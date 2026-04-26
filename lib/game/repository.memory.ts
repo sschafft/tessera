@@ -229,6 +229,20 @@ export class MemoryGameRepository implements GameRepository {
     );
   }
 
+  async findPairRound(
+    round_id: string,
+    pair_id: string,
+  ): Promise<PairRoundRecord | null> {
+    for (const pr of this.pairRounds.values()) {
+      if (pr.round_id === round_id && pr.pair_id === pair_id) return pr;
+    }
+    return null;
+  }
+
+  async findPairById(pair_id: string): Promise<PairRecord | null> {
+    return this.pairs.get(pair_id) ?? null;
+  }
+
   async setGameStatus(
     game_id: string,
     status: "lobby" | "running" | "ended" | "purged",

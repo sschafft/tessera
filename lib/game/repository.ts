@@ -193,6 +193,20 @@ export interface GameRepository {
   listPairRoundsForRound(round_id: string): Promise<PairRoundRecord[]>;
 
   /**
+   * Find the pair_round row for a given (round, pair). Used by player
+   * views to fetch their goal pattern.
+   */
+  findPairRound(
+    round_id: string,
+    pair_id: string,
+  ): Promise<PairRoundRecord | null>;
+
+  /**
+   * Find a pair by id (used for play-state lookups).
+   */
+  findPairById(pair_id: string): Promise<PairRecord | null>;
+
+  /**
    * Update the game status (lobby → running → ended → purged).
    */
   setGameStatus(

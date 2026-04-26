@@ -1,0 +1,124 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import type { TileColor } from "@/components/canvas/Tile";
+import type { GoalPattern } from "@/lib/pattern/types";
+import { PlayTopBar } from "./PlayTopBar";
+import { BuilderView } from "./BuilderView";
+import { GuiderView } from "./GuiderView";
+import { ObserverView } from "./ObserverView";
+import { LobbyWaiting } from "./LobbyWaiting";
+
+type PlayRole = "lobby" | "builder" | "guider" | "observer";
+
+export interface PlayState {
+  code: string;
+  workshop_name: string;
+  video_call_url: string;
+  whiteboard_url: string | null;
+  role: PlayRole;
+  me: { id: string; display_name: string; role: PlayRole; color: TileColor };
+  partner: {
+    id: string;
+    display_name: string;
+    role: PlayRole;
+    color: TileColor;
+  } | null;
+  pair: { id: string } | null;
+  round: {
+    id: string;
+    index: number;
+    complexity: number;
+    duration_seconds: number;
+    status: "pending" | "running" | "ended";
+    started_at: string | null;
+    ended_at: string | null;
+  } | null;
+  pair_round: {
+    id: string;
+    test_enabled: boolean;
+    shares_remaining: number;
+  } | null;
+  goal: GoalPattern | null;
+}
+
+export interface PlayContentProps {
+  code: string;
+  initial: PlayState;
+}
+
+const POLL_MS = 2000;
+
+export function PlayContent({ code, initial }: PlayContentProps) {
+  const [state, setState] = useState<PlayState>(initial);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchState = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/games/${code}/play`, { cache: "no-store" });
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      const json: PlayState = await res.json();
+      setState(json);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "fetch failed");
+    }
+  }, [code]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const tick = async () => {
+      if (!cancelled) await fetchState();
+    };
+    const id = setInterval(tick, POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [fetchState]);
+
+  const partnerForBar = state.partner
+    ? {
+        name: state.partner.display_name,
+        color: state.partner.color,
+        role: state.partner.role,
+      }
+    : null;
+
+  return (
+    <div className="flex min-h-screen flex-col bg-[var(--color-paper)]">
+      <PlayTopBar
+        code={state.code}
+        role={roleLabel(state.role)}
+        partner={partnerForBar}
+        round={state.round}
+        videoCallUrl={state.video_call_url}
+        whiteboardUrl={state.whiteboard_url}
+      />
+      <main className="flex flex-1 overflow-hidden">
+        {state.role === "lobby" && <LobbyWaiting workshopName={state.workshop_name} />}
+        {state.role === "builder" && <BuilderView state={state} />}
+        {state.role === "guider" && <GuiderView state={state} />}
+        {state.role === "observer" && <ObserverView state={state} />}
+      </main>
+      {error && (
+        <p className="px-6 py-2 text-[11px] text-[var(--color-t-red)]">
+          poll error · {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function roleLabel(r: PlayRole) {
+  switch (r) {
+    case "builder":
+      return "Builder" as const;
+    case "guider":
+      return "Guider" as const;
+    case "observer":
+      return "Observer" as const;
+    default:
+      return "Builder" as const;
+  }
+}

@@ -312,6 +312,32 @@ export class SupabaseGameRepository implements GameRepository {
     return (data ?? []).map(toPairRoundRecord);
   }
 
+  async findPairRound(
+    round_id: string,
+    pair_id: string,
+  ): Promise<PairRoundRecord | null> {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase
+      .from("pair_rounds")
+      .select("*")
+      .eq("round_id", round_id)
+      .eq("pair_id", pair_id)
+      .maybeSingle();
+    if (error) throw new Error(`findPairRound: ${error.message}`);
+    return data ? toPairRoundRecord(data) : null;
+  }
+
+  async findPairById(pair_id: string): Promise<PairRecord | null> {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase
+      .from("pairs")
+      .select("*")
+      .eq("id", pair_id)
+      .maybeSingle();
+    if (error) throw new Error(`findPairById: ${error.message}`);
+    return data ? toPairRecord(data) : null;
+  }
+
   async setGameStatus(
     game_id: string,
     status: "lobby" | "running" | "ended" | "purged",
