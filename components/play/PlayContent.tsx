@@ -70,6 +70,23 @@ export interface PlayState {
   partner_brief: BriefSummary | null;
   /** Observers see both briefs when revealed. */
   observer_briefs: BriefSummary[] | null;
+  /** Prototype glimpse window for the builder; null when not active. */
+  prototype: {
+    goal: PlacedPiece[];
+    ends_at: string;
+  } | null;
+  /** Most recent Agile-share snapshot from the builder; guider/observer only. */
+  builder_snapshot: PlacedPiece[] | null;
+  /** Remaining Agile shares; surfaced to the builder for their UI. */
+  shares_remaining: number;
+  /** Observer-only: list of pairs available to switch to. */
+  available_pairs:
+    | Array<{
+        id: string;
+        builder_name: string | null;
+        guider_name: string | null;
+      }>
+    | null;
 }
 
 export interface PlayContentProps {

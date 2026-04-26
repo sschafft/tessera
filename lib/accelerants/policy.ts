@@ -27,10 +27,10 @@ export interface AccelerantPolicy {
 }
 
 export const POLICIES: Record<AccelerantKind, AccelerantPolicy> = {
-  prototype: { maxPerRound: 4, cooldownSeconds: 12, implemented: false },
+  prototype: { maxPerRound: 4, cooldownSeconds: 12, implemented: true },
   reveal_briefs: { maxPerRound: 1, cooldownSeconds: 0, implemented: true },
   test_build: { maxPerRound: null, cooldownSeconds: 0, implemented: true },
-  agile_share: { maxPerRound: 3, cooldownSeconds: 0, implemented: false },
+  agile_share: { maxPerRound: 3, cooldownSeconds: 0, implemented: true },
   time_pressure: { maxPerRound: 2, cooldownSeconds: 0, implemented: true },
   vocab_swap: { maxPerRound: 1, cooldownSeconds: 0, implemented: true },
   randomizer: { maxPerRound: null, cooldownSeconds: 0, implemented: true },

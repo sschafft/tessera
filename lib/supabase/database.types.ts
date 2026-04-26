@@ -224,30 +224,36 @@ export type Database = {
       pair_rounds: {
         Row: {
           briefs_revealed: boolean
+          builder_snapshot: Json | null
           goal_pattern: Json
           id: string
           pair_id: string
           pattern_seed: string
+          prototype_until: string | null
           round_id: string
           shares_remaining: number
           test_enabled: boolean
         }
         Insert: {
           briefs_revealed?: boolean
+          builder_snapshot?: Json | null
           goal_pattern: Json
           id?: string
           pair_id: string
           pattern_seed: string
+          prototype_until?: string | null
           round_id: string
           shares_remaining?: number
           test_enabled?: boolean
         }
         Update: {
           briefs_revealed?: boolean
+          builder_snapshot?: Json | null
           goal_pattern?: Json
           id?: string
           pair_id?: string
           pattern_seed?: string
+          prototype_until?: string | null
           round_id?: string
           shares_remaining?: number
           test_enabled?: boolean

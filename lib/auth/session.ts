@@ -1,6 +1,8 @@
 import { cookies } from "next/headers";
 import { cookieName } from "./cookie";
 import { verifySession, type TesseraClaims } from "./jwt";
+import { getRepository } from "@/lib/game/getRepository";
+import type { ParticipantRecord } from "@/lib/game/repository";
 
 /**
  * Read and verify the session JWT for the given game code.
@@ -20,4 +22,22 @@ export async function readSessionForGame(
   } catch {
     return null;
   }
+}
+
+/**
+ * Resolve the requester's *live* role from the participants table.
+ * Use this for any route that gates on non-GM roles (builder, guider,
+ * observer); the JWT can carry a stale role claim because we don't
+ * re-mint cookies when the GM allocates someone in the lobby. The DB
+ * is the source of truth.
+ */
+export async function readSessionAndParticipant(
+  code: string,
+): Promise<{ claims: TesseraClaims; me: ParticipantRecord } | null> {
+  const claims = await readSessionForGame(code);
+  if (!claims) return null;
+  const repo = getRepository();
+  const me = await repo.findParticipantById(claims.sub);
+  if (!me || me.game_id !== claims.game_id) return null;
+  return { claims, me };
 }

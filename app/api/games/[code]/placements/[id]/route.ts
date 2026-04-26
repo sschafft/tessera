@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { isValidGameCode } from "@/lib/game/code";
-import { readSessionForGame } from "@/lib/auth/session";
+import { readSessionAndParticipant } from "@/lib/auth/session";
 import { getRepository } from "@/lib/game/getRepository";
 
 export const runtime = "nodejs";
@@ -14,11 +14,11 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
   if (!isValidGameCode(code)) {
     return NextResponse.json({ error: "invalid_code" }, { status: 400 });
   }
-  const claims = await readSessionForGame(code);
-  if (!claims) {
+  const session = await readSessionAndParticipant(code);
+  if (!session) {
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
   }
-  if (claims.role !== "builder") {
+  if (session.me.role !== "builder") {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
@@ -27,7 +27,7 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
   if (!placement) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
-  if (placement.placed_by !== claims.sub) {
+  if (placement.placed_by !== session.me.id) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

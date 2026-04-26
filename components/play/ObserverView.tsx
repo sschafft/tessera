@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { PlayCanvas } from "@/components/canvas/PlayCanvas";
 import { BriefEnvelope } from "./BriefEnvelope";
 import type { PlayState } from "./PlayContent";
@@ -8,10 +11,10 @@ export interface ObserverViewProps {
 
 export function ObserverView({ state }: ObserverViewProps) {
   if (!state.round || state.round.status !== "running" || !state.goal) {
-    return <WaitingForRound />;
+    return <WaitingForRound state={state} />;
   }
   return (
-    <section className="grid w-full" style={{ gridTemplateColumns: "1fr 1fr" }}>
+    <section className="grid w-full" style={{ gridTemplateColumns: "1fr 1fr", gridTemplateRows: "1fr auto" }}>
       {state.observer_briefs && state.observer_briefs.length > 0 && (
         <div className="absolute right-6 top-20 z-20 flex flex-col gap-2">
           {state.observer_briefs.map((b) => (
@@ -54,6 +57,14 @@ export function ObserverView({ state }: ObserverViewProps) {
           <PlayCanvas pieces={state.goal} />
         </div>
       </div>
+
+      {state.available_pairs && state.available_pairs.length > 1 && (
+        <div
+          className="col-span-2 flex items-center gap-3 border-t border-[var(--color-line)] bg-white px-6 py-3"
+        >
+          <PairSwitcher state={state} />
+        </div>
+      )}
     </section>
   );
 }
@@ -80,7 +91,7 @@ function PaneHeader({
   );
 }
 
-function WaitingForRound() {
+function WaitingForRound({ state }: { state: PlayState }) {
   return (
     <section className="m-auto flex max-w-[480px] flex-col items-center gap-3 px-6 text-center">
       <div className="t-mono text-[11px] tracking-widest text-[var(--color-ink-3)]">
@@ -91,6 +102,72 @@ function WaitingForRound() {
         Once the facilitator hits Start, you&apos;ll see your pair&apos;s
         builder canvas alongside the goal.
       </p>
+      {state.available_pairs && state.available_pairs.length > 1 && (
+        <PairSwitcher state={state} />
+      )}
     </section>
+  );
+}
+
+function PairSwitcher({ state }: { state: PlayState }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const pairs = state.available_pairs ?? [];
+
+  const switchTo = async (pairId: string) => {
+    if (pairId === state.pair?.id) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/games/${state.code}/observe`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ pair_id: pairId }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || `status ${res.status}`);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "switch failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <span className="t-mono text-[10px] uppercase tracking-widest text-[var(--color-ink-3)]">
+        Other pairs
+      </span>
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        {pairs.map((p) => {
+          const active = p.id === state.pair?.id;
+          const label =
+            p.builder_name && p.guider_name
+              ? `${p.builder_name} ↔ ${p.guider_name}`
+              : "(empty)";
+          return (
+            <button
+              key={p.id}
+              type="button"
+              disabled={busy || active}
+              onClick={() => switchTo(p.id)}
+              className="rounded-full border-[1.5px] px-3.5 py-1.5 text-[12px] font-semibold disabled:opacity-50"
+              style={{
+                borderColor: active ? "var(--color-ink)" : "var(--color-line)",
+                background: active ? "var(--color-ink)" : "transparent",
+                color: active ? "var(--color-paper)" : "var(--color-ink)",
+              }}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+      {error && (
+        <span className="text-[11px] text-[var(--color-t-red)]">{error}</span>
+      )}
+    </div>
   );
 }

@@ -173,8 +173,30 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       }
       break;
 
+    case "prototype": {
+      // Builder gets a 5-second glimpse window starting now. We persist
+      // an absolute timestamp so all clients agree on expiry without
+      // server-side ticking.
+      const seconds =
+        typeof body.payload?.duration_seconds === "number"
+          ? body.payload.duration_seconds
+          : 5;
+      const until = new Date(Date.now() + seconds * 1000);
+      for (const pair of targetedPairs) {
+        const pr = await repo.findPairRound(round.id, pair.id);
+        if (pr) await repo.setPrototypeUntil(pr.id, until);
+      }
+      break;
+    }
+
+    case "agile_share":
+      // No DB side-effect on trigger; the accelerant unlocks the
+      // builder's "Share progress" button. The actual snapshot capture
+      // happens via the dedicated /agile-share endpoint when the
+      // builder clicks. We log the trigger here for the audit.
+      break;
+
     default:
-      // prototype + agile_share fall through (not_implemented caught above).
       break;
   }
 

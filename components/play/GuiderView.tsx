@@ -49,6 +49,27 @@ export function GuiderView({ state }: GuiderViewProps) {
         Talk through the picture on your call. Your builder is rebuilding it
         without seeing this.
       </p>
+
+      {state.builder_snapshot && state.builder_snapshot.length > 0 && (
+        <div className="absolute bottom-6 right-6 z-10 w-[300px]">
+          <div className="t-card flex flex-col gap-2 p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-ink-2)]">
+                Builder shared progress
+              </span>
+              <span className="t-mono text-[10px] text-[var(--color-ink-3)]">
+                preview · {state.builder_snapshot.length} placed
+              </span>
+            </div>
+            <div
+              className="overflow-hidden rounded-[10px]"
+              style={{ transform: "scale(0.4)", transformOrigin: "top left", height: 200, marginBottom: -200 }}
+            >
+              <PlayCanvas pieces={state.builder_snapshot} />
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

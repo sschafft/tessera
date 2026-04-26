@@ -71,6 +71,10 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       brief: null,
       partner_brief: null,
       observer_briefs: null,
+      prototype: null,
+      builder_snapshot: null,
+      shares_remaining: 0,
+      available_pairs: null,
     });
   }
 
@@ -88,6 +92,28 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
   // After the round ends, everyone sees the goal + everyone's
   // placements + everyone's brief, so the pair can debrief together.
   const roundEnded = round?.status === "ended";
+
+  // Observers get a list of all pairs (with names) so they can
+  // switch between them via the bottom strip.
+  let availablePairs: Array<{
+    id: string;
+    builder_name: string | null;
+    guider_name: string | null;
+  }> | null = null;
+  if (me.role === "observer") {
+    const pairs = await repo.listPairs(game.id);
+    const allParticipants = await repo.listActiveParticipants(game.id);
+    const byId = new Map(allParticipants.map((p) => [p.id, p]));
+    availablePairs = pairs.map((p) => ({
+      id: p.id,
+      builder_name: p.builder_id
+        ? byId.get(p.builder_id)?.display_name ?? null
+        : null,
+      guider_name: p.guider_id
+        ? byId.get(p.guider_id)?.display_name ?? null
+        : null,
+    }));
+  }
 
   const showGoal =
     me.role === "guider" || me.role === "observer" || roundEnded;
@@ -191,6 +217,20 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     accuracy,
     test_enabled: testEnabled,
     briefs_revealed: pairRound?.briefs_revealed ?? false,
+    // Prototype glimpse — when active, builder gets a degraded preview.
+    prototype: prototypeWindow(pairRound, me.role),
+    // Agile share — guider gets the most recent builder snapshot.
+    builder_snapshot:
+      pairRound && (me.role === "guider" || me.role === "observer")
+        ? (pairRound.builder_snapshot as Array<{
+            shape: string;
+            color: string;
+            q: number;
+            r: number;
+            rot: number;
+          }> | null)
+        : null,
+    shares_remaining: pairRound?.shares_remaining ?? 0,
     brief: myBrief
       ? {
           role: myBrief.role,
@@ -212,7 +252,75 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
           rules: b.rules,
         }))
       : null,
+    available_pairs: availablePairs,
   });
+}
+
+/**
+ * Build the Prototype-glimpse payload for the requester. Only the
+ * builder gets a payload; everyone else gets null. Returns null when
+ * the window has lapsed. The glimpse is a degraded copy of the goal:
+ * randomly drops ~25% of pieces and corrupts another ~15% of colours,
+ * so it's "close to but not the goal" — same intent as the design's
+ * prototype-but-flawed metaphor.
+ */
+function prototypeWindow(
+  pairRound:
+    | {
+        prototype_until: string | null;
+        goal_pattern: unknown;
+        pattern_seed: string;
+      }
+    | null,
+  role: string,
+): { goal: unknown; ends_at: string } | null {
+  if (!pairRound || !pairRound.prototype_until) return null;
+  if (role !== "builder") return null;
+  const endsMs = new Date(pairRound.prototype_until).getTime();
+  if (endsMs <= Date.now()) return null;
+  const pieces = (pairRound.goal_pattern as Array<{
+    shape: string;
+    color: string;
+    q: number;
+    r: number;
+    rot: number;
+  }>) ?? [];
+  const seedHash = (s: string, k: number) => {
+    let h = 2166136261 ^ k;
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return (h >>> 0) / 0xffffffff;
+  };
+  const palette = [
+    "red",
+    "orange",
+    "yellow",
+    "green",
+    "blue",
+    "purple",
+    "pink",
+    "teal",
+  ];
+  const degraded: typeof pieces = [];
+  for (let i = 0; i < pieces.length; i++) {
+    const dropRoll = seedHash(pairRound.pattern_seed, i);
+    if (dropRoll < 0.25) continue; // drop ~25% of pieces
+    const piece = { ...pieces[i]! };
+    const colorRoll = seedHash(pairRound.pattern_seed, i + 1000);
+    if (colorRoll < 0.15) {
+      // Replace colour with a random different one ~15% of the time.
+      const idx = Math.floor(seedHash(pairRound.pattern_seed, i + 2000) * palette.length);
+      const swap = palette[idx % palette.length]!;
+      piece.color = swap === piece.color ? palette[(idx + 1) % palette.length]! : swap;
+    }
+    degraded.push(piece);
+  }
+  return {
+    goal: degraded,
+    ends_at: pairRound.prototype_until,
+  };
 }
 
 function meSummary(p: NonNullable<Awaited<ReturnType<ReturnType<typeof getRepository>["findParticipantById"]>>>) {

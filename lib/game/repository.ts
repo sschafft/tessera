@@ -91,6 +91,10 @@ export interface PairRoundRecord {
   test_enabled: boolean;
   shares_remaining: number;
   briefs_revealed: boolean;
+  /** ISO-8601 timestamp until which Prototype glimpse is visible. */
+  prototype_until: string | null;
+  /** Snapshot of placements captured by the last Agile share. */
+  builder_snapshot: unknown;
 }
 
 export interface PlacementRecord {
@@ -350,4 +354,20 @@ export interface GameRepository {
   ): Promise<void>;
 
   decrementRoundDuration(round_id: string, delta: number): Promise<void>;
+
+  /**
+   * Set Prototype-glimpse visibility window. Builder play state will
+   * surface a degraded preview of the goal until `until` passes.
+   */
+  setPrototypeUntil(pair_round_id: string, until: Date): Promise<void>;
+
+  /**
+   * Capture the builder's current placements into the pair_round's
+   * snapshot field, and decrement shares_remaining. Returns the new
+   * shares_remaining value.
+   */
+  captureBuilderSnapshot(
+    pair_round_id: string,
+    snapshot: unknown,
+  ): Promise<number>;
 }

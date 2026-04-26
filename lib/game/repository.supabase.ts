@@ -609,6 +609,47 @@ export class SupabaseGameRepository implements GameRepository {
     }
   }
 
+  async setPrototypeUntil(
+    pair_round_id: string,
+    until: Date,
+  ): Promise<void> {
+    const supabase = getServiceClient();
+    const { error } = await supabase
+      .from("pair_rounds")
+      .update({ prototype_until: until.toISOString() })
+      .eq("id", pair_round_id);
+    if (error) throw new Error(`setPrototypeUntil: ${error.message}`);
+  }
+
+  async captureBuilderSnapshot(
+    pair_round_id: string,
+    snapshot: unknown,
+  ): Promise<number> {
+    const supabase = getServiceClient();
+    // Read current value, then update; PostgREST doesn't support
+    // arithmetic in a single UPDATE without an RPC.
+    const { data: cur, error: readErr } = await supabase
+      .from("pair_rounds")
+      .select("shares_remaining")
+      .eq("id", pair_round_id)
+      .single();
+    if (readErr || !cur) {
+      throw new Error(`captureBuilderSnapshot read: ${readErr?.message}`);
+    }
+    const next = Math.max(0, cur.shares_remaining - 1);
+    const { error: updErr } = await supabase
+      .from("pair_rounds")
+      .update({
+        builder_snapshot: snapshot as never,
+        shares_remaining: next,
+      })
+      .eq("id", pair_round_id);
+    if (updErr) {
+      throw new Error(`captureBuilderSnapshot write: ${updErr.message}`);
+    }
+    return next;
+  }
+
   async listLibraryBriefs(input: {
     role: BriefRole;
     complexity: number;
@@ -707,5 +748,7 @@ function toPairRoundRecord(row: DbPairRound): PairRoundRecord {
     test_enabled: row.test_enabled,
     shares_remaining: row.shares_remaining,
     briefs_revealed: row.briefs_revealed,
+    prototype_until: row.prototype_until,
+    builder_snapshot: row.builder_snapshot,
   };
 }

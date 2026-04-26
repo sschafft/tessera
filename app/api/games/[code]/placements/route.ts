@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { isValidGameCode } from "@/lib/game/code";
-import { readSessionForGame } from "@/lib/auth/session";
+import { readSessionAndParticipant } from "@/lib/auth/session";
 import { getRepository } from "@/lib/game/getRepository";
 import { GRID_HEIGHT, GRID_WIDTH } from "@/lib/grid/coords";
 import { PlacementCellTakenError } from "@/lib/game/repository.memory";
@@ -49,11 +49,11 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "invalid_code" }, { status: 400 });
   }
 
-  const claims = await readSessionForGame(code);
-  if (!claims) {
+  const session = await readSessionAndParticipant(code);
+  if (!session) {
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
   }
-  if (claims.role !== "builder") {
+  if (session.me.role !== "builder") {
     return NextResponse.json(
       { error: "only_builder_can_place" },
       { status: 403 },
@@ -84,12 +84,12 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
 
   const repo = getRepository();
-  const me = await repo.findParticipantById(claims.sub);
-  if (!me || me.game_id !== claims.game_id || !me.pair_id) {
+  const me = session.me;
+  if (!me.pair_id) {
     return NextResponse.json({ error: "not_in_pair" }, { status: 400 });
   }
 
-  const round = await repo.findLatestRound(claims.game_id);
+  const round = await repo.findLatestRound(session.claims.game_id);
   if (!round || round.status !== "running") {
     return NextResponse.json({ error: "round_not_running" }, { status: 400 });
   }

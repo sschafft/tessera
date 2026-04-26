@@ -137,6 +137,10 @@ export default async function PlayPage({ params }: PageProps) {
       : null,
     partner_brief: null,
     observer_briefs: null,
+    prototype: null,
+    builder_snapshot: null,
+    shares_remaining: pairRound?.shares_remaining ?? 0,
+    available_pairs: null,
   };
 
   return <PlayContent code={code} initial={initial} />;

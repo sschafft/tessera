@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Tile, type TileColor, type TileShape } from "@/components/canvas/Tile";
 import { InteractiveCanvas } from "@/components/canvas/InteractiveCanvas";
+import { PlayCanvas } from "@/components/canvas/PlayCanvas";
 import { BriefEnvelope } from "./BriefEnvelope";
 import type { PlacedPiece, PlayState } from "./PlayContent";
 
@@ -44,6 +45,7 @@ function BuilderInteractive({ state }: { state: PlayState }) {
   const [optimistic, setOptimistic] = useState<PlacedPiece[]>([]);
   const [pendingDeletes, setPendingDeletes] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
+  const [sharingProgress, setSharingProgress] = useState(false);
 
   // Server placements + local optimistic adds, minus locally-pending deletes.
   const visiblePieces = [...state.placements, ...optimistic].filter(
@@ -91,6 +93,24 @@ function BuilderInteractive({ state }: { state: PlayState }) {
     },
     [selectedShape, selectedColor, selectedRotation, state.code],
   );
+
+  const shareProgress = useCallback(async () => {
+    setSharingProgress(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/games/${state.code}/agile-share`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || `status ${res.status}`);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "share failed");
+    } finally {
+      setSharingProgress(false);
+    }
+  }, [state.code]);
 
   const remove = useCallback(
     async (piece: PlacedPiece) => {
@@ -159,6 +179,7 @@ function BuilderInteractive({ state }: { state: PlayState }) {
           )}
         </div>
         <div className="flex flex-col items-center gap-3">
+          <PrototypeOverlay prototype={state.prototype} />
           <InteractiveCanvas
             pieces={visiblePieces}
             selectedShape={selectedShape}
@@ -177,6 +198,21 @@ function BuilderInteractive({ state }: { state: PlayState }) {
               <span className="t-mono rounded-full bg-[var(--color-paper-2)] px-3 py-1 text-[11px] font-bold">
                 ✓ {state.accuracy.correct} / {state.accuracy.total} correct
               </span>
+            )}
+            {state.shares_remaining > 0 && (
+              <button
+                type="button"
+                onClick={shareProgress}
+                disabled={sharingProgress}
+                className="t-mono rounded-full bg-[var(--color-tint-orange)] px-3 py-1 text-[11px] font-bold text-[var(--color-t-orange)] disabled:opacity-50"
+                style={{
+                  boxShadow: "inset 0 0 0 1.5px var(--color-t-orange)",
+                }}
+              >
+                {sharingProgress
+                  ? "Sharing…"
+                  : `↻ Share progress (${state.shares_remaining})`}
+              </button>
             )}
           </div>
         </div>
@@ -347,6 +383,55 @@ function Tools({
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+function PrototypeOverlay({
+  prototype,
+}: {
+  prototype: PlayState["prototype"];
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!prototype) return;
+    const id = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(id);
+  }, [prototype]);
+
+  if (!prototype) return null;
+  const endsMs = new Date(prototype.ends_at).getTime();
+  const remaining = Math.max(0, Math.ceil((endsMs - now) / 1000));
+  if (remaining === 0) return null;
+
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <span
+        className="t-mono inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest"
+        style={{
+          background: "var(--color-tint-blue)",
+          color: "var(--color-t-blue)",
+          boxShadow: "inset 0 0 0 1.5px var(--color-t-blue)",
+        }}
+      >
+        🔮 Prototype glimpse · {remaining}s
+      </span>
+      <div
+        className="rounded-[var(--radius-lg)]"
+        style={{
+          filter: "saturate(0.55) opacity(0.85)",
+          border: "2px dashed var(--color-t-blue)",
+          padding: 4,
+        }}
+      >
+        <PlayCanvas pieces={prototype.goal} />
+      </div>
+      <span
+        className="t-mono text-[10px] text-[var(--color-ink-3)]"
+        style={{ letterSpacing: ".1em" }}
+      >
+        approximate · expect ~25% wrong
+      </span>
     </div>
   );
 }

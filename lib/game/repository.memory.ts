@@ -252,6 +252,8 @@ export class MemoryGameRepository implements GameRepository {
       test_enabled: false,
       shares_remaining: 3,
       briefs_revealed: false,
+      prototype_until: null,
+      builder_snapshot: null,
     };
     this.pairRounds.set(pr.id, pr);
     return pr;
@@ -463,6 +465,25 @@ export class MemoryGameRepository implements GameRepository {
       const newRemaining = Math.max(30, remaining - delta);
       r.duration_seconds = elapsed + newRemaining;
     }
+  }
+
+  async setPrototypeUntil(
+    pair_round_id: string,
+    until: Date,
+  ): Promise<void> {
+    const pr = this.pairRounds.get(pair_round_id);
+    if (pr) pr.prototype_until = until.toISOString();
+  }
+
+  async captureBuilderSnapshot(
+    pair_round_id: string,
+    snapshot: unknown,
+  ): Promise<number> {
+    const pr = this.pairRounds.get(pair_round_id);
+    if (!pr) return 0;
+    pr.builder_snapshot = snapshot;
+    pr.shares_remaining = Math.max(0, pr.shares_remaining - 1);
+    return pr.shares_remaining;
   }
 }
 
