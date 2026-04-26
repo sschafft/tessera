@@ -1,0 +1,162 @@
+/* Tessera — design tokens
+ * Playful & toy-like. Bright primaries, chunky rounded shapes, soft shadows.
+ * Original visual language — not based on any branded toy/game system.
+ */
+
+:root {
+  /* Surfaces */
+  --paper: #fbf6ed;
+  --paper-2: #f3ebd9;
+  --paper-edge: #e8dcbf;
+  --ink: #1f1a14;
+  --ink-2: #4a4035;
+  --ink-3: #8a7f70;
+  --line: #e0d4b8;
+  --line-2: #cfc0a0;
+
+  /* Brand primaries — toyshop, but tuned warmer than crayon */
+  --t-red:    #ee3a3a;
+  --t-orange: #ff8a1f;
+  --t-yellow: #f5c518;
+  --t-green:  #46b86a;
+  --t-blue:   #2c7be8;
+  --t-purple: #7e54d8;
+  --t-pink:   #ee6ea8;
+  --t-teal:   #19b6b1;
+
+  /* Soft tints (cards / chips) */
+  --tint-red:    #fde0e0;
+  --tint-orange: #ffe6cd;
+  --tint-yellow: #fbf0c2;
+  --tint-green:  #d8f1de;
+  --tint-blue:   #d6e6fb;
+  --tint-purple: #e6dbf7;
+
+  /* Type */
+  --font-display: "Fraunces", Georgia, serif;
+  --font-ui: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Radius — chunky */
+  --r-sm: 8px;
+  --r-md: 14px;
+  --r-lg: 22px;
+  --r-xl: 32px;
+  --r-pill: 999px;
+
+  /* Shadows — soft, layered */
+  --sh-sm: 0 1px 0 rgba(60,40,10,.06), 0 2px 4px rgba(60,40,10,.06);
+  --sh-md: 0 1px 0 rgba(60,40,10,.05), 0 6px 14px rgba(60,40,10,.10), 0 18px 40px rgba(60,40,10,.06);
+  --sh-lg: 0 2px 0 rgba(60,40,10,.06), 0 14px 30px rgba(60,40,10,.14), 0 40px 80px rgba(60,40,10,.10);
+  --sh-press: 0 1px 0 rgba(60,40,10,.06) inset, 0 -2px 0 rgba(0,0,0,.06) inset;
+  --sh-chunky: 0 4px 0 rgba(0,0,0,.10), 0 10px 22px rgba(60,40,10,.10);
+
+  /* Motion */
+  --ease: cubic-bezier(.25,.7,.3,1);
+}
+
+/* utility resets used inside artboards */
+.t-reset, .t-reset * {
+  box-sizing: border-box;
+}
+.t-reset {
+  font-family: var(--font-ui);
+  color: var(--ink);
+  background: var(--paper);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.t-display { font-family: var(--font-display); font-weight: 600; letter-spacing: -0.02em; }
+.t-mono { font-family: var(--font-mono); }
+
+/* Chunky button */
+.t-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 44px; padding: 0 20px;
+  background: var(--ink); color: var(--paper);
+  border: none; border-radius: var(--r-pill);
+  font-family: var(--font-ui); font-weight: 600; font-size: 14px;
+  cursor: pointer;
+  box-shadow: var(--sh-chunky);
+  transition: transform .12s var(--ease), box-shadow .12s var(--ease);
+}
+.t-btn:hover { transform: translateY(-1px); }
+.t-btn--primary { background: var(--t-red); color: #fff; }
+.t-btn--ghost { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink); }
+.t-btn--sm { height: 32px; padding: 0 14px; font-size: 12px; box-shadow: 0 2px 0 rgba(0,0,0,.10); }
+
+/* Chip */
+.t-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: var(--r-pill);
+  background: var(--paper-2);
+  color: var(--ink-2);
+  font-size: 11px; font-weight: 600;
+  letter-spacing: .02em;
+}
+
+/* Card */
+.t-card {
+  background: #fff;
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-md);
+  border: 1px solid var(--line);
+}
+
+/* "Sealed envelope" — used for secret briefs */
+.t-envelope {
+  position: relative;
+  background:
+    repeating-linear-gradient(45deg,
+      transparent 0 8px,
+      rgba(238,58,58,.10) 8px 12px,
+      transparent 12px 20px,
+      rgba(44,123,232,.10) 20px 24px);
+  background-color: #fffaf0;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--r-md);
+  padding: 18px 18px 16px;
+  box-shadow: var(--sh-chunky);
+}
+.t-envelope::before {
+  content: "";
+  position: absolute; top: -1.5px; left: 0; right: 0; height: 22px;
+  background: var(--ink);
+  clip-path: polygon(0 0, 50% 100%, 100% 0);
+  opacity: .92;
+}
+.t-envelope__seal {
+  position: absolute; right: 14px; top: 14px;
+  width: 36px; height: 36px; border-radius: 50%;
+  background: var(--t-red);
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-display); font-weight: 700; font-size: 14px;
+  box-shadow: 0 2px 0 rgba(0,0,0,.18);
+  transform: rotate(-8deg);
+}
+
+/* Stamp / status */
+.t-stamp {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px;
+  font-family: var(--font-mono);
+  font-size: 10px; font-weight: 700;
+  letter-spacing: .12em; text-transform: uppercase;
+  border: 1.5px solid currentColor;
+  border-radius: 4px;
+  transform: rotate(-2deg);
+}
+
+/* Hatched placeholder background */
+.t-hatch {
+  background-image: repeating-linear-gradient(45deg,
+    rgba(0,0,0,.05) 0 1px, transparent 1px 8px);
+}
+
+/* Dotted bg for canvas */
+.t-dots {
+  background-image: radial-gradient(circle, rgba(0,0,0,.10) 1px, transparent 1.4px);
+  background-size: 16px 16px;
+}

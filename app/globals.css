@@ -1,0 +1,73 @@
+@import "tailwindcss";
+@import "../styles/tessera.css";
+
+/* Tessera design tokens — ported from design/tessera/project/tokens.css.
+ * Tailwind v4 picks these up via the @theme directive and makes them
+ * available as utility classes (e.g. bg-paper, text-ink, font-display).
+ */
+@theme {
+  /* Surfaces */
+  --color-paper: #fbf6ed;
+  --color-paper-2: #f3ebd9;
+  --color-paper-edge: #e8dcbf;
+  --color-ink: #1f1a14;
+  --color-ink-2: #4a4035;
+  --color-ink-3: #8a7f70;
+  --color-line: #e0d4b8;
+  --color-line-2: #cfc0a0;
+
+  /* Brand primaries */
+  --color-t-red: #ee3a3a;
+  --color-t-orange: #ff8a1f;
+  --color-t-yellow: #f5c518;
+  --color-t-green: #46b86a;
+  --color-t-blue: #2c7be8;
+  --color-t-purple: #7e54d8;
+  --color-t-pink: #ee6ea8;
+  --color-t-teal: #19b6b1;
+
+  /* Soft tints */
+  --color-tint-red: #fde0e0;
+  --color-tint-orange: #ffe6cd;
+  --color-tint-yellow: #fbf0c2;
+  --color-tint-green: #d8f1de;
+  --color-tint-blue: #d6e6fb;
+  --color-tint-purple: #e6dbf7;
+  --color-tint-pink: #fbe1ee;
+  --color-tint-teal: #d4f1f0;
+
+  /* Type */
+  --font-display: "Fraunces", Georgia, serif;
+  --font-ui: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-sans: var(--font-ui);
+
+  /* Radius — chunky */
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 22px;
+  --radius-xl: 32px;
+  --radius-pill: 999px;
+
+  /* Motion */
+  --ease-toy: cubic-bezier(0.25, 0.7, 0.3, 1);
+}
+
+/* Box-sizing reset (Tailwind v4 doesn't ship preflight reset for box-sizing on
+ * pseudo-elements as aggressively as we want for the playful design). */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}

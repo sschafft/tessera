@@ -1,0 +1,227 @@
+/* Tessera bespoke utilities — components from the design bundle that are
+ * easier to express as a small CSS layer than as Tailwind utilities.
+ * Each class mirrors a class in design/tessera/project/tokens.css.
+ */
+
+/* ─── Display type helpers ─────────────────────────────────────────────── */
+.t-display {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.t-mono {
+  font-family: var(--font-mono);
+}
+
+/* ─── Shadows ──────────────────────────────────────────────────────────── */
+.shadow-sm-soft {
+  box-shadow:
+    0 1px 0 rgb(60 40 10 / 0.06),
+    0 2px 4px rgb(60 40 10 / 0.06);
+}
+
+.shadow-md-soft {
+  box-shadow:
+    0 1px 0 rgb(60 40 10 / 0.05),
+    0 6px 14px rgb(60 40 10 / 0.1),
+    0 18px 40px rgb(60 40 10 / 0.06);
+}
+
+.shadow-lg-soft {
+  box-shadow:
+    0 2px 0 rgb(60 40 10 / 0.06),
+    0 14px 30px rgb(60 40 10 / 0.14),
+    0 40px 80px rgb(60 40 10 / 0.1);
+}
+
+/* "Chunky" toy-button shadow with a 4px offset */
+.shadow-chunky {
+  box-shadow:
+    0 4px 0 rgb(0 0 0 / 0.1),
+    0 10px 22px rgb(60 40 10 / 0.1);
+}
+
+.shadow-press {
+  box-shadow:
+    inset 0 1px 0 rgb(60 40 10 / 0.06),
+    inset 0 -2px 0 rgb(0 0 0 / 0.06);
+}
+
+/* ─── Sealed envelope (used for player briefs) ────────────────────────── */
+.t-envelope {
+  position: relative;
+  background:
+    repeating-linear-gradient(
+      45deg,
+      transparent 0 8px,
+      rgb(238 58 58 / 0.1) 8px 12px,
+      transparent 12px 20px,
+      rgb(44 123 232 / 0.1) 20px 24px
+    );
+  background-color: #fffaf0;
+  border: 1.5px solid var(--color-ink);
+  border-radius: var(--radius-md);
+  padding: 18px 18px 16px;
+  box-shadow: 0 4px 0 rgb(0 0 0 / 0.1), 0 10px 22px rgb(60 40 10 / 0.1);
+}
+
+.t-envelope::before {
+  content: "";
+  position: absolute;
+  top: -1.5px;
+  left: 0;
+  right: 0;
+  height: 22px;
+  background: var(--color-ink);
+  clip-path: polygon(0 0, 50% 100%, 100% 0);
+  opacity: 0.92;
+}
+
+.t-envelope__seal {
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--color-t-red);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 14px;
+  box-shadow: 0 2px 0 rgb(0 0 0 / 0.18);
+  transform: rotate(-8deg);
+}
+
+/* ─── Stamp (rotated mono badge for "● THE GOAL" etc) ─────────────────── */
+.t-stamp {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border: 1.5px solid currentColor;
+  border-radius: 4px;
+  transform: rotate(-2deg);
+}
+
+/* ─── Backgrounds ──────────────────────────────────────────────────────── */
+.t-hatch {
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgb(0 0 0 / 0.05) 0 1px,
+    transparent 1px 8px
+  );
+}
+
+.t-dots {
+  background-image: radial-gradient(
+    circle,
+    rgb(0 0 0 / 0.1) 1px,
+    transparent 1.4px
+  );
+  background-size: 16px 16px;
+}
+
+/* ─── Buttons (chunky toy style) ───────────────────────────────────────── */
+.t-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 20px;
+  background: var(--color-ink);
+  color: var(--color-paper);
+  border: none;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: 0 4px 0 rgb(0 0 0 / 0.1), 0 10px 22px rgb(60 40 10 / 0.1);
+  transition:
+    transform 0.12s var(--ease-toy),
+    box-shadow 0.12s var(--ease-toy);
+}
+
+.t-btn:hover {
+  transform: translateY(-1px);
+}
+
+.t-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 0 rgb(0 0 0 / 0.1);
+}
+
+.t-btn--primary {
+  background: var(--color-t-red);
+  color: #fff;
+}
+
+.t-btn--ghost {
+  background: transparent;
+  color: var(--color-ink);
+  box-shadow: inset 0 0 0 2px var(--color-ink);
+}
+
+.t-btn--ghost:active {
+  box-shadow: inset 0 0 0 2px var(--color-ink);
+}
+
+.t-btn--sm {
+  height: 32px;
+  padding: 0 14px;
+  font-size: 12px;
+  box-shadow: 0 2px 0 rgb(0 0 0 / 0.1);
+}
+
+/* ─── Chip ─────────────────────────────────────────────────────────────── */
+.t-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--color-paper-2);
+  color: var(--color-ink-2);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* ─── Card ─────────────────────────────────────────────────────────────── */
+.t-card {
+  background: #fff;
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 1px 0 rgb(60 40 10 / 0.05),
+    0 6px 14px rgb(60 40 10 / 0.1),
+    0 18px 40px rgb(60 40 10 / 0.06);
+  border: 1px solid var(--color-line);
+}
+
+/* ─── Form inputs ──────────────────────────────────────────────────────── */
+.t-input {
+  width: 100%;
+  height: 42px;
+  padding: 0 14px;
+  border: 1.5px solid var(--color-line);
+  border-radius: 12px;
+  background: #fff;
+  font: 14px/1 var(--font-ui);
+  color: var(--color-ink);
+  outline: none;
+  transition: border-color 0.12s;
+}
+
+.t-input:focus {
+  border-color: var(--color-ink);
+}

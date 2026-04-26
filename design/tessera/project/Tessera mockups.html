@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Tessera — 5-screen mockups</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css" />
+<style>
+  html, body { margin: 0; padding: 0; background: #f0eee9; font-family: "DM Sans", system-ui, sans-serif; }
+  body { overflow: hidden; }
+</style>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="shapes.jsx"></script>
+<script type="text/babel" src="helpers.jsx"></script>
+<script type="text/babel" src="screen-landing.jsx"></script>
+<script type="text/babel" src="screen-builder.jsx"></script>
+<script type="text/babel" src="screen-guider.jsx"></script>
+<script type="text/babel" src="screen-observer.jsx"></script>
+<script type="text/babel" src="screen-master.jsx"></script>
+
+<script type="text/babel">
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "accelerantStyle": "chunky",
+  "briefOpen": true,
+  "complexity": 5,
+  "gridType": "square",
+  "palette": "classic"
+}/*EDITMODE-END*/;
+
+function App() {
+  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+
+  return (
+    <>
+      <DesignCanvas>
+        <DCSection id="overview" title="Tessera · 5-screen flow" subtitle="A facilitation game where pairs build the same picture without seeing it">
+          <DCArtboard id="landing"  label="01 · Landing / create game"   width={1440} height={900}>
+            <ScreenLanding />
+          </DCArtboard>
+          <DCArtboard id="builder"  label="02 · Builder"                  width={1440} height={900}>
+            <ScreenBuilder briefOpen={t.briefOpen} accelerantStyle={t.accelerantStyle} />
+          </DCArtboard>
+          <DCArtboard id="guider"   label="03 · Guider"                   width={1440} height={900}>
+            <ScreenGuider briefOpen={t.briefOpen} />
+          </DCArtboard>
+          <DCArtboard id="observer" label="04 · Observer"                 width={1440} height={900}>
+            <ScreenObserver />
+          </DCArtboard>
+          <DCArtboard id="master"   label="05 · Game master ★"            width={1440} height={900}>
+            <ScreenMaster accelerantStyle={t.accelerantStyle} />
+          </DCArtboard>
+        </DCSection>
+      </DesignCanvas>
+
+      <TweaksPanel>
+        <TweakSection label="Setup" />
+        <TweakRadio  label="Accelerant style" value={t.accelerantStyle}
+          options={['chunky','cards','minimal']}
+          onChange={(v) => setTweak('accelerantStyle', v)} />
+        <TweakToggle label="Brief envelopes open" value={t.briefOpen}
+          onChange={(v) => setTweak('briefOpen', v)} />
+        <TweakSection label="Game preview" />
+        <TweakSlider label="Complexity" value={t.complexity} min={1} max={8} step={1}
+          onChange={(v) => setTweak('complexity', v)} />
+        <TweakRadio  label="Grid type" value={t.gridType}
+          options={['triangular','square','hex']}
+          onChange={(v) => setTweak('gridType', v)} />
+        <TweakRadio  label="Color theme" value={t.palette}
+          options={['classic','muted','neon']}
+          onChange={(v) => setTweak('palette', v)} />
+      </TweaksPanel>
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
