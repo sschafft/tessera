@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { TeamMode } from "@/lib/game/repository";
+import type { BriefSource, TeamMode } from "@/lib/game/repository";
 import type { TileColor } from "@/components/canvas/Tile";
 import { MasterLobby } from "./MasterLobby";
 import { PairsPanel } from "./PairsPanel";
 import { TopBarControls } from "./TopBarControls";
 import { AccelerantsRail } from "./AccelerantsRail";
 import { EndGameModal } from "./EndGameModal";
+import { GeminiFallbackModal } from "./GeminiFallbackModal";
 import { GameEndedView } from "@/components/play/GameEndedView";
 import { MasterPairView } from "./MasterPairView";
 import { useGameEvents } from "@/lib/realtime/useGameEvents";
@@ -219,26 +220,59 @@ export function MasterContent({
     [code, fetchSnapshot],
   );
 
-  const startRound = useCallback(async () => {
-    setBusy(true);
-    setActionError(null);
-    try {
-      const res = await fetch(`/api/games/${code}/rounds/start`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({}),
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.message || j.error || `status ${res.status}`);
+  const [geminiFallback, setGeminiFallback] = useState<{
+    failedRole: "builder" | "guider" | null;
+  } | null>(null);
+
+  const startRound = useCallback(
+    async (override?: BriefSource) => {
+      setBusy(true);
+      setActionError(null);
+      try {
+        const body: Record<string, unknown> = {};
+        if (override) body.brief_source_override = override;
+        const res = await fetch(`/api/games/${code}/rounds/start`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (res.status === 502) {
+          const j = await res.json().catch(() => ({}));
+          if (j?.error === "gemini_failed") {
+            const failed: "builder" | "guider" | null =
+              j.failed_role === "builder" || j.failed_role === "guider"
+                ? j.failed_role
+                : null;
+            setGeminiFallback({ failedRole: failed });
+            return;
+          }
+        }
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          throw new Error(j.message || j.error || `status ${res.status}`);
+        }
+        setGeminiFallback(null);
+        await fetchSnapshot();
+      } catch (err) {
+        setActionError(err instanceof Error ? err.message : "start failed");
+      } finally {
+        setBusy(false);
       }
-      await fetchSnapshot();
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : "start failed");
-    } finally {
-      setBusy(false);
-    }
-  }, [code, fetchSnapshot]);
+    },
+    [code, fetchSnapshot],
+  );
+
+  const startRoundDefault = useCallback(() => {
+    void startRound();
+  }, [startRound]);
+
+  const startWithLibrary = useCallback(() => {
+    void startRound("library");
+  }, [startRound]);
+
+  const dismissGeminiFallback = useCallback(() => {
+    setGeminiFallback(null);
+  }, []);
 
   const endRound = useCallback(async () => {
     setBusy(true);
@@ -404,7 +438,12 @@ export function MasterContent({
         complexity={round?.complexity ?? defaultComplexity}
         round={round}
         durationSeconds={round?.duration_seconds ?? initialDurationSeconds}
-        canStart={pairs.length > 0 && (round === null || round.status === "ended")}
+        canStart={
+          pairs.length > 0 &&
+          (round === null ||
+            round.status === "ended" ||
+            round.status === "pending")
+        }
         gameEnded={data?.status === "ended"}
         allRoundsDone={
           round?.status === "ended" &&
@@ -413,7 +452,7 @@ export function MasterContent({
         busy={busy}
         actionError={actionError}
         pairsCount={pairs.length}
-        onStart={startRound}
+        onStart={startRoundDefault}
         onEnd={endRound}
         onEndGame={requestEndGame}
       />
@@ -493,6 +532,13 @@ export function MasterContent({
         busy={busy}
         onConfirm={confirmEndGame}
         onCancel={cancelEndGame}
+      />
+      <GeminiFallbackModal
+        open={geminiFallback !== null}
+        busy={busy}
+        failedRole={geminiFallback?.failedRole ?? null}
+        onUseLibrary={startWithLibrary}
+        onCancel={dismissGeminiFallback}
       />
     </>
   );

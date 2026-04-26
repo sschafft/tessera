@@ -3,14 +3,27 @@ import "server-only";
 import { getRepository } from "@/lib/game/getRepository";
 import type { BriefRole, BriefSource, CustomBrief } from "@/lib/game/repository";
 import { pickLibraryBrief, type PickedBrief } from "./library";
-import {
-  GeminiResponseError,
-  GeminiUnavailableError,
-  generateBriefViaGemini,
-} from "./gemini";
+import { generateBriefViaGemini } from "./gemini";
 
 const PER_GAME_MAX = 30;
 const PER_DAY_MAX = 800;
+
+/**
+ * Thrown when source='gemini' and the Gemini path fails (network,
+ * malformed output, budget exhausted, etc.) AND the caller passed
+ * `allow_library_fallback: false`. Lets /rounds/start surface the
+ * failure to the GM instead of silently downgrading to library briefs,
+ * so the GM can choose between library / custom / retry.
+ */
+export class GeminiBriefFailedError extends Error {
+  constructor(
+    public readonly role: BriefRole,
+    public readonly reason: string,
+  ) {
+    super(`gemini brief failed for ${role}: ${reason}`);
+    this.name = "GeminiBriefFailedError";
+  }
+}
 
 export interface OrchestrateInput {
   role: BriefRole;
@@ -21,15 +34,24 @@ export interface OrchestrateInput {
   custom?: CustomBrief | null;
   /** Avoids re-rolling the same title twice in a row. */
   exclude_titles?: string[];
+  /**
+   * When source='gemini' and the call fails:
+   *   true  → silently fall back to a library brief
+   *   false → throw GeminiBriefFailedError
+   * Defaults to true (re-roll path keeps working through outages);
+   * /rounds/start passes false so the GM is told and can choose.
+   */
+  allow_library_fallback?: boolean;
 }
 
 /**
  * Pick a brief based on the configured source. Falls back gracefully:
- *   gm    → library when custom is missing
- *   gemini → library when API key absent, budget exhausted, or
- *            Gemini returns malformed output
+ *   gm     → library when custom is missing
+ *   gemini → library when allow_library_fallback (default), else throws
  */
 export async function pickBrief(input: OrchestrateInput): Promise<PickedBrief> {
+  const allowFallback = input.allow_library_fallback ?? true;
+
   if (input.source === "gm" && input.custom) {
     return {
       source: "gm",
@@ -39,36 +61,38 @@ export async function pickBrief(input: OrchestrateInput): Promise<PickedBrief> {
   }
 
   if (input.source === "gemini") {
-    const repo = getRepository();
-    const reservation = await repo.reserveGeminiCall({
-      game_id: input.game_id,
-      perGameMax: PER_GAME_MAX,
-      perDayMax: PER_DAY_MAX,
-    });
-    if (reservation.ok) {
-      try {
-        return await generateBriefViaGemini({
-          role: input.role,
-          complexity: input.complexity,
-          exclude_titles: input.exclude_titles,
-        });
-      } catch (err) {
-        if (
-          err instanceof GeminiUnavailableError ||
-          err instanceof GeminiResponseError
-        ) {
-          // Fall through to library; the budget already incremented but
-          // the failure is rare enough that we don't refund it.
-          console.warn("[briefs] gemini failed, falling back to library", err);
-        } else {
-          throw err;
+    let geminiFailReason: string | null = null;
+    try {
+      const repo = getRepository();
+      const reservation = await repo.reserveGeminiCall({
+        game_id: input.game_id,
+        perGameMax: PER_GAME_MAX,
+        perDayMax: PER_DAY_MAX,
+      });
+      if (reservation.ok) {
+        try {
+          return await generateBriefViaGemini({
+            role: input.role,
+            complexity: input.complexity,
+            exclude_titles: input.exclude_titles,
+          });
+        } catch (err) {
+          geminiFailReason = err instanceof Error ? err.message : String(err);
+          console.warn(
+            `[briefs] gemini call failed: ${geminiFailReason}`,
+          );
         }
+      } else {
+        geminiFailReason = `budget_${reservation.reason}`;
+        console.info(`[briefs] gemini budget exhausted (${reservation.reason})`);
       }
-    } else {
-      console.info(
-        "[briefs] gemini budget exhausted, falling back to library",
-        reservation.reason,
-      );
+    } catch (err) {
+      geminiFailReason = err instanceof Error ? err.message : String(err);
+      console.warn(`[briefs] gemini reservation failed: ${geminiFailReason}`);
+    }
+
+    if (geminiFailReason && !allowFallback) {
+      throw new GeminiBriefFailedError(input.role, geminiFailReason);
     }
   }
 

@@ -232,6 +232,26 @@ export class MemoryGameRepository implements GameRepository {
     }
   }
 
+  async deleteRound(round_id: string): Promise<void> {
+    const pairRoundIds = new Set<string>();
+    for (const [id, pr] of this.pairRounds.entries()) {
+      if (pr.round_id === round_id) {
+        pairRoundIds.add(id);
+        this.pairRounds.delete(id);
+      }
+    }
+    for (const [id, b] of this.briefs.entries()) {
+      if (pairRoundIds.has(b.pair_round_id)) this.briefs.delete(id);
+    }
+    for (const [id, p] of this.placements.entries()) {
+      if (pairRoundIds.has(p.pair_round_id)) this.placements.delete(id);
+    }
+    for (const [id, e] of this.accelerantEvents.entries()) {
+      if (e.round_id === round_id) this.accelerantEvents.delete(id);
+    }
+    this.rounds.delete(round_id);
+  }
+
   async findLatestRound(game_id: string): Promise<RoundRecord | null> {
     const rs = [...this.rounds.values()]
       .filter((r) => r.game_id === game_id)

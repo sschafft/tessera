@@ -307,6 +307,17 @@ export class SupabaseGameRepository implements GameRepository {
     if (error) throw new Error(`endRound: ${error.message}`);
   }
 
+  async deleteRound(round_id: string): Promise<void> {
+    const supabase = getServiceClient();
+    // FK CASCADE on pair_rounds → briefs / placements / accelerant_events
+    // (configured in the schema migration) handles the dependent rows.
+    const { error } = await supabase
+      .from("rounds")
+      .delete()
+      .eq("id", round_id);
+    if (error) throw new Error(`deleteRound: ${error.message}`);
+  }
+
   async findLatestRound(game_id: string): Promise<RoundRecord | null> {
     const supabase = getServiceClient();
     const { data, error } = await supabase

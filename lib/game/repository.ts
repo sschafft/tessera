@@ -232,6 +232,13 @@ export interface GameRepository {
   endRound(round_id: string): Promise<void>;
 
   /**
+   * Delete a round (and via cascade, its pair_rounds and briefs).
+   * Used to clean up half-started rounds left behind by a failed
+   * /rounds/start so the GM can retry.
+   */
+  deleteRound(round_id: string): Promise<void>;
+
+  /**
    * Find the most recent (highest index) round for a game.
    */
   findLatestRound(game_id: string): Promise<RoundRecord | null>;

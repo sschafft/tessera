@@ -3,7 +3,12 @@ import { isValidGameCode } from "@/lib/game/code";
 import { readSessionForGame } from "@/lib/auth/session";
 import { getRepository } from "@/lib/game/getRepository";
 import { generatePattern } from "@/lib/pattern/generator";
-import { pickBrief } from "@/lib/briefs/orchestrator";
+import {
+  GeminiBriefFailedError,
+  pickBrief,
+} from "@/lib/briefs/orchestrator";
+import type { PickedBrief } from "@/lib/briefs/library";
+import type { BriefSource } from "@/lib/game/repository";
 import { publishGameEvent } from "@/lib/realtime/publish";
 
 export const maxDuration = 30;
@@ -19,6 +24,14 @@ interface StartPayload {
   complexity?: number;
   /** Optional override; defaults to the game's round_duration_seconds. */
   duration_seconds?: number;
+  /**
+   * Override the brief source for both sides for this round. The GM
+   * sets this when retrying after a Gemini failure ('library'), or
+   * when explicitly downgrading to presets without re-editing the
+   * game. Falls through to game.{builder,guider}_brief_source when
+   * absent.
+   */
+  brief_source_override?: BriefSource;
 }
 
 export async function POST(req: NextRequest, { params }: RouteParams) {
@@ -40,6 +53,12 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   } catch {
     // Empty body is fine.
   }
+  const briefOverride: BriefSource | undefined =
+    body.brief_source_override === "library" ||
+    body.brief_source_override === "gm" ||
+    body.brief_source_override === "gemini"
+      ? body.brief_source_override
+      : undefined;
 
   const repo = getRepository();
   const game = await repo.findGameByCode(code);
@@ -62,7 +81,13 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       { status: 409 },
     );
   }
-  const nextIndex = (latest?.index ?? 0) + 1;
+  // A pending round is an orphan from a prior failed Start (e.g.
+  // Gemini timeout). Drop it so the GM can retry cleanly.
+  if (latest && latest.status === "pending") {
+    await repo.deleteRound(latest.id);
+  }
+  const nextIndex =
+    (latest && latest.status === "ended" ? latest.index : 0) + 1;
   if (nextIndex > game.round_count) {
     return NextResponse.json(
       { error: "all_rounds_complete" },
@@ -76,7 +101,72 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       ? body.duration_seconds
       : game.round_duration_seconds;
 
-  // Create the round (status='pending') then per-pair patterns.
+  const builderSource: BriefSource =
+    briefOverride ?? game.builder_brief_source;
+  const guiderSource: BriefSource =
+    briefOverride ?? game.guider_brief_source;
+  // Only fall back silently when the GM has explicitly chosen the
+  // override (so re-rolls / overrides keep working even if Gemini
+  // hiccups). For the default Start path, surface the failure so the
+  // GM can choose between library / custom / retry.
+  const allowFallback = briefOverride !== undefined;
+
+  // ─── Preflight: generate every brief in memory before we touch the
+  // ─── DB. If any Gemini call fails we'll return 502 cleanly without
+  // ─── leaving an orphan round behind.
+  type PreparedPair = {
+    pair_id: string;
+    seed: string;
+    goal: unknown;
+    builder?: PickedBrief;
+    guider?: PickedBrief;
+  };
+  const prepared: PreparedPair[] = [];
+  try {
+    for (const pair of pairs) {
+      const seed = `${game.id}:${nextIndex}:${pair.id}:${Date.now()}`;
+      const goal = generatePattern({ complexity, seed });
+      const entry: PreparedPair = { pair_id: pair.id, seed, goal };
+      if (game.builder_brief_on) {
+        entry.builder = await pickBrief({
+          role: "builder",
+          complexity,
+          source: builderSource,
+          game_id: game.id,
+          custom: game.builder_brief_custom,
+          allow_library_fallback: allowFallback,
+        });
+      }
+      if (game.guider_brief_on) {
+        entry.guider = await pickBrief({
+          role: "guider",
+          complexity,
+          source: guiderSource,
+          game_id: game.id,
+          custom: game.guider_brief_custom,
+          allow_library_fallback: allowFallback,
+        });
+      }
+      prepared.push(entry);
+    }
+  } catch (err) {
+    if (err instanceof GeminiBriefFailedError) {
+      return NextResponse.json(
+        {
+          error: "gemini_failed",
+          failed_role: err.role,
+          reason: err.reason,
+        },
+        { status: 502 },
+      );
+    }
+    throw err;
+  }
+
+  // ─── Commit: now that briefs are guaranteed, write the round + per-
+  // ─── pair rows. Failures here are rare (DB outages) and would still
+  // ─── leave a pending round; the next Start retries it (delete-then-
+  // ─── create above).
   const round = await repo.createRound({
     game_id: game.id,
     index: nextIndex,
@@ -84,49 +174,29 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     duration_seconds: duration,
   });
 
-  for (const pair of pairs) {
-    const seed = `${game.id}:${round.id}:${pair.id}`;
-    const goal = generatePattern({ complexity, seed });
+  for (const p of prepared) {
     const pairRound = await repo.createPairRound({
       round_id: round.id,
-      pair_id: pair.id,
-      goal_pattern: goal,
-      pattern_seed: seed,
+      pair_id: p.pair_id,
+      goal_pattern: p.goal,
+      pattern_seed: p.seed,
     });
-
-    // Brief generation per pair, gated by per-side toggles. Only the
-    // 'library' source is wired in M5; 'gemini' / 'gm' source paths
-    // ship in M5.5 and M5.6.
-    if (game.builder_brief_on) {
-      const brief = await pickBrief({
-        role: "builder",
-        complexity,
-        source: game.builder_brief_source,
-        game_id: game.id,
-        custom: game.builder_brief_custom,
-      });
+    if (p.builder) {
       await repo.upsertBrief({
         pair_round_id: pairRound.id,
         role: "builder",
-        source: brief.source,
-        title: brief.title,
-        rules: brief.rules,
+        source: p.builder.source,
+        title: p.builder.title,
+        rules: p.builder.rules,
       });
     }
-    if (game.guider_brief_on) {
-      const brief = await pickBrief({
-        role: "guider",
-        complexity,
-        source: game.guider_brief_source,
-        game_id: game.id,
-        custom: game.guider_brief_custom,
-      });
+    if (p.guider) {
       await repo.upsertBrief({
         pair_round_id: pairRound.id,
         role: "guider",
-        source: brief.source,
-        title: brief.title,
-        rules: brief.rules,
+        source: p.guider.source,
+        title: p.guider.title,
+        rules: p.guider.rules,
       });
     }
   }
