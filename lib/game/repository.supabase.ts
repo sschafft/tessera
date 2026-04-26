@@ -44,6 +44,24 @@ function toGameRecord(row: DbGame): GameRecord {
     guider_brief_on: row.guider_brief_on,
     builder_brief_source: row.builder_brief_source,
     guider_brief_source: row.guider_brief_source,
+    builder_brief_custom:
+      row.builder_brief_custom &&
+      typeof row.builder_brief_custom === "object" &&
+      !Array.isArray(row.builder_brief_custom)
+        ? (row.builder_brief_custom as unknown as {
+            title: string;
+            rules: string[];
+          })
+        : null,
+    guider_brief_custom:
+      row.guider_brief_custom &&
+      typeof row.guider_brief_custom === "object" &&
+      !Array.isArray(row.guider_brief_custom)
+        ? (row.guider_brief_custom as unknown as {
+            title: string;
+            rules: string[];
+          })
+        : null,
     round_count: row.round_count,
     round_duration_seconds: row.round_duration_seconds,
     participant_cap: row.participant_cap,
@@ -94,6 +112,8 @@ export class SupabaseGameRepository implements GameRepository {
         guider_brief_on: input.guider_brief_on,
         builder_brief_source: input.builder_brief_source,
         guider_brief_source: input.guider_brief_source,
+        builder_brief_custom: (input.builder_brief_custom ?? null) as never,
+        guider_brief_custom: (input.guider_brief_custom ?? null) as never,
         round_count: input.round_count,
         round_duration_seconds: input.round_duration_seconds,
         participant_cap: input.participant_cap,

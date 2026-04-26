@@ -142,6 +142,7 @@ export type Database = {
       }
       games: {
         Row: {
+          builder_brief_custom: Json | null
           builder_brief_on: boolean
           builder_brief_source: Database["public"]["Enums"]["brief_source_t"]
           code: string
@@ -150,6 +151,7 @@ export type Database = {
           ended_at: string | null
           gemini_calls_used: number
           gm_participant_id: string
+          guider_brief_custom: Json | null
           guider_brief_on: boolean
           guider_brief_source: Database["public"]["Enums"]["brief_source_t"]
           host_token_hash: string
@@ -166,6 +168,7 @@ export type Database = {
           workshop_name: string
         }
         Insert: {
+          builder_brief_custom?: Json | null
           builder_brief_on?: boolean
           builder_brief_source?: Database["public"]["Enums"]["brief_source_t"]
           code: string
@@ -174,6 +177,7 @@ export type Database = {
           ended_at?: string | null
           gemini_calls_used?: number
           gm_participant_id: string
+          guider_brief_custom?: Json | null
           guider_brief_on?: boolean
           guider_brief_source?: Database["public"]["Enums"]["brief_source_t"]
           host_token_hash: string
@@ -190,6 +194,7 @@ export type Database = {
           workshop_name: string
         }
         Update: {
+          builder_brief_custom?: Json | null
           builder_brief_on?: boolean
           builder_brief_source?: Database["public"]["Enums"]["brief_source_t"]
           code?: string
@@ -198,6 +203,7 @@ export type Database = {
           ended_at?: string | null
           gemini_calls_used?: number
           gm_participant_id?: string
+          guider_brief_custom?: Json | null
           guider_brief_on?: boolean
           guider_brief_source?: Database["public"]["Enums"]["brief_source_t"]
           host_token_hash?: string

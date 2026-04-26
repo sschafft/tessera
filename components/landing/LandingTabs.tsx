@@ -62,6 +62,13 @@ export function LandingTabs() {
   );
 }
 
+interface CreatedInfo {
+  code: string;
+  recoveryUrl: string;
+}
+
+type BriefSource = "library" | "gm";
+
 function HostForm() {
   const router = useRouter();
   const [workshopName, setWorkshopName] = useState("Q3 cross-functional kickoff");
@@ -71,8 +78,15 @@ function HostForm() {
   const [complexity, setComplexity] = useState(5);
   const [builderBrief, setBuilderBrief] = useState(true);
   const [guiderBrief, setGuiderBrief] = useState(true);
+  const [builderBriefSource, setBuilderBriefSource] = useState<BriefSource>("library");
+  const [guiderBriefSource, setGuiderBriefSource] = useState<BriefSource>("library");
+  const [builderCustomTitle, setBuilderCustomTitle] = useState("");
+  const [builderCustomRules, setBuilderCustomRules] = useState("");
+  const [guiderCustomTitle, setGuiderCustomTitle] = useState("");
+  const [guiderCustomRules, setGuiderCustomRules] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [created, setCreated] = useState<CreatedInfo | null>(null);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -90,8 +104,28 @@ function HostForm() {
           default_complexity: complexity,
           builder_brief_on: builderBrief,
           guider_brief_on: guiderBrief,
-          builder_brief_source: "library",
-          guider_brief_source: "library",
+          builder_brief_source: builderBrief ? builderBriefSource : "library",
+          guider_brief_source: guiderBrief ? guiderBriefSource : "library",
+          builder_brief_custom:
+            builderBrief && builderBriefSource === "gm"
+              ? {
+                  title: builderCustomTitle.trim(),
+                  rules: builderCustomRules
+                    .split("\n")
+                    .map((r) => r.trim())
+                    .filter(Boolean),
+                }
+              : null,
+          guider_brief_custom:
+            guiderBrief && guiderBriefSource === "gm"
+              ? {
+                  title: guiderCustomTitle.trim(),
+                  rules: guiderCustomRules
+                    .split("\n")
+                    .map((r) => r.trim())
+                    .filter(Boolean),
+                }
+              : null,
           round_count: 1,
           round_duration_seconds: 900,
           participant_cap: 50,
@@ -102,12 +136,24 @@ function HostForm() {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || `Server returned ${res.status}`);
       }
-      const data: { code: string } = await res.json();
-      router.push(`/g/${data.code}/master`);
+      const data: { code: string; host_token: string } = await res.json();
+      const recoveryUrl = `${window.location.origin}/host-recover/${data.code}#${data.host_token}`;
+      setCreated({ code: data.code, recoveryUrl });
+      setSubmitting(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
       setSubmitting(false);
     }
+  }
+
+  if (created) {
+    return (
+      <CreatedConfirm
+        code={created.code}
+        recoveryUrl={created.recoveryUrl}
+        onContinue={() => router.push(`/g/${created.code}/master`)}
+      />
+    );
   }
 
   return (
@@ -173,6 +219,33 @@ function HostForm() {
           onChange={setGuiderBrief}
         />
       </div>
+
+      {(builderBrief || guiderBrief) && (
+        <div className="grid grid-cols-2 gap-3">
+          {builderBrief && (
+            <BriefSourceSection
+              label="Builder brief source"
+              source={builderBriefSource}
+              onSourceChange={setBuilderBriefSource}
+              title={builderCustomTitle}
+              onTitleChange={setBuilderCustomTitle}
+              rules={builderCustomRules}
+              onRulesChange={setBuilderCustomRules}
+            />
+          )}
+          {guiderBrief && (
+            <BriefSourceSection
+              label="Guider brief source"
+              source={guiderBriefSource}
+              onSourceChange={setGuiderBriefSource}
+              title={guiderCustomTitle}
+              onTitleChange={setGuiderCustomTitle}
+              rules={guiderCustomRules}
+              onRulesChange={setGuiderCustomRules}
+            />
+          )}
+        </div>
+      )}
 
       {error && (
         <p className="text-[13px] text-[var(--color-t-red)]" role="alert">
@@ -263,5 +336,161 @@ function JoinForm() {
         Join game →
       </button>
     </form>
+  );
+}
+
+const BRIEF_SOURCE_OPTIONS = ["library", "gm"] as const;
+const BRIEF_SOURCE_LABELS: Record<BriefSource, string> = {
+  library: "Library",
+  gm: "Custom",
+};
+
+function BriefSourceSection({
+  label,
+  source,
+  onSourceChange,
+  title,
+  onTitleChange,
+  rules,
+  onRulesChange,
+}: {
+  label: string;
+  source: BriefSource;
+  onSourceChange: (s: BriefSource) => void;
+  title: string;
+  onTitleChange: (t: string) => void;
+  rules: string;
+  onRulesChange: (r: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2 rounded-[14px] border border-[var(--color-line)] p-3">
+      <span className="t-mono text-[11px] uppercase tracking-wide text-[var(--color-ink-2)]">
+        {label}
+      </span>
+      <div className="flex gap-1.5 rounded-[10px] bg-[var(--color-paper-2)] p-0.5">
+        {BRIEF_SOURCE_OPTIONS.map((opt) => {
+          const active = source === opt;
+          return (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => onSourceChange(opt)}
+              className="flex-1 cursor-pointer border-none px-2 py-1.5 text-[12px] font-semibold"
+              style={{
+                background: active ? "#fff" : "transparent",
+                borderRadius: 8,
+                color: active ? "var(--color-ink)" : "var(--color-ink-3)",
+                boxShadow: active ? "0 1px 2px rgba(0,0,0,.10)" : "none",
+              }}
+            >
+              {BRIEF_SOURCE_LABELS[opt]}
+            </button>
+          );
+        })}
+      </div>
+      {source === "gm" && (
+        <>
+          <input
+            className="t-input"
+            value={title}
+            onChange={(e) => onTitleChange(e.target.value)}
+            placeholder="Brief title (e.g., Mirror image)"
+            maxLength={80}
+          />
+          <textarea
+            className="rounded-[12px] border-[1.5px] border-[var(--color-line)] bg-white p-2.5 text-[13px] text-[var(--color-ink)] outline-none"
+            rows={3}
+            value={rules}
+            onChange={(e) => onRulesChange(e.target.value)}
+            placeholder={`One rule per line\n• When they say "left", place right`}
+            style={{ fontFamily: "var(--font-ui)" }}
+            maxLength={1500}
+          />
+          <p className="t-mono text-[10px] text-[var(--color-ink-3)]">
+            One rule per line · 5 max · 280 chars each
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
+function CreatedConfirm({
+  code,
+  recoveryUrl,
+  onContinue,
+}: {
+  code: string;
+  recoveryUrl: string;
+  onContinue: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="flex flex-col gap-4 p-6">
+      <div className="flex flex-col gap-1">
+        <span className="t-mono text-[11px] uppercase tracking-widest text-[var(--color-ink-3)]">
+          GAME CREATED
+        </span>
+        <h3 className="t-display text-[28px] font-bold tracking-tight">
+          {code}
+        </h3>
+      </div>
+
+      <div
+        className="flex flex-col gap-2 rounded-[14px] px-4 py-3.5"
+        style={{ background: "var(--color-tint-yellow)" }}
+      >
+        <div
+          className="text-[12px] font-bold uppercase tracking-wide"
+          style={{ color: "#7a5b00" }}
+        >
+          ⚠ Save your host recovery link
+        </div>
+        <p
+          className="text-[13px]"
+          style={{ color: "#7a5b00", lineHeight: 1.45 }}
+        >
+          If you close this tab, this is the <b>only way back</b> into the
+          game master dashboard. Bookmark it now.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <span className="t-mono text-[11px] uppercase tracking-wide text-[var(--color-ink-2)]">
+          Recovery URL
+        </span>
+        <div
+          className="t-mono break-all rounded-[10px] border border-[var(--color-line)] bg-[var(--color-paper-2)] px-3 py-2.5 text-[11px]"
+          style={{ wordBreak: "break-all" }}
+        >
+          {recoveryUrl}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          className="t-btn t-btn--ghost t-btn--sm"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(recoveryUrl);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1500);
+            } catch {
+              setCopied(false);
+            }
+          }}
+        >
+          {copied ? "✓ Copied" : "Copy URL"}
+        </button>
+        <button
+          type="button"
+          className="t-btn t-btn--primary t-btn--sm"
+          onClick={onContinue}
+        >
+          I&apos;ve saved it · go to dashboard →
+        </button>
+      </div>
+    </div>
   );
 }

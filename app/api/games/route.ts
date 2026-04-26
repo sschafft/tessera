@@ -14,6 +14,11 @@ import type {
 // the consensus is Node is the safer default for auth/crypto routes.
 export const runtime = "nodejs";
 
+interface CustomBriefPayload {
+  title?: string;
+  rules?: string[];
+}
+
 interface CreateGamePayload {
   workshop_name?: string;
   video_call_url?: string;
@@ -24,10 +29,35 @@ interface CreateGamePayload {
   guider_brief_on?: boolean;
   builder_brief_source?: BriefSource;
   guider_brief_source?: BriefSource;
+  builder_brief_custom?: CustomBriefPayload | null;
+  guider_brief_custom?: CustomBriefPayload | null;
   round_count?: number;
   round_duration_seconds?: number;
   participant_cap?: number;
   sound_on?: boolean;
+}
+
+const CUSTOM_TITLE_MAX = 80;
+const CUSTOM_RULE_MAX = 280;
+const CUSTOM_RULES_MAX = 5;
+
+function sanitiseCustom(b: CustomBriefPayload | null | undefined) {
+  if (!b) return null;
+  const title = typeof b.title === "string" ? b.title.trim() : "";
+  if (!title) return null;
+  if (title.length > CUSTOM_TITLE_MAX) return { error: "title_too_long" } as const;
+  const rules = Array.isArray(b.rules)
+    ? b.rules
+        .filter((r): r is string => typeof r === "string")
+        .map((r) => r.trim())
+        .filter(Boolean)
+    : [];
+  if (rules.length === 0) return { error: "rules_required" } as const;
+  if (rules.length > CUSTOM_RULES_MAX) return { error: "too_many_rules" } as const;
+  if (rules.some((r) => r.length > CUSTOM_RULE_MAX)) {
+    return { error: "rule_too_long" } as const;
+  }
+  return { title, rules };
 }
 
 function isUrl(s: unknown): s is string {
@@ -80,6 +110,22 @@ function validate(payload: CreateGamePayload): CreateGameInput | { error: string
     }
   }
 
+  // Validate custom briefs when source='gm'.
+  let builderCustom: { title: string; rules: string[] } | null = null;
+  if (payload.builder_brief_on && payload.builder_brief_source === "gm") {
+    const v = sanitiseCustom(payload.builder_brief_custom);
+    if (!v) return { error: "builder_brief_custom required when source='gm'" };
+    if ("error" in v) return { error: `builder_brief_${v.error}` };
+    builderCustom = v;
+  }
+  let guiderCustom: { title: string; rules: string[] } | null = null;
+  if (payload.guider_brief_on && payload.guider_brief_source === "gm") {
+    const v = sanitiseCustom(payload.guider_brief_custom);
+    if (!v) return { error: "guider_brief_custom required when source='gm'" };
+    if ("error" in v) return { error: `guider_brief_${v.error}` };
+    guiderCustom = v;
+  }
+
   return {
     workshop_name: payload.workshop_name.trim().slice(0, 80),
     video_call_url: payload.video_call_url!,
@@ -90,6 +136,8 @@ function validate(payload: CreateGamePayload): CreateGameInput | { error: string
     guider_brief_on: Boolean(payload.guider_brief_on),
     builder_brief_source: payload.builder_brief_source!,
     guider_brief_source: payload.guider_brief_source!,
+    builder_brief_custom: builderCustom,
+    guider_brief_custom: guiderCustom,
     round_count: r,
     round_duration_seconds: dur,
     participant_cap: cap,

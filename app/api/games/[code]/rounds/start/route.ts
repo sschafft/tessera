@@ -95,7 +95,18 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     // 'library' source is wired in M5; 'gemini' / 'gm' source paths
     // ship in M5.5 and M5.6.
     if (game.builder_brief_on) {
-      const brief = await pickLibraryBrief({ role: "builder", complexity });
+      // GM-authored briefs (source='gm') skip the library; library
+      // is the fallback if the source is library or the GM didn't
+      // actually fill in a custom brief.
+      const useCustom =
+        game.builder_brief_source === "gm" && game.builder_brief_custom;
+      const brief = useCustom
+        ? {
+            source: "gm" as const,
+            title: game.builder_brief_custom!.title,
+            rules: game.builder_brief_custom!.rules,
+          }
+        : await pickLibraryBrief({ role: "builder", complexity });
       await repo.upsertBrief({
         pair_round_id: pairRound.id,
         role: "builder",
@@ -105,7 +116,15 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       });
     }
     if (game.guider_brief_on) {
-      const brief = await pickLibraryBrief({ role: "guider", complexity });
+      const useCustom =
+        game.guider_brief_source === "gm" && game.guider_brief_custom;
+      const brief = useCustom
+        ? {
+            source: "gm" as const,
+            title: game.guider_brief_custom!.title,
+            rules: game.guider_brief_custom!.rules,
+          }
+        : await pickLibraryBrief({ role: "guider", complexity });
       await repo.upsertBrief({
         pair_round_id: pairRound.id,
         role: "guider",

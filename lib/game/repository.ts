@@ -13,6 +13,11 @@ export type ParticipantRole =
   | "observer"
   | "lobby";
 
+export interface CustomBrief {
+  title: string;
+  rules: string[];
+}
+
 export interface CreateGameInput {
   workshop_name: string;
   video_call_url: string;
@@ -23,6 +28,10 @@ export interface CreateGameInput {
   guider_brief_on: boolean;
   builder_brief_source: BriefSource;
   guider_brief_source: BriefSource;
+  /** Required when builder_brief_source='gm'; ignored otherwise. */
+  builder_brief_custom?: CustomBrief | null;
+  /** Required when guider_brief_source='gm'; ignored otherwise. */
+  guider_brief_custom?: CustomBrief | null;
   round_count: number;
   round_duration_seconds: number;
   participant_cap: number;
@@ -39,6 +48,8 @@ export interface GameRecord extends CreateGameInput {
   host_token_hash: string;
   gemini_calls_used: number;
   gm_participant_id: string;
+  builder_brief_custom: CustomBrief | null;
+  guider_brief_custom: CustomBrief | null;
 }
 
 export interface ParticipantRecord {

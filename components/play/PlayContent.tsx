@@ -1,8 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { TileColor, TileShape } from "@/components/canvas/Tile";
 import type { GoalPattern } from "@/lib/pattern/types";
+import {
+  enableAudio,
+  playGameEnd,
+  playRoundEnd,
+  playTimePressure,
+} from "@/lib/sound";
 
 export interface PlacedPiece {
   id: string;
@@ -36,6 +42,7 @@ export interface PlayState {
   video_call_url: string;
   whiteboard_url: string | null;
   game_status: "lobby" | "running" | "ended" | "purged";
+  sound_on: boolean;
   role: PlayRole;
   me: { id: string; display_name: string; role: PlayRole; color: TileColor };
   partner: {
@@ -123,6 +130,56 @@ export function PlayContent({ code, initial }: PlayContentProps) {
       clearInterval(id);
     };
   }, [fetchState]);
+
+  // Audio: arm on the first user click; trigger sound on state diffs.
+  useEffect(() => {
+    if (!state.sound_on) return;
+    const onClick = () => {
+      void enableAudio();
+    };
+    window.addEventListener("pointerdown", onClick, { once: true });
+    return () => window.removeEventListener("pointerdown", onClick);
+  }, [state.sound_on]);
+
+  const prevRoundStatus = useRef<string | null | undefined>(state.round?.status);
+  const prevDuration = useRef<number | undefined>(state.round?.duration_seconds);
+  const prevGameStatus = useRef<string>(state.game_status);
+
+  useEffect(() => {
+    if (!state.sound_on) return;
+    const cur = state.round?.status;
+    // Round just ended: play the round-end ding (skip if game also ended).
+    if (
+      prevRoundStatus.current === "running" &&
+      cur === "ended" &&
+      state.game_status !== "ended"
+    ) {
+      playRoundEnd();
+    }
+    prevRoundStatus.current = cur;
+  }, [state.round?.status, state.game_status, state.sound_on]);
+
+  useEffect(() => {
+    if (!state.sound_on) return;
+    const cur = state.round?.duration_seconds;
+    if (
+      typeof prevDuration.current === "number" &&
+      typeof cur === "number" &&
+      cur < prevDuration.current &&
+      state.round?.status === "running"
+    ) {
+      playTimePressure();
+    }
+    prevDuration.current = cur;
+  }, [state.round?.duration_seconds, state.round?.status, state.sound_on]);
+
+  useEffect(() => {
+    if (!state.sound_on) return;
+    if (prevGameStatus.current !== "ended" && state.game_status === "ended") {
+      playGameEnd();
+    }
+    prevGameStatus.current = state.game_status;
+  }, [state.game_status, state.sound_on]);
 
   const partnerForBar = state.partner
     ? {

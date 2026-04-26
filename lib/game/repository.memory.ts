@@ -68,6 +68,8 @@ export class MemoryGameRepository implements GameRepository {
       last_interaction_at: now,
       ended_at: null,
       gemini_calls_used: 0,
+      builder_brief_custom: input.builder_brief_custom ?? null,
+      guider_brief_custom: input.guider_brief_custom ?? null,
     };
     this.games.set(record.code, record);
     return record;
