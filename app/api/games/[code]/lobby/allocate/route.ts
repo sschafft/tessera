@@ -1,0 +1,174 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { isValidGameCode } from "@/lib/game/code";
+import { readSessionForGame } from "@/lib/auth/session";
+import { getRepository } from "@/lib/game/getRepository";
+import type { ParticipantRecord } from "@/lib/game/repository";
+
+export const runtime = "nodejs";
+
+interface RouteParams {
+  params: Promise<{ code: string }>;
+}
+
+type AllocatePayload =
+  | { kind: "auto" }
+  | { kind: "pair"; participant_ids: [string, string]; builder_id: string }
+  | { kind: "observer"; participant_ids: string[]; pair_id: string };
+
+function isAllocatePayload(b: unknown): b is AllocatePayload {
+  if (!b || typeof b !== "object") return false;
+  const k = (b as { kind?: unknown }).kind;
+  if (k === "auto") return true;
+  if (k === "pair") {
+    const o = b as { participant_ids?: unknown; builder_id?: unknown };
+    return (
+      Array.isArray(o.participant_ids) &&
+      o.participant_ids.length === 2 &&
+      o.participant_ids.every((s) => typeof s === "string") &&
+      typeof o.builder_id === "string" &&
+      o.participant_ids.includes(o.builder_id)
+    );
+  }
+  if (k === "observer") {
+    const o = b as { participant_ids?: unknown; pair_id?: unknown };
+    return (
+      Array.isArray(o.participant_ids) &&
+      o.participant_ids.length > 0 &&
+      o.participant_ids.every((s) => typeof s === "string") &&
+      typeof o.pair_id === "string"
+    );
+  }
+  return false;
+}
+
+export async function POST(req: NextRequest, { params }: RouteParams) {
+  const { code } = await params;
+  if (!isValidGameCode(code)) {
+    return NextResponse.json({ error: "invalid_code" }, { status: 400 });
+  }
+  const claims = await readSessionForGame(code);
+  if (!claims) {
+    return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  }
+  if (claims.role !== "gm") {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "invalid_json" }, { status: 400 });
+  }
+  if (!isAllocatePayload(body)) {
+    return NextResponse.json({ error: "invalid_payload" }, { status: 400 });
+  }
+
+  const repo = getRepository();
+  const game = await repo.findGameByCode(code);
+  if (!game || game.id !== claims.game_id) {
+    return NextResponse.json({ error: "game_not_found" }, { status: 404 });
+  }
+
+  const participants = await repo.listActiveParticipants(game.id);
+  const byId = new Map(participants.map((p) => [p.id, p]));
+
+  if (body.kind === "auto") {
+    const result = await autoAllocate({ repo, game_id: game.id, participants });
+    return NextResponse.json({ ok: true, ...result });
+  }
+
+  if (body.kind === "pair") {
+    const [aId, bId] = body.participant_ids;
+    const a = byId.get(aId);
+    const b = byId.get(bId);
+    if (!a || !b) {
+      return NextResponse.json(
+        { error: "participant_not_in_game" },
+        { status: 400 },
+      );
+    }
+    const builderId = body.builder_id;
+    const guiderId = builderId === aId ? bId : aId;
+    await repo.createPair(game.id, builderId, guiderId);
+    return NextResponse.json({ ok: true });
+  }
+
+  // observer
+  const pairs = await repo.listPairs(game.id);
+  const pair = pairs.find((p) => p.id === body.pair_id);
+  if (!pair) {
+    return NextResponse.json({ error: "pair_not_found" }, { status: 400 });
+  }
+  for (const pid of body.participant_ids) {
+    const p = byId.get(pid);
+    if (!p) continue;
+    await repo.assignObserver(pid, pair.id);
+  }
+  return NextResponse.json({ ok: true });
+}
+
+interface AutoResult {
+  pairs_created: number;
+  observers_assigned: number;
+  unallocated: number;
+}
+
+async function autoAllocate({
+  repo,
+  game_id,
+  participants,
+}: {
+  repo: ReturnType<typeof getRepository>;
+  game_id: string;
+  participants: ParticipantRecord[];
+}): Promise<AutoResult> {
+  // Reset all roles first so re-running auto-allocate is idempotent.
+  await repo.clearAllocations(game_id);
+
+  const lobbyOnly = participants.filter((p) => p.role !== "gm");
+  shuffle(lobbyOnly);
+
+  const pairs: { builder: string; guider: string }[] = [];
+  let i = 0;
+  while (i + 1 < lobbyOnly.length) {
+    const a = lobbyOnly[i]!;
+    const b = lobbyOnly[i + 1]!;
+    pairs.push({ builder: a.id, guider: b.id });
+    i += 2;
+  }
+
+  const createdPairs: string[] = [];
+  for (const p of pairs) {
+    const created = await repo.createPair(game_id, p.builder, p.guider);
+    createdPairs.push(created.id);
+  }
+
+  let observers = 0;
+  if (i < lobbyOnly.length && createdPairs.length > 0) {
+    // Distribute leftover players as observers, round-robin into pairs.
+    const leftovers = lobbyOnly.slice(i);
+    for (let j = 0; j < leftovers.length; j++) {
+      const target = createdPairs[j % createdPairs.length]!;
+      await repo.assignObserver(leftovers[j]!.id, target);
+      observers += 1;
+    }
+  }
+
+  const unallocated =
+    createdPairs.length === 0 ? lobbyOnly.length : 0;
+  return {
+    pairs_created: createdPairs.length,
+    observers_assigned: observers,
+    unallocated,
+  };
+}
+
+function shuffle<T>(arr: T[]): void {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = arr[i]!;
+    arr[i] = arr[j]!;
+    arr[j] = tmp;
+  }
+}

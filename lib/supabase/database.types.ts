@@ -463,7 +463,26 @@ export type Database = {
       }
     }
     Views: { [_ in never]: never }
-    Functions: { [_ in never]: never }
+    Functions: {
+      clear_allocations: {
+        Args: { p_game_id: string }
+        Returns: undefined
+      }
+      create_pair_with_roles: {
+        Args: {
+          p_builder_id: string
+          p_game_id: string
+          p_guider_id: string
+        }
+        Returns: {
+          builder_id: string | null
+          created_at: string
+          game_id: string
+          guider_id: string | null
+          id: string
+        }
+      }
+    }
     Enums: {
       accelerant_scope_t: "pair" | "all"
       accelerant_t:

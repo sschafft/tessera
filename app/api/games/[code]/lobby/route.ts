@@ -10,8 +10,9 @@ interface RouteParams {
 }
 
 /**
- * GM-only lobby snapshot. Returns the active participant list for live
- * polling on the master dashboard. Polled at ~2 Hz; cheap query.
+ * GM-only snapshot of all participants and pairs for a game. Polled at
+ * 2 Hz from the master dashboard. Returns enough data for the UI to
+ * render the lobby panel + pairs list without further round-trips.
  */
 export async function GET(req: NextRequest, { params }: RouteParams) {
   const { code } = await params;
@@ -33,10 +34,11 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "game_not_found" }, { status: 404 });
   }
 
-  const active = await repo.listActiveParticipants(game.id);
+  const [active, pairs] = await Promise.all([
+    repo.listActiveParticipants(game.id),
+    repo.listPairs(game.id),
+  ]);
 
-  // Strip last_seen_at and game_id from the wire payload — the dashboard
-  // only needs what it renders.
   const participants = active.map((p) => ({
     id: p.id,
     display_name: p.display_name,
@@ -52,5 +54,11 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     team_mode: game.team_mode,
     participant_cap: game.participant_cap,
     participants,
+    pairs: pairs.map((p) => ({
+      id: p.id,
+      builder_id: p.builder_id,
+      guider_id: p.guider_id,
+      created_at: p.created_at,
+    })),
   });
 }

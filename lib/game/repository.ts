@@ -61,6 +61,14 @@ export interface CreateParticipantInput {
   color: string;
 }
 
+export interface PairRecord {
+  id: string;
+  game_id: string;
+  builder_id: string | null;
+  guider_id: string | null;
+  created_at: string;
+}
+
 export interface GameRepository {
   createGame(
     input: CreateGameInput & {
@@ -101,4 +109,31 @@ export interface GameRepository {
    * Touch last_seen_at on a participant.
    */
   touchParticipant(id: string): Promise<void>;
+
+  /**
+   * Create a pair with a builder + guider, and atomically update both
+   * participants' role + pair_id.
+   */
+  createPair(
+    game_id: string,
+    builder_id: string,
+    guider_id: string,
+  ): Promise<PairRecord>;
+
+  /**
+   * List pairs for a game, ordered by created_at asc.
+   */
+  listPairs(game_id: string): Promise<PairRecord[]>;
+
+  /**
+   * Add a participant to an existing pair as an observer. Updates the
+   * participant's role + pair_id; does not modify the pair row.
+   */
+  assignObserver(participant_id: string, pair_id: string): Promise<void>;
+
+  /**
+   * Reset every participant in a game back to the lobby and delete all
+   * existing pairs. Used as the precondition for auto-allocate.
+   */
+  clearAllocations(game_id: string): Promise<void>;
 }

@@ -3,6 +3,7 @@ import type {
   CreateParticipantInput,
   GameRecord,
   GameRepository,
+  PairRecord,
   ParticipantRecord,
 } from "./repository";
 
@@ -20,6 +21,7 @@ export class DuplicateNameError extends Error {
 export class MemoryGameRepository implements GameRepository {
   private games = new Map<string, GameRecord>();
   private participants = new Map<string, ParticipantRecord>();
+  private pairs = new Map<string, PairRecord>();
 
   async createGame(
     input: CreateGameInput & {
@@ -101,6 +103,66 @@ export class MemoryGameRepository implements GameRepository {
   async touchParticipant(id: string): Promise<void> {
     const p = this.participants.get(id);
     if (p) p.last_seen_at = new Date().toISOString();
+  }
+
+  async createPair(
+    game_id: string,
+    builder_id: string,
+    guider_id: string,
+  ): Promise<PairRecord> {
+    const builder = this.participants.get(builder_id);
+    const guider = this.participants.get(guider_id);
+    if (!builder || builder.game_id !== game_id) {
+      throw new Error("builder_not_in_game");
+    }
+    if (!guider || guider.game_id !== game_id) {
+      throw new Error("guider_not_in_game");
+    }
+    const pair: PairRecord = {
+      id: crypto.randomUUID(),
+      game_id,
+      builder_id,
+      guider_id,
+      created_at: new Date().toISOString(),
+    };
+    this.pairs.set(pair.id, pair);
+    builder.role = "builder";
+    builder.pair_id = pair.id;
+    guider.role = "guider";
+    guider.pair_id = pair.id;
+    return pair;
+  }
+
+  async listPairs(game_id: string): Promise<PairRecord[]> {
+    return [...this.pairs.values()]
+      .filter((p) => p.game_id === game_id)
+      .sort((a, b) => a.created_at.localeCompare(b.created_at));
+  }
+
+  async assignObserver(
+    participant_id: string,
+    pair_id: string,
+  ): Promise<void> {
+    const p = this.participants.get(participant_id);
+    const pair = this.pairs.get(pair_id);
+    if (!p) throw new Error("participant_not_found");
+    if (!pair || pair.game_id !== p.game_id) {
+      throw new Error("pair_not_in_game");
+    }
+    p.role = "observer";
+    p.pair_id = pair_id;
+  }
+
+  async clearAllocations(game_id: string): Promise<void> {
+    for (const p of this.participants.values()) {
+      if (p.game_id === game_id && p.role !== "gm") {
+        p.role = "lobby";
+        p.pair_id = null;
+      }
+    }
+    for (const [id, pair] of this.pairs.entries()) {
+      if (pair.game_id === game_id) this.pairs.delete(id);
+    }
   }
 }
 

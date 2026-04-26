@@ -4,7 +4,7 @@ import { readSessionForGame } from "@/lib/auth/session";
 import { getRepository } from "@/lib/game/getRepository";
 import { Wordmark } from "@/components/primitives/Wordmark";
 import { RoleChip } from "@/components/primitives/RoleChip";
-import { MasterLobby } from "@/components/master/MasterLobby";
+import { MasterDashboard } from "@/components/master/MasterDashboard";
 
 interface PageProps {
   params: Promise<{ code: string }>;
@@ -66,8 +66,7 @@ export default async function MasterPage({ params }: PageProps) {
       >
         {/* Left: lobby + pairs */}
         <aside className="flex flex-col border-r border-[var(--color-line)] bg-white">
-          <MasterLobby code={code} teamMode={game.team_mode} />
-          <PairsPlaceholder />
+          <MasterDashboard code={code} teamMode={game.team_mode} />
         </aside>
 
         {/* Center: focused-pair detail (placeholder) */}
@@ -91,19 +90,6 @@ function formatDuration(s: number): string {
   const m = Math.floor(s / 60);
   const r = s % 60;
   return `${m}:${r.toString().padStart(2, "0")}`;
-}
-
-function PairsPlaceholder() {
-  return (
-    <div className="border-t border-[var(--color-line)] px-4 py-4">
-      <span className="text-[12px] font-bold uppercase tracking-wide text-[var(--color-ink-2)]">
-        Pairs · 0
-      </span>
-      <p className="mt-2 text-[12px] text-[var(--color-ink-3)]">
-        Allocation lands next. Pair assignment + auto-allocate buttons go here.
-      </p>
-    </div>
-  );
 }
 
 function FocusedPairPlaceholder() {

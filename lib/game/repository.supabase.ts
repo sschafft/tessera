@@ -8,11 +8,13 @@ import type {
   CreateParticipantInput,
   GameRecord,
   GameRepository,
+  PairRecord,
   ParticipantRecord,
 } from "./repository";
 
 type DbGame = Database["public"]["Tables"]["games"]["Row"];
 type DbParticipant = Database["public"]["Tables"]["participants"]["Row"];
+type DbPair = Database["public"]["Tables"]["pairs"]["Row"];
 
 function toGameRecord(row: DbGame): GameRecord {
   return {
@@ -179,4 +181,62 @@ export class SupabaseGameRepository implements GameRepository {
       .eq("id", id);
     if (error) throw new Error(`touchParticipant: ${error.message}`);
   }
+
+  async createPair(
+    game_id: string,
+    builder_id: string,
+    guider_id: string,
+  ): Promise<PairRecord> {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase.rpc("create_pair_with_roles", {
+      p_game_id: game_id,
+      p_builder_id: builder_id,
+      p_guider_id: guider_id,
+    });
+    if (error || !data) {
+      throw new Error(`createPair: ${error?.message ?? "unknown"}`);
+    }
+    return toPairRecord(data as DbPair);
+  }
+
+  async listPairs(game_id: string): Promise<PairRecord[]> {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase
+      .from("pairs")
+      .select("*")
+      .eq("game_id", game_id)
+      .order("created_at", { ascending: true });
+    if (error) throw new Error(`listPairs: ${error.message}`);
+    return (data ?? []).map(toPairRecord);
+  }
+
+  async assignObserver(
+    participant_id: string,
+    pair_id: string,
+  ): Promise<void> {
+    const supabase = getServiceClient();
+    const { error } = await supabase
+      .from("participants")
+      .update({ role: "observer", pair_id })
+      .eq("id", participant_id);
+    if (error) throw new Error(`assignObserver: ${error.message}`);
+  }
+
+  async clearAllocations(game_id: string): Promise<void> {
+    const supabase = getServiceClient();
+    const { error } = await supabase.rpc("clear_allocations", {
+      p_game_id: game_id,
+    });
+    if (error) throw new Error(`clearAllocations: ${error.message}`);
+  }
+}
+
+function toPairRecord(row: DbPair): PairRecord {
+  return {
+    id: row.id,
+    game_id: row.game_id,
+    builder_id: row.builder_id,
+    guider_id: row.guider_id,
+    created_at: row.created_at,
+  };
 }

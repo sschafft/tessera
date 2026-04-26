@@ -1,67 +1,52 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Avatar } from "@/components/primitives/Avatar";
-import type { TileColor } from "@/components/canvas/Tile";
 import type { TeamMode } from "@/lib/game/repository";
-
-interface LobbyParticipant {
-  id: string;
-  display_name: string;
-  role: "lobby" | "builder" | "guider" | "observer" | "gm";
-  pair_id: string | null;
-  color: TileColor;
-  joined_at: string;
-}
-
-interface LobbyResponse {
-  code: string;
-  workshop_name: string;
-  team_mode: TeamMode;
-  participant_cap: number;
-  participants: LobbyParticipant[];
-}
-
-const POLL_MS = 2000;
+import type {
+  LobbyParticipant,
+  LobbyPair,
+} from "./MasterDashboard";
 
 export interface MasterLobbyProps {
   code: string;
   teamMode: TeamMode;
+  members: LobbyParticipant[];
+  cap: number;
+  selected: Set<string>;
+  toggleSelect: (id: string) => void;
+  clearSelection: () => void;
+  pollError: string | null;
+  actionError: string | null;
+  busy: boolean;
+  pairs: LobbyPair[];
+  participants: LobbyParticipant[];
+  onAuto: () => void;
+  onPair: (builderId: string) => void;
+  onObserver: (pairId: string) => void;
 }
 
-export function MasterLobby({ code, teamMode }: MasterLobbyProps) {
-  const [data, setData] = useState<LobbyResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    const tick = async () => {
-      try {
-        const res = await fetch(`/api/games/${code}/lobby`, {
-          cache: "no-store",
-        });
-        if (!res.ok) throw new Error(`status ${res.status}`);
-        const json: LobbyResponse = await res.json();
-        if (!cancelled) {
-          setData(json);
-          setError(null);
-        }
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : "fetch failed");
-      }
-    };
-    tick();
-    const id = setInterval(tick, POLL_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [code]);
-
-  // The GM is in the participant list as role='gm'; show only humans
-  // waiting for allocation in the lobby panel.
-  const lobbyPeople = (data?.participants ?? []).filter((p) => p.role !== "gm");
-  const totalSeats = data?.participant_cap ?? 0;
+export function MasterLobby({
+  code,
+  teamMode,
+  members,
+  cap,
+  selected,
+  toggleSelect,
+  clearSelection,
+  pollError,
+  actionError,
+  busy,
+  pairs,
+  participants,
+  onAuto,
+  onPair,
+  onObserver,
+}: MasterLobbyProps) {
+  const selectedIds = Array.from(selected).filter((id) =>
+    members.some((m) => m.id === id),
+  );
+  const selectedCount = selectedIds.length;
 
   return (
     <div className="border-b border-[var(--color-line)] bg-[var(--color-paper)]">
@@ -76,22 +61,22 @@ export function MasterLobby({ code, teamMode }: MasterLobbyProps) {
             }}
           />
           <span className="text-[12px] font-bold uppercase tracking-wide text-[var(--color-ink-2)]">
-            Lobby · {lobbyPeople.length} waiting
+            Lobby · {members.length} waiting
           </span>
         </div>
         <span className="t-mono text-[11px] text-[var(--color-ink-3)]">
-          cap {totalSeats}
+          {selectedCount > 0 ? `${selectedCount} selected` : `cap ${cap}`}
         </span>
       </div>
 
-      {error && (
+      {(pollError || actionError) && (
         <p className="px-5 pb-2 text-[11px] text-[var(--color-t-red)]">
-          {error}
+          {actionError ?? pollError}
         </p>
       )}
 
       <div className="flex flex-col gap-1 px-3.5 pb-2.5">
-        {lobbyPeople.length === 0 ? (
+        {members.length === 0 ? (
           <p className="px-3 py-6 text-center text-[12px] text-[var(--color-ink-3)]">
             Share <span className="t-mono font-bold">{code}</span> with players
             to join.
@@ -99,31 +84,106 @@ export function MasterLobby({ code, teamMode }: MasterLobbyProps) {
             They&apos;ll appear here as they sign in.
           </p>
         ) : (
-          lobbyPeople.map((p) => <LobbyRow key={p.id} participant={p} />)
+          members.map((p) => (
+            <LobbyRow
+              key={p.id}
+              participant={p}
+              selected={selected.has(p.id)}
+              onToggle={() => toggleSelect(p.id)}
+            />
+          ))
         )}
       </div>
 
+      {/* Action bar */}
       <div className="flex flex-col gap-1.5 px-3 pb-3">
+        {selectedCount === 2 && (
+          <PairAssignButton
+            members={members.filter((m) => selectedIds.includes(m.id))}
+            disabled={busy}
+            onPair={onPair}
+          />
+        )}
+
+        {selectedCount === 1 && pairs.length > 0 && (
+          <ObserverAssignButton
+            pairs={pairs}
+            participants={participants}
+            disabled={busy}
+            onObserver={onObserver}
+          />
+        )}
+
+        {selectedCount >= 3 && pairs.length > 0 && (
+          <ObserverAssignButton
+            pairs={pairs}
+            participants={participants}
+            disabled={busy}
+            onObserver={onObserver}
+            label={`👁 Add ${selectedCount} observers to pair…`}
+          />
+        )}
+
         <button
+          type="button"
+          onClick={onAuto}
+          disabled={busy || members.length < 2}
           className="rounded-[10px] border-[1.5px] border-[var(--color-ink)] bg-white px-3 py-2 text-[12px] font-bold text-[var(--color-ink)] disabled:opacity-50"
           style={{ boxShadow: "0 2px 0 var(--color-ink)" }}
-          disabled
         >
           🎲 Auto-allocate all
         </button>
+
+        {selectedCount > 0 && (
+          <button
+            type="button"
+            onClick={clearSelection}
+            className="t-mono text-[10px] text-[var(--color-ink-3)] underline"
+          >
+            clear selection
+          </button>
+        )}
+
         <p className="t-mono text-[10px] text-[var(--color-ink-3)]">
           {teamMode === "gm_picks"
-            ? "you'll assign roles · auto-allocate lands next"
-            : "players choose their own roles · you arrange pairs"}
+            ? "you assign roles"
+            : "players choose; you arrange pairs"}
         </p>
       </div>
     </div>
   );
 }
 
-function LobbyRow({ participant }: { participant: LobbyParticipant }) {
+function LobbyRow({
+  participant,
+  selected,
+  onToggle,
+}: {
+  participant: LobbyParticipant;
+  selected: boolean;
+  onToggle: () => void;
+}) {
   return (
-    <div className="flex items-center gap-2.5 rounded-[10px] px-2.5 py-1.5">
+    <button
+      type="button"
+      onClick={onToggle}
+      className="flex items-center gap-2.5 rounded-[10px] px-2.5 py-1.5 text-left"
+      style={{
+        border: `1.5px solid ${selected ? "var(--color-ink)" : "transparent"}`,
+        background: selected ? "#fff" : "transparent",
+      }}
+    >
+      <span
+        aria-hidden="true"
+        className="grid h-[18px] w-[18px] flex-shrink-0 place-items-center text-[11px] font-bold text-white"
+        style={{
+          borderRadius: 5,
+          border: `1.5px solid ${selected ? "var(--color-ink)" : "var(--color-line-2)"}`,
+          background: selected ? "var(--color-ink)" : "#fff",
+        }}
+      >
+        {selected ? "✓" : ""}
+      </span>
       <Avatar
         name={participant.display_name}
         color={participant.color}
@@ -134,10 +194,132 @@ function LobbyRow({ participant }: { participant: LobbyParticipant }) {
           {participant.display_name}
         </span>
         <span className="block text-[10px] text-[var(--color-ink-3)]">
-          {participant.role === "lobby" ? "unallocated" : participant.role} ·{" "}
-          {formatJoinedAt(participant.joined_at)}
+          waiting · joined {formatJoinedAt(participant.joined_at)}
         </span>
       </span>
+    </button>
+  );
+}
+
+function PairAssignButton({
+  members,
+  disabled,
+  onPair,
+}: {
+  members: LobbyParticipant[];
+  disabled: boolean;
+  onPair: (builderId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  if (members.length !== 2) return null;
+  const [a, b] = members;
+  if (!a || !b) return null;
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        disabled={disabled}
+        className="rounded-[10px] border-none bg-[var(--color-ink)] px-3 py-2 text-[13px] font-bold text-[var(--color-paper)] disabled:opacity-50"
+        style={{ boxShadow: "0 2px 0 rgba(0,0,0,.15)" }}
+      >
+        ⇄ Pair selected · assign roles
+      </button>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-1.5 rounded-[10px] border border-[var(--color-line)] bg-white p-2">
+      <span className="t-mono text-[10px] uppercase tracking-wide text-[var(--color-ink-3)]">
+        Who builds?
+      </span>
+      <div className="grid grid-cols-2 gap-1.5">
+        <button
+          type="button"
+          onClick={() => onPair(a.id)}
+          className="rounded-[8px] bg-[var(--color-tint-orange)] px-2 py-1.5 text-[12px] font-bold text-[var(--color-t-orange)]"
+        >
+          {a.display_name}
+        </button>
+        <button
+          type="button"
+          onClick={() => onPair(b.id)}
+          className="rounded-[8px] bg-[var(--color-tint-orange)] px-2 py-1.5 text-[12px] font-bold text-[var(--color-t-orange)]"
+        >
+          {b.display_name}
+        </button>
+      </div>
+      <button
+        type="button"
+        onClick={() => setOpen(false)}
+        className="t-mono text-[10px] text-[var(--color-ink-3)]"
+      >
+        cancel
+      </button>
+    </div>
+  );
+}
+
+function ObserverAssignButton({
+  pairs,
+  participants,
+  disabled,
+  onObserver,
+  label = "👁 As observer to pair…",
+}: {
+  pairs: LobbyPair[];
+  participants: LobbyParticipant[];
+  disabled: boolean;
+  onObserver: (pairId: string) => void;
+  label?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const byId = new Map(participants.map((p) => [p.id, p]));
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        disabled={disabled}
+        className="rounded-[10px] border-[1.5px] border-[var(--color-line)] bg-white px-3 py-2 text-[12px] font-semibold text-[var(--color-ink-2)] disabled:opacity-50"
+      >
+        {label}
+      </button>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-1.5 rounded-[10px] border border-[var(--color-line)] bg-white p-2">
+      <span className="t-mono text-[10px] uppercase tracking-wide text-[var(--color-ink-3)]">
+        Pick a pair
+      </span>
+      <div className="flex flex-col gap-1">
+        {pairs.map((pair) => {
+          const builder = pair.builder_id ? byId.get(pair.builder_id) : null;
+          const guider = pair.guider_id ? byId.get(pair.guider_id) : null;
+          const label =
+            builder && guider
+              ? `${builder.display_name} ↔ ${guider.display_name}`
+              : "(empty pair)";
+          return (
+            <button
+              key={pair.id}
+              type="button"
+              onClick={() => onObserver(pair.id)}
+              className="rounded-[8px] px-2 py-1.5 text-left text-[12px] font-semibold hover:bg-[var(--color-paper-2)]"
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+      <button
+        type="button"
+        onClick={() => setOpen(false)}
+        className="t-mono text-[10px] text-[var(--color-ink-3)]"
+      >
+        cancel
+      </button>
     </div>
   );
 }
