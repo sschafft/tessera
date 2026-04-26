@@ -1,4 +1,5 @@
 import { PlayCanvas } from "@/components/canvas/PlayCanvas";
+import { BriefEnvelope } from "./BriefEnvelope";
 import type { PlayState } from "./PlayContent";
 
 export interface GuiderViewProps {
@@ -11,6 +12,15 @@ export function GuiderView({ state }: GuiderViewProps) {
   }
   return (
     <section className="relative mx-auto flex w-full max-w-[1100px] flex-1 flex-col items-center justify-center gap-6 p-6">
+      {state.brief && state.brief.role === "guider" && (
+        <div className="absolute right-6 top-6 z-10">
+          <BriefEnvelope
+            role="guider"
+            title={state.brief.title}
+            rules={state.brief.rules}
+          />
+        </div>
+      )}
       <div className="relative">
         <span
           className="t-stamp absolute -left-2 -top-4 z-10"

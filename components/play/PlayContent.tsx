@@ -50,6 +50,11 @@ export interface PlayState {
   } | null;
   goal: GoalPattern | null;
   placements: PlacedPiece[];
+  brief: {
+    role: "builder" | "guider";
+    title: string;
+    rules: string[];
+  } | null;
 }
 
 export interface PlayContentProps {

@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import { Tile, type TileColor, type TileShape } from "@/components/canvas/Tile";
 import { InteractiveCanvas } from "@/components/canvas/InteractiveCanvas";
+import { BriefEnvelope } from "./BriefEnvelope";
 import type { PlacedPiece, PlayState } from "./PlayContent";
 
 export interface BuilderViewProps {
@@ -139,7 +140,16 @@ function BuilderInteractive({ state }: { state: PlayState }) {
           </p>
         )}
       </aside>
-      <section className="flex items-start justify-center overflow-auto p-6">
+      <section className="relative flex items-start justify-center overflow-auto p-6">
+        {state.brief && state.brief.role === "builder" && (
+          <div className="absolute right-6 top-6 z-10">
+            <BriefEnvelope
+              role="builder"
+              title={state.brief.title}
+              rules={state.brief.rules}
+            />
+          </div>
+        )}
         <div className="flex flex-col items-center gap-3">
           <InteractiveCanvas
             pieces={visiblePieces}

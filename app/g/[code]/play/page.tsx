@@ -65,6 +65,11 @@ export default async function PlayPage({ params }: PageProps) {
     }
   }
 
+  const myBrief =
+    pairRound && (me.role === "builder" || me.role === "guider")
+      ? await repo.findBrief(pairRound.id, me.role)
+      : null;
+
   const showGoal = me.role === "guider" || me.role === "observer";
   const goal: GoalPattern | null =
     showGoal && pairRound
@@ -119,6 +124,13 @@ export default async function PlayPage({ params }: PageProps) {
       r: p.r,
       rot: p.rot,
     })),
+    brief: myBrief
+      ? {
+          role: myBrief.role,
+          title: myBrief.title,
+          rules: myBrief.rules,
+        }
+      : null,
   };
 
   return <PlayContent code={code} initial={initial} />;

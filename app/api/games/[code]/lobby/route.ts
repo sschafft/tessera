@@ -40,6 +40,33 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     repo.findLatestRound(game.id),
   ]);
 
+  // Build a map of (pair_id → { builder_brief, guider_brief }) for the
+  // current round. Only populated when a round is in flight.
+  const briefsByPair = new Map<
+    string,
+    {
+      builder: { title: string; rules: string[] } | null;
+      guider: { title: string; rules: string[] } | null;
+    }
+  >();
+  if (round) {
+    for (const pair of pairs) {
+      const pr = await repo.findPairRound(round.id, pair.id);
+      if (!pr) continue;
+      const list = await repo.listBriefsForPairRound(pr.id);
+      const builder = list.find((b) => b.role === "builder");
+      const guider = list.find((b) => b.role === "guider");
+      briefsByPair.set(pair.id, {
+        builder: builder
+          ? { title: builder.title, rules: builder.rules }
+          : null,
+        guider: guider
+          ? { title: guider.title, rules: guider.rules }
+          : null,
+      });
+    }
+  }
+
   const participants = active.map((p) => ({
     id: p.id,
     display_name: p.display_name,
@@ -62,6 +89,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       builder_id: p.builder_id,
       guider_id: p.guider_id,
       created_at: p.created_at,
+      briefs: briefsByPair.get(p.id) ?? { builder: null, guider: null },
     })),
     round: round
       ? {

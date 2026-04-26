@@ -104,6 +104,28 @@ export interface PlacementRecord {
   placed_at: string;
 }
 
+export type BriefRole = "builder" | "guider";
+
+export interface BriefRecord {
+  id: string;
+  pair_round_id: string;
+  role: BriefRole;
+  source: BriefSource;
+  title: string;
+  rules: string[];
+  revealed: boolean;
+  created_at: string;
+}
+
+export interface LibraryBriefRecord {
+  id: string;
+  role: BriefRole;
+  complexity_min: number;
+  complexity_max: number;
+  title: string;
+  rules: string[];
+}
+
 export interface GameRepository {
   createGame(
     input: CreateGameInput & {
@@ -246,6 +268,41 @@ export interface GameRepository {
    * Delete a placement by id. Returns true on delete, false if not found.
    */
   deletePlacement(id: string): Promise<boolean>;
+
+  /**
+   * Insert (or replace) a brief for a (pair_round, role). Used both at
+   * round start and for re-rolls.
+   */
+  upsertBrief(input: {
+    pair_round_id: string;
+    role: BriefRole;
+    source: BriefSource;
+    title: string;
+    rules: string[];
+  }): Promise<BriefRecord>;
+
+  /**
+   * Read a single brief for a pair_round + role.
+   */
+  findBrief(
+    pair_round_id: string,
+    role: BriefRole,
+  ): Promise<BriefRecord | null>;
+
+  /**
+   * Read both briefs for a pair_round (used by the GM dashboard).
+   */
+  listBriefsForPairRound(pair_round_id: string): Promise<BriefRecord[]>;
+
+  /**
+   * Read library briefs matching a role + complexity, optionally
+   * excluding titles (for re-roll dedupe).
+   */
+  listLibraryBriefs(input: {
+    role: BriefRole;
+    complexity: number;
+    exclude_titles?: string[];
+  }): Promise<LibraryBriefRecord[]>;
 
   /**
    * Update the game status (lobby → running → ended → purged).

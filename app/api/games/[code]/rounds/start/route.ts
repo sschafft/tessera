@@ -3,6 +3,7 @@ import { isValidGameCode } from "@/lib/game/code";
 import { readSessionForGame } from "@/lib/auth/session";
 import { getRepository } from "@/lib/game/getRepository";
 import { generatePattern } from "@/lib/pattern/generator";
+import { pickLibraryBrief } from "@/lib/briefs/library";
 
 export const runtime = "nodejs";
 
@@ -83,12 +84,36 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   for (const pair of pairs) {
     const seed = `${game.id}:${round.id}:${pair.id}`;
     const goal = generatePattern({ complexity, seed });
-    await repo.createPairRound({
+    const pairRound = await repo.createPairRound({
       round_id: round.id,
       pair_id: pair.id,
       goal_pattern: goal,
       pattern_seed: seed,
     });
+
+    // Brief generation per pair, gated by per-side toggles. Only the
+    // 'library' source is wired in M5; 'gemini' / 'gm' source paths
+    // ship in M5.5 and M5.6.
+    if (game.builder_brief_on) {
+      const brief = await pickLibraryBrief({ role: "builder", complexity });
+      await repo.upsertBrief({
+        pair_round_id: pairRound.id,
+        role: "builder",
+        source: brief.source,
+        title: brief.title,
+        rules: brief.rules,
+      });
+    }
+    if (game.guider_brief_on) {
+      const brief = await pickLibraryBrief({ role: "guider", complexity });
+      await repo.upsertBrief({
+        pair_round_id: pairRound.id,
+        role: "guider",
+        source: brief.source,
+        title: brief.title,
+        rules: brief.rules,
+      });
+    }
   }
 
   await repo.startRound(round.id);

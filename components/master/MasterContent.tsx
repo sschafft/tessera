@@ -21,6 +21,10 @@ export interface LobbyPair {
   builder_id: string | null;
   guider_id: string | null;
   created_at: string;
+  briefs: {
+    builder: { title: string; rules: string[] } | null;
+    guider: { title: string; rules: string[] } | null;
+  };
 }
 
 export interface LobbyRound {
@@ -77,6 +81,7 @@ export function MasterContent({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [focusedPairId, setFocusedPairId] = useState<string | null>(null);
 
   const fetchSnapshot = useCallback(async () => {
     try {
@@ -141,6 +146,30 @@ export function MasterContent({
     [code, clearSelection, fetchSnapshot],
   );
 
+  const rerollBrief = useCallback(
+    async (pairId: string, role: "builder" | "guider") => {
+      setBusy(true);
+      setActionError(null);
+      try {
+        const res = await fetch(`/api/games/${code}/briefs/reroll`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ pair_id: pairId, role }),
+        });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          throw new Error(j.error || `status ${res.status}`);
+        }
+        await fetchSnapshot();
+      } catch (err) {
+        setActionError(err instanceof Error ? err.message : "reroll failed");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [code, fetchSnapshot],
+  );
+
   const startRound = useCallback(async () => {
     setBusy(true);
     setActionError(null);
@@ -168,6 +197,18 @@ export function MasterContent({
     [participants],
   );
   const pairs = useMemo(() => data?.pairs ?? [], [data]);
+
+  // Auto-focus the first pair once one exists; clear focus if the pair
+  // disappears (e.g. after a Shuffle).
+  useEffect(() => {
+    if (!focusedPairId && pairs.length > 0) {
+      setFocusedPairId(pairs[0]!.id);
+    } else if (focusedPairId && !pairs.some((p) => p.id === focusedPairId)) {
+      setFocusedPairId(pairs[0]?.id ?? null);
+    }
+  }, [pairs, focusedPairId]);
+
+  const focusedPair = pairs.find((p) => p.id === focusedPairId) ?? null;
 
   const round = data?.round ?? null;
   const workshopName = data?.workshop_name ?? initialWorkshopName;
@@ -223,14 +264,29 @@ export function MasterContent({
               })
             }
           />
-          <PairsPanel pairs={pairs} participants={participants} />
+          <PairsPanel
+            pairs={pairs}
+            participants={participants}
+            focusedPairId={focusedPairId}
+            onFocus={setFocusedPairId}
+          />
         </aside>
 
         <main
           className="flex flex-col gap-4 overflow-y-auto p-6"
           style={{ background: "var(--color-paper-2)" }}
         >
-          <FocusedPairPlaceholder round={round} pairs={pairs.length} />
+          {focusedPair ? (
+            <FocusedPairCard
+              pair={focusedPair}
+              participants={participants}
+              round={round}
+              onReroll={rerollBrief}
+              busy={busy}
+            />
+          ) : (
+            <FocusedPairPlaceholder round={round} pairs={pairs.length} />
+          )}
         </main>
 
         <aside className="flex flex-col border-l border-[var(--color-line)] bg-white">
@@ -254,24 +310,141 @@ function FocusedPairPlaceholder({
         FOCUSED PAIR
       </div>
       {round?.status === "running" ? (
-        <>
-          <h2 className="t-display text-2xl">
-            Round {round.index} live · {pairs} pair{pairs === 1 ? "" : "s"}
-          </h2>
-          <p className="max-w-md text-[14px] text-[var(--color-ink-2)]">
-            Pair canvas previews land in the next milestone. For now, builders
-            see an empty canvas + tile tray; guiders see the goal pattern.
-          </p>
-        </>
+        <h2 className="t-display text-2xl">
+          Round {round.index} live · {pairs} pair{pairs === 1 ? "" : "s"}
+        </h2>
       ) : (
         <>
           <h2 className="t-display text-2xl">Waiting for the round to start</h2>
           <p className="max-w-md text-[14px] text-[var(--color-ink-2)]">
             Once you allocate pairs in the sidebar, the <b>Start round</b>{" "}
             button up top generates a fresh goal pattern for each pair and the
-            canvas previews appear here.
+            briefs in play appear here.
           </p>
         </>
+      )}
+    </div>
+  );
+}
+
+function FocusedPairCard({
+  pair,
+  participants,
+  round,
+  onReroll,
+  busy,
+}: {
+  pair: LobbyPair;
+  participants: LobbyParticipant[];
+  round: LobbyRound | null;
+  onReroll: (pairId: string, role: "builder" | "guider") => void;
+  busy: boolean;
+}) {
+  const builder =
+    pair.builder_id !== null
+      ? participants.find((p) => p.id === pair.builder_id) ?? null
+      : null;
+  const guider =
+    pair.guider_id !== null
+      ? participants.find((p) => p.id === pair.guider_id) ?? null
+      : null;
+  const pairName = `${builder?.display_name ?? "?"} ↔ ${guider?.display_name ?? "?"}`;
+  const running = round?.status === "running";
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-end justify-between">
+        <div>
+          <div className="t-mono text-[11px] tracking-widest text-[var(--color-ink-3)]">
+            FOCUSED PAIR
+          </div>
+          <h2 className="t-display mt-1 text-[28px]">{pairName}</h2>
+        </div>
+      </div>
+
+      <div className="t-card p-4">
+        <div className="mb-3.5 flex items-center justify-between">
+          <span className="text-[12px] font-bold uppercase tracking-wide text-[var(--color-ink-2)]">
+            Briefs in play (only you see both)
+          </span>
+        </div>
+        {running ? (
+          <div className="grid grid-cols-2 gap-3.5">
+            <BriefCard
+              role="builder"
+              brief={pair.briefs.builder}
+              onReroll={() => onReroll(pair.id, "builder")}
+              busy={busy}
+            />
+            <BriefCard
+              role="guider"
+              brief={pair.briefs.guider}
+              onReroll={() => onReroll(pair.id, "guider")}
+              busy={busy}
+            />
+          </div>
+        ) : (
+          <p className="text-[13px] text-[var(--color-ink-3)]">
+            Briefs spin up when you start the round.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function BriefCard({
+  role,
+  brief,
+  onReroll,
+  busy,
+}: {
+  role: "builder" | "guider";
+  brief: { title: string; rules: string[] } | null;
+  onReroll: () => void;
+  busy: boolean;
+}) {
+  const isBuilder = role === "builder";
+  return (
+    <div
+      className="rounded-[12px] border-[1.5px] p-3.5"
+      style={{
+        background: isBuilder
+          ? "var(--color-tint-orange)"
+          : "var(--color-tint-blue)",
+        borderColor: isBuilder ? "var(--color-t-orange)" : "var(--color-t-blue)",
+      }}
+    >
+      <div className="mb-2 flex items-center justify-between">
+        <span
+          className="t-mono text-[10px] font-bold tracking-widest"
+          style={{
+            color: isBuilder ? "var(--color-t-orange)" : "var(--color-t-blue)",
+          }}
+        >
+          ● {role.toUpperCase()}
+        </span>
+        <button
+          type="button"
+          onClick={onReroll}
+          disabled={busy}
+          className="t-mono text-[10px] text-[var(--color-ink-3)] underline disabled:opacity-50"
+        >
+          re-roll
+        </button>
+      </div>
+      <div
+        className="t-display mb-2 text-[15px] font-bold"
+        style={{ color: "var(--color-ink)" }}
+      >
+        {brief?.title ?? "(off — toggle in game settings)"}
+      </div>
+      {brief && (
+        <ul className="m-0 flex list-none flex-col gap-1 p-0 text-[12px] text-[var(--color-ink-2)]">
+          {brief.rules.map((r, i) => (
+            <li key={i}>· {r}</li>
+          ))}
+        </ul>
       )}
     </div>
   );

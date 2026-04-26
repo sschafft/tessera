@@ -7,10 +7,14 @@ import {
   PlacementCellTakenError,
 } from "./repository.memory";
 import type {
+  BriefRecord,
+  BriefRole,
+  BriefSource,
   CreateGameInput,
   CreateParticipantInput,
   GameRecord,
   GameRepository,
+  LibraryBriefRecord,
   PairRecord,
   PairRoundRecord,
   ParticipantRecord,
@@ -24,6 +28,8 @@ type DbPair = Database["public"]["Tables"]["pairs"]["Row"];
 type DbRound = Database["public"]["Tables"]["rounds"]["Row"];
 type DbPairRound = Database["public"]["Tables"]["pair_rounds"]["Row"];
 type DbPlacement = Database["public"]["Tables"]["placements"]["Row"];
+type DbBrief = Database["public"]["Tables"]["briefs"]["Row"];
+type DbLibrary = Database["public"]["Tables"]["briefs_library"]["Row"];
 
 function toGameRecord(row: DbGame): GameRecord {
   return {
@@ -417,6 +423,115 @@ export class SupabaseGameRepository implements GameRepository {
     if (error) throw new Error(`deletePlacement: ${error.message}`);
     return (count ?? 0) > 0;
   }
+
+  async upsertBrief(input: {
+    pair_round_id: string;
+    role: BriefRole;
+    source: BriefSource;
+    title: string;
+    rules: string[];
+  }): Promise<BriefRecord> {
+    const supabase = getServiceClient();
+    // Delete any existing brief for this (pair_round, role) — the
+    // unique(pair_round_id, role) index makes that the cleanest path.
+    await supabase
+      .from("briefs")
+      .delete()
+      .eq("pair_round_id", input.pair_round_id)
+      .eq("role", input.role);
+    const { data, error } = await supabase
+      .from("briefs")
+      .insert({
+        pair_round_id: input.pair_round_id,
+        role: input.role,
+        source: input.source,
+        title: input.title,
+        rules: input.rules as never,
+      })
+      .select()
+      .single();
+    if (error || !data) {
+      throw new Error(`upsertBrief: ${error?.message ?? "unknown"}`);
+    }
+    return toBriefRecord(data);
+  }
+
+  async findBrief(
+    pair_round_id: string,
+    role: BriefRole,
+  ): Promise<BriefRecord | null> {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase
+      .from("briefs")
+      .select("*")
+      .eq("pair_round_id", pair_round_id)
+      .eq("role", role)
+      .maybeSingle();
+    if (error) throw new Error(`findBrief: ${error.message}`);
+    return data ? toBriefRecord(data) : null;
+  }
+
+  async listBriefsForPairRound(
+    pair_round_id: string,
+  ): Promise<BriefRecord[]> {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase
+      .from("briefs")
+      .select("*")
+      .eq("pair_round_id", pair_round_id);
+    if (error) throw new Error(`listBriefsForPairRound: ${error.message}`);
+    return (data ?? []).map(toBriefRecord);
+  }
+
+  async listLibraryBriefs(input: {
+    role: BriefRole;
+    complexity: number;
+    exclude_titles?: string[];
+  }): Promise<LibraryBriefRecord[]> {
+    const supabase = getServiceClient();
+    let query = supabase
+      .from("briefs_library")
+      .select("*")
+      .eq("role", input.role)
+      .lte("complexity_min", input.complexity)
+      .gte("complexity_max", input.complexity);
+
+    if (input.exclude_titles && input.exclude_titles.length > 0) {
+      // Postgres `not.in.(a,b)` syntax via the Supabase client.
+      query = query.not(
+        "title",
+        "in",
+        `(${input.exclude_titles.map((t) => `"${t.replace(/"/g, '""')}"`).join(",")})`,
+      );
+    }
+    const { data, error } = await query;
+    if (error) throw new Error(`listLibraryBriefs: ${error.message}`);
+    return (data ?? []).map(toLibraryBrief);
+  }
+}
+
+function toBriefRecord(row: DbBrief): BriefRecord {
+  return {
+    id: row.id,
+    pair_round_id: row.pair_round_id,
+    role: row.role as BriefRole,
+    source: row.source,
+    title: row.title,
+    rules: Array.isArray(row.rules) ? (row.rules as string[]) : [],
+    revealed: row.revealed,
+    created_at: row.created_at,
+  };
+}
+
+function toLibraryBrief(row: DbLibrary): LibraryBriefRecord {
+  return {
+    id: row.id,
+    role: row.role as BriefRole,
+    complexity_min: row.complexity_min,
+    complexity_max: row.complexity_max,
+    title: row.title,
+    rules: Array.isArray(row.rules) ? (row.rules as string[]) : [],
+  };
 }
 
 function toPlacementRecord(row: DbPlacement): PlacementRecord {

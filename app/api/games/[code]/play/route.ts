@@ -88,6 +88,13 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       ? await repo.listPlacements(pairRound.id)
       : [];
 
+  // Each player sees only their own brief (until Reveal Briefs in M6).
+  // Observers don't have a brief themselves; we surface null.
+  const myBrief =
+    pairRound && (me.role === "builder" || me.role === "guider")
+      ? await repo.findBrief(pairRound.id, me.role)
+      : null;
+
   return NextResponse.json({
     code,
     workshop_name: game.workshop_name,
@@ -121,6 +128,13 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       r: p.r,
       rot: p.rot,
     })),
+    brief: myBrief
+      ? {
+          role: myBrief.role,
+          title: myBrief.title,
+          rules: myBrief.rules,
+        }
+      : null,
   });
 }
 

@@ -1,8 +1,12 @@
 import type {
+  BriefRecord,
+  BriefRole,
+  BriefSource,
   CreateGameInput,
   CreateParticipantInput,
   GameRecord,
   GameRepository,
+  LibraryBriefRecord,
   PairRecord,
   PairRoundRecord,
   ParticipantRecord,
@@ -35,6 +39,7 @@ export class MemoryGameRepository implements GameRepository {
   private rounds = new Map<string, RoundRecord>();
   private pairRounds = new Map<string, PairRoundRecord>();
   private placements = new Map<string, PlacementRecord>();
+  private briefs = new Map<string, BriefRecord>();
 
   async createGame(
     input: CreateGameInput & {
@@ -306,6 +311,62 @@ export class MemoryGameRepository implements GameRepository {
 
   async deletePlacement(id: string): Promise<boolean> {
     return this.placements.delete(id);
+  }
+
+  async upsertBrief(input: {
+    pair_round_id: string;
+    role: BriefRole;
+    source: BriefSource;
+    title: string;
+    rules: string[];
+  }): Promise<BriefRecord> {
+    // Replace any existing brief for this (pair_round, role).
+    for (const [id, b] of this.briefs.entries()) {
+      if (b.pair_round_id === input.pair_round_id && b.role === input.role) {
+        this.briefs.delete(id);
+      }
+    }
+    const record: BriefRecord = {
+      id: crypto.randomUUID(),
+      pair_round_id: input.pair_round_id,
+      role: input.role,
+      source: input.source,
+      title: input.title,
+      rules: input.rules,
+      revealed: false,
+      created_at: new Date().toISOString(),
+    };
+    this.briefs.set(record.id, record);
+    return record;
+  }
+
+  async findBrief(
+    pair_round_id: string,
+    role: BriefRole,
+  ): Promise<BriefRecord | null> {
+    for (const b of this.briefs.values()) {
+      if (b.pair_round_id === pair_round_id && b.role === role) return b;
+    }
+    return null;
+  }
+
+  async listBriefsForPairRound(
+    pair_round_id: string,
+  ): Promise<BriefRecord[]> {
+    return [...this.briefs.values()].filter(
+      (b) => b.pair_round_id === pair_round_id,
+    );
+  }
+
+  async listLibraryBriefs(_input: {
+    role: BriefRole;
+    complexity: number;
+    exclude_titles?: string[];
+  }): Promise<LibraryBriefRecord[]> {
+    // The in-memory backend has no library — Supabase is authoritative.
+    // Returning [] forces the orchestrator to fall back to a built-in
+    // emergency brief if it ever runs against the in-memory store.
+    return [];
   }
 }
 

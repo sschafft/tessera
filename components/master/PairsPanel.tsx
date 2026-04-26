@@ -6,9 +6,16 @@ import type { LobbyPair, LobbyParticipant } from "./MasterContent";
 export interface PairsPanelProps {
   pairs: LobbyPair[];
   participants: LobbyParticipant[];
+  focusedPairId: string | null;
+  onFocus: (id: string) => void;
 }
 
-export function PairsPanel({ pairs, participants }: PairsPanelProps) {
+export function PairsPanel({
+  pairs,
+  participants,
+  focusedPairId,
+  onFocus,
+}: PairsPanelProps) {
   const byId = new Map(participants.map((p) => [p.id, p]));
   const observersByPair = new Map<string, LobbyParticipant[]>();
   for (const p of participants) {
@@ -47,6 +54,8 @@ export function PairsPanel({ pairs, participants }: PairsPanelProps) {
               builder={pair.builder_id ? byId.get(pair.builder_id) : undefined}
               guider={pair.guider_id ? byId.get(pair.guider_id) : undefined}
               observers={observersByPair.get(pair.id) ?? []}
+              focused={focusedPairId === pair.id}
+              onFocus={() => onFocus(pair.id)}
             />
           ))
         )}
@@ -59,14 +68,27 @@ function PairRow({
   builder,
   guider,
   observers,
+  focused,
+  onFocus,
 }: {
   pair: LobbyPair;
   builder?: LobbyParticipant;
   guider?: LobbyParticipant;
   observers: LobbyParticipant[];
+  focused: boolean;
+  onFocus: () => void;
 }) {
   return (
-    <div className="mb-1.5 flex flex-col gap-2 rounded-[12px] border border-transparent p-3 hover:border-[var(--color-line)]">
+    <button
+      type="button"
+      onClick={onFocus}
+      className="mb-1.5 flex flex-col gap-2 rounded-[12px] p-3 text-left"
+      style={{
+        border: `1.5px solid ${focused ? "var(--color-ink)" : "transparent"}`,
+        background: focused ? "var(--color-paper)" : "transparent",
+      }}
+      aria-pressed={focused}
+    >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1">
           {builder && (
@@ -112,6 +134,6 @@ function PairRow({
           </div>
         </div>
       )}
-    </div>
+    </button>
   );
 }
