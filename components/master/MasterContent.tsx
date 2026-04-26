@@ -9,6 +9,7 @@ import { TopBarControls } from "./TopBarControls";
 import { AccelerantsRail } from "./AccelerantsRail";
 import { EndGameModal } from "./EndGameModal";
 import { GameEndedView } from "@/components/play/GameEndedView";
+import { MasterPairView } from "./MasterPairView";
 import { useGameEvents } from "@/lib/realtime/useGameEvents";
 
 export interface LobbyParticipant {
@@ -462,11 +463,11 @@ export function MasterContent({
           className="flex flex-col gap-4 overflow-y-auto p-6"
           style={{ background: "var(--color-paper-2)" }}
         >
-          {focusedPair ? (
-            <FocusedPairCard
-              pair={focusedPair}
-              participants={participants}
-              round={round}
+          {focusedPair && data?.game_id ? (
+            <MasterPairView
+              code={code}
+              gameId={data.game_id}
+              pairId={focusedPair.id}
               onReroll={rerollBrief}
               busy={busy}
             />
@@ -525,126 +526,4 @@ function FocusedPairPlaceholder({
   );
 }
 
-function FocusedPairCard({
-  pair,
-  participants,
-  round,
-  onReroll,
-  busy,
-}: {
-  pair: LobbyPair;
-  participants: LobbyParticipant[];
-  round: LobbyRound | null;
-  onReroll: (pairId: string, role: "builder" | "guider") => void;
-  busy: boolean;
-}) {
-  const builder =
-    pair.builder_id !== null
-      ? participants.find((p) => p.id === pair.builder_id) ?? null
-      : null;
-  const guider =
-    pair.guider_id !== null
-      ? participants.find((p) => p.id === pair.guider_id) ?? null
-      : null;
-  const pairName = `${builder?.display_name ?? "?"} ↔ ${guider?.display_name ?? "?"}`;
-  const running = round?.status === "running";
-
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-end justify-between">
-        <div>
-          <div className="t-mono text-[11px] tracking-widest text-[var(--color-ink-3)]">
-            FOCUSED PAIR
-          </div>
-          <h2 className="t-display mt-1 text-[28px]">{pairName}</h2>
-        </div>
-      </div>
-
-      <div className="t-card p-4">
-        <div className="mb-3.5 flex items-center justify-between">
-          <span className="text-[12px] font-bold uppercase tracking-wide text-[var(--color-ink-2)]">
-            Briefs in play (only you see both)
-          </span>
-        </div>
-        {running ? (
-          <div className="grid grid-cols-2 gap-3.5">
-            <BriefCard
-              role="builder"
-              brief={pair.briefs.builder}
-              onReroll={() => onReroll(pair.id, "builder")}
-              busy={busy}
-            />
-            <BriefCard
-              role="guider"
-              brief={pair.briefs.guider}
-              onReroll={() => onReroll(pair.id, "guider")}
-              busy={busy}
-            />
-          </div>
-        ) : (
-          <p className="text-[13px] text-[var(--color-ink-3)]">
-            Briefs spin up when you start the round.
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function BriefCard({
-  role,
-  brief,
-  onReroll,
-  busy,
-}: {
-  role: "builder" | "guider";
-  brief: { title: string; rules: string[] } | null;
-  onReroll: () => void;
-  busy: boolean;
-}) {
-  const isBuilder = role === "builder";
-  return (
-    <div
-      className="rounded-[12px] border-[1.5px] p-3.5"
-      style={{
-        background: isBuilder
-          ? "var(--color-tint-orange)"
-          : "var(--color-tint-blue)",
-        borderColor: isBuilder ? "var(--color-t-orange)" : "var(--color-t-blue)",
-      }}
-    >
-      <div className="mb-2 flex items-center justify-between">
-        <span
-          className="t-mono text-[10px] font-bold tracking-widest"
-          style={{
-            color: isBuilder ? "var(--color-t-orange)" : "var(--color-t-blue)",
-          }}
-        >
-          ● {role.toUpperCase()}
-        </span>
-        <button
-          type="button"
-          onClick={onReroll}
-          disabled={busy}
-          className="t-mono text-[10px] text-[var(--color-ink-3)] underline disabled:opacity-50"
-        >
-          re-roll
-        </button>
-      </div>
-      <div
-        className="t-display mb-2 text-[15px] font-bold"
-        style={{ color: "var(--color-ink)" }}
-      >
-        {brief?.title ?? "(off — toggle in game settings)"}
-      </div>
-      {brief && (
-        <ul className="m-0 flex list-none flex-col gap-1 p-0 text-[12px] text-[var(--color-ink-2)]">
-          {brief.rules.map((r, i) => (
-            <li key={i}>· {r}</li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
 
