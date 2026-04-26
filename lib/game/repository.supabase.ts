@@ -2,13 +2,17 @@ import "server-only";
 
 import { getServiceClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
+import { DuplicateNameError } from "./repository.memory";
 import type {
   CreateGameInput,
+  CreateParticipantInput,
   GameRecord,
   GameRepository,
+  ParticipantRecord,
 } from "./repository";
 
 type DbGame = Database["public"]["Tables"]["games"]["Row"];
+type DbParticipant = Database["public"]["Tables"]["participants"]["Row"];
 
 function toGameRecord(row: DbGame): GameRecord {
   return {
@@ -37,8 +41,22 @@ function toGameRecord(row: DbGame): GameRecord {
   };
 }
 
+function toParticipantRecord(row: DbParticipant): ParticipantRecord {
+  return {
+    id: row.id,
+    game_id: row.game_id,
+    display_name: row.display_name,
+    role: row.role,
+    pair_id: row.pair_id,
+    color: row.color,
+    joined_at: row.joined_at,
+    last_seen_at: row.last_seen_at,
+    released_at: row.released_at,
+  };
+}
+
 export class SupabaseGameRepository implements GameRepository {
-  async create(
+  async createGame(
     input: CreateGameInput & {
       code: string;
       host_token_hash: string;
@@ -75,17 +93,90 @@ export class SupabaseGameRepository implements GameRepository {
     return toGameRecord(data);
   }
 
-  async findByCode(code: string): Promise<GameRecord | null> {
+  async findGameByCode(code: string): Promise<GameRecord | null> {
     const supabase = getServiceClient();
     const { data, error } = await supabase
       .from("games")
       .select("*")
       .eq("code", code)
       .maybeSingle();
-
-    if (error) {
-      throw new Error(`Failed to find game: ${error.message}`);
-    }
+    if (error) throw new Error(`findGameByCode: ${error.message}`);
     return data ? toGameRecord(data) : null;
+  }
+
+  async createParticipant(
+    input: CreateParticipantInput,
+  ): Promise<ParticipantRecord> {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase
+      .from("participants")
+      .insert({
+        ...(input.id ? { id: input.id } : {}),
+        game_id: input.game_id,
+        display_name: input.display_name,
+        role: input.role,
+        color: input.color,
+      })
+      .select()
+      .single();
+
+    if (error || !data) {
+      // Postgres unique-violation code is 23505. Map to our typed error.
+      if (error?.code === "23505") throw new DuplicateNameError();
+      throw new Error(
+        `createParticipant: ${error?.message ?? "unknown"}`,
+      );
+    }
+    return toParticipantRecord(data);
+  }
+
+  async listActiveParticipants(
+    game_id: string,
+  ): Promise<ParticipantRecord[]> {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase
+      .from("participants")
+      .select("*")
+      .eq("game_id", game_id)
+      .is("released_at", null)
+      .order("joined_at", { ascending: true });
+    if (error) throw new Error(`listActiveParticipants: ${error.message}`);
+    return (data ?? []).map(toParticipantRecord);
+  }
+
+  async findParticipantByName(
+    game_id: string,
+    display_name: string,
+  ): Promise<ParticipantRecord | null> {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase
+      .from("participants")
+      .select("*")
+      .eq("game_id", game_id)
+      .ilike("display_name", display_name)
+      .is("released_at", null)
+      .maybeSingle();
+    if (error) throw new Error(`findParticipantByName: ${error.message}`);
+    return data ? toParticipantRecord(data) : null;
+  }
+
+  async findParticipantById(id: string): Promise<ParticipantRecord | null> {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase
+      .from("participants")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    if (error) throw new Error(`findParticipantById: ${error.message}`);
+    return data ? toParticipantRecord(data) : null;
+  }
+
+  async touchParticipant(id: string): Promise<void> {
+    const supabase = getServiceClient();
+    const { error } = await supabase
+      .from("participants")
+      .update({ last_seen_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) throw new Error(`touchParticipant: ${error.message}`);
   }
 }

@@ -1,19 +1,27 @@
 import type {
   CreateGameInput,
+  CreateParticipantInput,
   GameRecord,
   GameRepository,
+  ParticipantRecord,
 } from "./repository";
 
+export class DuplicateNameError extends Error {
+  constructor() {
+    super("display_name already exists in this game");
+    this.name = "DuplicateNameError";
+  }
+}
+
 /**
- * In-memory GameRepository. Used during milestone 1 before Supabase is
- * wired up. Note: the data is per-process, so it doesn't survive a Next.js
- * dev server restart and won't work across multiple Vercel instances. It
- * is a placeholder, not a runtime store.
+ * In-memory GameRepository. Used during early local dev before Supabase
+ * env vars are set. Per-process, no persistence across server restarts.
  */
 export class MemoryGameRepository implements GameRepository {
-  private byCode = new Map<string, GameRecord>();
+  private games = new Map<string, GameRecord>();
+  private participants = new Map<string, ParticipantRecord>();
 
-  async create(
+  async createGame(
     input: CreateGameInput & {
       code: string;
       host_token_hash: string;
@@ -30,20 +38,73 @@ export class MemoryGameRepository implements GameRepository {
       ended_at: null,
       gemini_calls_used: 0,
     };
-    this.byCode.set(record.code, record);
+    this.games.set(record.code, record);
     return record;
   }
 
-  async findByCode(code: string): Promise<GameRecord | null> {
-    return this.byCode.get(code) ?? null;
+  async findGameByCode(code: string): Promise<GameRecord | null> {
+    return this.games.get(code) ?? null;
+  }
+
+  async createParticipant(
+    input: CreateParticipantInput,
+  ): Promise<ParticipantRecord> {
+    const existing = await this.findParticipantByName(
+      input.game_id,
+      input.display_name,
+    );
+    if (existing) throw new DuplicateNameError();
+
+    const now = new Date().toISOString();
+    const record: ParticipantRecord = {
+      id: input.id ?? crypto.randomUUID(),
+      game_id: input.game_id,
+      display_name: input.display_name,
+      role: input.role,
+      pair_id: null,
+      color: input.color,
+      joined_at: now,
+      last_seen_at: now,
+      released_at: null,
+    };
+    this.participants.set(record.id, record);
+    return record;
+  }
+
+  async listActiveParticipants(game_id: string): Promise<ParticipantRecord[]> {
+    return [...this.participants.values()]
+      .filter((p) => p.game_id === game_id && p.released_at === null)
+      .sort((a, b) => a.joined_at.localeCompare(b.joined_at));
+  }
+
+  async findParticipantByName(
+    game_id: string,
+    display_name: string,
+  ): Promise<ParticipantRecord | null> {
+    const target = display_name.toLowerCase();
+    for (const p of this.participants.values()) {
+      if (
+        p.game_id === game_id &&
+        p.released_at === null &&
+        p.display_name.toLowerCase() === target
+      ) {
+        return p;
+      }
+    }
+    return null;
+  }
+
+  async findParticipantById(id: string): Promise<ParticipantRecord | null> {
+    return this.participants.get(id) ?? null;
+  }
+
+  async touchParticipant(id: string): Promise<void> {
+    const p = this.participants.get(id);
+    if (p) p.last_seen_at = new Date().toISOString();
   }
 }
 
 let _instance: MemoryGameRepository | null = null;
-/**
- * Module-level singleton — Next.js's dev server preserves it across HMR
- * reloads inside a single process, but not across dev-server restarts.
- */
 export function getMemoryRepository(): MemoryGameRepository {
   if (!_instance) _instance = new MemoryGameRepository();
   return _instance;

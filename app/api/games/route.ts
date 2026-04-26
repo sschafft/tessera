@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
   const gmParticipantId = crypto.randomUUID();
 
   const repo = getRepository();
-  const game = await repo.create({
+  const game = await repo.createGame({
     ...validated,
     code,
     host_token_hash: hostTokenHash,
