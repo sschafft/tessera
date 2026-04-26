@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Avatar } from "@/components/primitives/Avatar";
 import type { TeamMode } from "@/lib/game/repository";
 import type { LobbyParticipant, LobbyPair } from "./MasterContent";
+import { ShareJoinLink } from "./ShareJoinLink";
 
 export interface MasterLobbyProps {
   code: string;
@@ -47,7 +48,8 @@ export function MasterLobby({
 
   return (
     <div className="border-b border-[var(--color-line)] bg-[var(--color-paper)]">
-      <div className="flex items-baseline justify-between px-5 pb-2 pt-4">
+      <ShareJoinLink code={code} />
+      <div className="flex items-baseline justify-between border-t border-[var(--color-line)] px-5 pb-2 pt-3.5">
         <div className="flex items-center gap-2">
           <span
             aria-hidden="true"
@@ -75,10 +77,9 @@ export function MasterLobby({
       <div className="flex flex-col gap-1 px-3.5 pb-2.5">
         {members.length === 0 ? (
           <p className="px-3 py-6 text-center text-[12px] text-[var(--color-ink-3)]">
-            Share <span className="t-mono font-bold">{code}</span> with players
-            to join.
+            Drop the link above into your call chat or Slack —
             <br />
-            They&apos;ll appear here as they sign in.
+            players will appear here as they sign in.
           </p>
         ) : (
           members.map((p) => (
