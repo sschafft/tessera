@@ -147,7 +147,24 @@ We do not use Supabase Auth. Tessera has no accounts; we mint our own short-live
 - **Reconnect:** A participant returning within 5 min with the same `(code, display_name)` reclaims their seat and pair (PRD §6.1). After 5 min the slot is freed.
 - **Role changes:** Any time the GM changes a participant's role in the lobby, the server re-issues that participant's JWT with the new role claim and sets an updated `ts_<code>` cookie. Stale JWTs with the wrong role therefore expire naturally within 4 hours, and RLS enforces the DB-level role at all times regardless.
 
-### 5.3 RLS policy shape (one example)
+### 5.3 Authorization split: server route handlers do the work; RLS is defence-in-depth
+
+Tessera's mutations all flow through Next.js route handlers. Those handlers verify our JWT, then call Supabase **using the service role key** (server-only) to perform the write. Our app code is the source of truth for "is this participant allowed to do this?"; RLS is configured with a **deny-by-default** posture as defence-in-depth.
+
+Why this split:
+
+- It decouples our JWT signing key from Supabase's JWT secret. We can rotate `TESSERA_JWT_SECRET` independently.
+- Validation (game_id matches, role allowed, cooldowns enforced) lives in TypeScript next to the rest of the business logic, not split between SQL policies and the route handler.
+- The browser only ever holds the anon key. The service role key never leaves the server.
+
+What runs against RLS:
+
+- **Realtime postgres_changes subscriptions** (added in milestone 4) — these are evaluated against the connecting client's JWT. We configure narrow `select` policies that read `auth.jwt() ->> 'tessera_game_id'` and `auth.jwt() ->> 'tessera_role'` for those reads. We use *namespaced* claim names so Supabase's own `role` semantics (`anon` / `authenticated` / `service_role`) are untouched.
+- **Realtime broadcast channels** — we use these for ephemeral piece drag and presence. They don't run RLS; we authorize the join via a server-issued channel token instead.
+
+Until milestone 4 ships, RLS is `enable row level security` on every table with **no policies** — meaning anon clients can read/write nothing, only the service role can act. Our route handlers do the rest.
+
+### 5.4 Sample RLS policy (for milestone 4)
 
 ```sql
 -- placements: only the builder of the pair, the pair's guider (read-only),

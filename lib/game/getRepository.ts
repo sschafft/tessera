@@ -1,14 +1,22 @@
+import "server-only";
+
+import { isSupabaseConfigured } from "@/lib/supabase/server";
 import { getMemoryRepository } from "./repository.memory";
+import { SupabaseGameRepository } from "./repository.supabase";
 import type { GameRepository } from "./repository";
 
+let _supabaseRepo: SupabaseGameRepository | null = null;
+
 /**
- * Returns the active GameRepository. Today: in-memory. Once Supabase is
- * configured (env vars present), this will return a Supabase-backed
- * implementation instead. Keep this single switch point so the rest of
- * the app never imports a concrete repository.
+ * Returns the active GameRepository. When Supabase env vars are set,
+ * we use the Supabase-backed repository; otherwise we fall back to the
+ * in-memory store (useful for early-stage local dev before the project
+ * is provisioned, and for unit tests).
  */
 export function getRepository(): GameRepository {
-  // TODO(supabase): when NEXT_PUBLIC_SUPABASE_URL is set, return the
-  // Supabase-backed repository instead.
+  if (isSupabaseConfigured()) {
+    if (!_supabaseRepo) _supabaseRepo = new SupabaseGameRepository();
+    return _supabaseRepo;
+  }
   return getMemoryRepository();
 }
