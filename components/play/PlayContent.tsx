@@ -230,7 +230,13 @@ function renderBody(state: PlayState) {
     return <RoundEndedView state={state} />;
   }
   if (state.role === "lobby") {
-    return <LobbyWaiting workshopName={state.workshop_name} />;
+    return (
+      <LobbyWaiting
+        workshopName={state.workshop_name}
+        videoCallUrl={state.video_call_url}
+        whiteboardUrl={state.whiteboard_url}
+      />
+    );
   }
   if (state.role === "builder") return <BuilderView state={state} />;
   if (state.role === "guider") return <GuiderView state={state} />;

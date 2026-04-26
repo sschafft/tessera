@@ -5,6 +5,7 @@ import { Tile, type TileColor, type TileShape } from "@/components/canvas/Tile";
 import { InteractiveCanvas } from "@/components/canvas/InteractiveCanvas";
 import { PlayCanvas } from "@/components/canvas/PlayCanvas";
 import { BriefEnvelope } from "./BriefEnvelope";
+import { JoinCallCta } from "./JoinCallCta";
 import type { PlacedPiece, PlayState } from "./PlayContent";
 
 const TRAY_SHAPES: TileShape[] = [
@@ -48,7 +49,7 @@ export interface BuilderViewProps {
 
 export function BuilderView({ state }: BuilderViewProps) {
   if (!state.round || state.round.status !== "running") {
-    return <WaitingForRound />;
+    return <WaitingForRound state={state} />;
   }
   return <BuilderInteractive state={state} />;
 }
@@ -730,17 +731,22 @@ function PrototypeOverlay({
   );
 }
 
-function WaitingForRound() {
+function WaitingForRound({ state }: { state: PlayState }) {
   return (
-    <section className="m-auto flex max-w-[480px] flex-col items-center gap-3 px-6 text-center">
+    <section className="m-auto flex max-w-[520px] flex-col items-center gap-5 px-6 text-center">
       <div className="t-mono text-[11px] tracking-widest text-[var(--color-ink-3)]">
-        BUILDER
+        BUILDER · WAITING
       </div>
-      <h1 className="t-display text-3xl">Waiting for the round to start</h1>
+      <h1 className="t-display text-3xl">Hop on the call.</h1>
       <p className="text-[15px] text-[var(--color-ink-2)]">
-        Your guider has the goal. As soon as the facilitator hits Start, your
-        canvas comes alive.
+        Your guider has the goal pattern. As soon as the facilitator hits
+        Start, your canvas comes alive — and you&apos;ll need the call open to
+        hear the descriptions.
       </p>
+      <JoinCallCta
+        videoCallUrl={state.video_call_url}
+        whiteboardUrl={state.whiteboard_url}
+      />
     </section>
   );
 }

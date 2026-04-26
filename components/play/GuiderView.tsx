@@ -1,5 +1,6 @@
 import { PlayCanvas } from "@/components/canvas/PlayCanvas";
 import { BriefEnvelope } from "./BriefEnvelope";
+import { JoinCallCta } from "./JoinCallCta";
 import type { PlayState } from "./PlayContent";
 
 export interface GuiderViewProps {
@@ -8,7 +9,7 @@ export interface GuiderViewProps {
 
 export function GuiderView({ state }: GuiderViewProps) {
   if (!state.round || state.round.status !== "running" || !state.goal) {
-    return <WaitingForRound />;
+    return <WaitingForRound state={state} />;
   }
   const showCoords = (state.round.complexity ?? 5) <= 4;
   return (
@@ -75,16 +76,21 @@ export function GuiderView({ state }: GuiderViewProps) {
   );
 }
 
-function WaitingForRound() {
+function WaitingForRound({ state }: { state: PlayState }) {
   return (
-    <section className="m-auto flex max-w-[480px] flex-col items-center gap-3 px-6 text-center">
+    <section className="m-auto flex max-w-[520px] flex-col items-center gap-5 px-6 text-center">
       <div className="t-mono text-[11px] tracking-widest text-[var(--color-ink-3)]">
-        GUIDER
+        GUIDER · WAITING
       </div>
-      <h1 className="t-display text-3xl">Waiting for the round to start</h1>
+      <h1 className="t-display text-3xl">Hop on the call.</h1>
       <p className="text-[15px] text-[var(--color-ink-2)]">
-        You&apos;ll see the goal pattern as soon as the facilitator hits Start.
+        Once the facilitator hits Start you&apos;ll see the goal pattern — and
+        your builder will be on the call ready to listen to your descriptions.
       </p>
+      <JoinCallCta
+        videoCallUrl={state.video_call_url}
+        whiteboardUrl={state.whiteboard_url}
+      />
     </section>
   );
 }

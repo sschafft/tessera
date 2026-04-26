@@ -411,6 +411,8 @@ export function MasterContent({
           (round?.index ?? 0) >= (data?.round_count ?? roundCount)
         }
         busy={busy}
+        actionError={actionError}
+        pairsCount={pairs.length}
         onStart={startRound}
         onEnd={endRound}
         onEndGame={requestEndGame}

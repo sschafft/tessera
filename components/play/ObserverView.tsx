@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { PlayCanvas } from "@/components/canvas/PlayCanvas";
 import { BriefEnvelope } from "./BriefEnvelope";
+import { JoinCallCta } from "./JoinCallCta";
 import type { PlayState } from "./PlayContent";
 
 export interface ObserverViewProps {
@@ -94,15 +95,20 @@ function PaneHeader({
 
 function WaitingForRound({ state }: { state: PlayState }) {
   return (
-    <section className="m-auto flex max-w-[480px] flex-col items-center gap-3 px-6 text-center">
+    <section className="m-auto flex max-w-[520px] flex-col items-center gap-5 px-6 text-center">
       <div className="t-mono text-[11px] tracking-widest text-[var(--color-ink-3)]">
-        OBSERVER
+        OBSERVER · WAITING
       </div>
-      <h1 className="t-display text-3xl">Waiting for the round to start</h1>
+      <h1 className="t-display text-3xl">Hop on the call.</h1>
       <p className="text-[15px] text-[var(--color-ink-2)]">
         Once the facilitator hits Start, you&apos;ll see your pair&apos;s
-        builder canvas alongside the goal.
+        builder canvas alongside the goal — and overhear the conversation
+        that drives it on the call.
       </p>
+      <JoinCallCta
+        videoCallUrl={state.video_call_url}
+        whiteboardUrl={state.whiteboard_url}
+      />
       {state.available_pairs && state.available_pairs.length > 1 && (
         <PairSwitcher state={state} />
       )}

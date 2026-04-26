@@ -366,18 +366,21 @@ function JoinForm() {
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!isValidGameCode(code)) {
-      setError("Game code must be in the form XXX-NNN.");
+    const normalised = code.trim().toUpperCase();
+    if (!isValidGameCode(normalised)) {
+      setError(
+        "That code doesn't look right. Should be 7 chars in XXX-NNN format.",
+      );
       return;
     }
     if (!displayName.trim()) {
-      setError("Display name is required.");
+      setError("Pick a display name to continue.");
       return;
     }
-    // Join API + lobby UI ship in milestone 2; for now we just route to the
-    // (placeholder) lobby page so the form proves itself end-to-end.
     setError(null);
-    router.push(`/g/${code}/join?name=${encodeURIComponent(displayName.trim())}`);
+    router.push(
+      `/g/${normalised}/join?name=${encodeURIComponent(displayName.trim())}`,
+    );
   }
 
   return (

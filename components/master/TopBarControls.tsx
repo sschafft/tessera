@@ -18,10 +18,22 @@ export interface TopBarControlsProps {
   /** True when round.status='ended' and we've reached round_count. */
   allRoundsDone: boolean;
   busy: boolean;
+  /** Last action error (e.g. "no_pairs"); surfaced near the button. */
+  actionError: string | null;
+  /** Whether at least one pair exists — used to explain a disabled Start. */
+  pairsCount: number;
   onStart: () => void;
   onEnd: () => void;
   onEndGame: () => void;
 }
+
+const ERROR_COPY: Record<string, string> = {
+  no_pairs: "Allocate at least one pair before starting a round.",
+  round_already_running: "A round is already running.",
+  all_rounds_complete:
+    "All planned rounds finished. Use \"Start another round\" instead.",
+  forbidden: "You don't have permission for that.",
+};
 
 export function TopBarControls({
   code,
@@ -34,6 +46,8 @@ export function TopBarControls({
   gameEnded,
   allRoundsDone,
   busy,
+  actionError,
+  pairsCount,
   onStart,
   onEnd,
   onEndGame,
@@ -59,7 +73,16 @@ export function TopBarControls({
     }
   }, [isRunning, remaining, round, onEnd]);
 
+  const startDisabledHint =
+    !gameEnded && !isRunning && !canStart
+      ? pairsCount === 0
+        ? "Allocate at least one pair before starting a round."
+        : "Start unavailable right now."
+      : null;
+  const errorMessage = actionError ? (ERROR_COPY[actionError] ?? actionError) : null;
+
   return (
+    <>
     <header className="flex h-16 flex-shrink-0 items-center justify-between border-b border-[var(--color-line)] bg-white px-7">
       <div className="flex items-center gap-4">
         <Wordmark size={22} />
@@ -131,6 +154,24 @@ export function TopBarControls({
         )}
       </div>
     </header>
+    {(errorMessage || startDisabledHint) && (
+      <div
+        className="flex items-center gap-2 border-b border-[var(--color-line)] px-7 py-2 text-[12px]"
+        style={{
+          background: errorMessage
+            ? "var(--color-tint-red)"
+            : "var(--color-tint-yellow)",
+          color: errorMessage ? "var(--color-t-red)" : "#7a5b00",
+        }}
+        role={errorMessage ? "alert" : undefined}
+      >
+        <span aria-hidden="true">{errorMessage ? "⚠" : "ℹ"}</span>
+        <span className="flex-1 font-semibold">
+          {errorMessage ?? startDisabledHint}
+        </span>
+      </div>
+    )}
+    </>
   );
 }
 
