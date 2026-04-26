@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { isValidGameCode } from "@/lib/game/code";
 import { readSessionAndParticipant } from "@/lib/auth/session";
+import { publishGameEvent } from "@/lib/realtime/publish";
 import { getRepository } from "@/lib/game/getRepository";
 
 export const runtime = "nodejs";
@@ -62,6 +63,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }));
 
   const remaining = await repo.captureBuilderSnapshot(pairRound.id, snapshot);
+  void publishGameEvent(session.claims.game_id, "snapshot_shared");
   return NextResponse.json({
     ok: true,
     shares_remaining: remaining,

@@ -292,6 +292,16 @@ export interface GameRepository {
   deletePlacement(id: string): Promise<boolean>;
 
   /**
+   * Update a placement's cell (q, r) and/or rotation. Throws
+   * PlacementCellTakenError when the new cell collides with another
+   * placement in the same pair_round.
+   */
+  updatePlacement(
+    id: string,
+    patch: { q?: number; r?: number; rot?: number },
+  ): Promise<PlacementRecord | null>;
+
+  /**
    * Insert (or replace) a brief for a (pair_round, role). Used both at
    * round start and for re-rolls.
    */

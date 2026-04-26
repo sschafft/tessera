@@ -67,6 +67,23 @@ interface CreatedInfo {
   recoveryUrl: string;
 }
 
+function isLikelyUrl(s: string): boolean {
+  try {
+    const u = new URL(s.trim());
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function errorStyle(hasError: boolean): React.CSSProperties | undefined {
+  if (!hasError) return undefined;
+  return {
+    borderColor: "var(--color-t-red)",
+    boxShadow: "0 0 0 2px var(--color-tint-red)",
+  };
+}
+
 type BriefSource = "library" | "gm" | "gemini";
 
 function HostForm() {
@@ -85,13 +102,52 @@ function HostForm() {
   const [guiderCustomTitle, setGuiderCustomTitle] = useState("");
   const [guiderCustomRules, setGuiderCustomRules] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [created, setCreated] = useState<CreatedInfo | null>(null);
+
+  function validate(): Record<string, string> {
+    const next: Record<string, string> = {};
+    if (!workshopName.trim()) next.workshop_name = "Give the workshop a name.";
+    if (!videoCallUrl.trim()) {
+      next.video_call_url = "Paste your Meet/Zoom link.";
+    } else if (!isLikelyUrl(videoCallUrl)) {
+      next.video_call_url = "Use a full URL (https://…).";
+    }
+    if (whiteboardUrl.trim() && !isLikelyUrl(whiteboardUrl)) {
+      next.whiteboard_url = "Use a full URL or leave it blank.";
+    }
+    if (builderBrief && builderBriefSource === "gm") {
+      if (!builderCustomTitle.trim()) {
+        next.builder_brief_custom = "Give your custom builder brief a title.";
+      } else if (
+        builderCustomRules.split("\n").map((s) => s.trim()).filter(Boolean)
+          .length === 0
+      ) {
+        next.builder_brief_custom = "Add at least one rule (one per line).";
+      }
+    }
+    if (guiderBrief && guiderBriefSource === "gm") {
+      if (!guiderCustomTitle.trim()) {
+        next.guider_brief_custom = "Give your custom guider brief a title.";
+      } else if (
+        guiderCustomRules.split("\n").map((s) => s.trim()).filter(Boolean)
+          .length === 0
+      ) {
+        next.guider_brief_custom = "Add at least one rule (one per line).";
+      }
+    }
+    return next;
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const v = validate();
+    if (Object.keys(v).length > 0) {
+      setErrors(v);
+      return;
+    }
     setSubmitting(true);
-    setError(null);
+    setErrors({});
     try {
       const res = await fetch("/api/games", {
         method: "POST",
@@ -141,9 +197,20 @@ function HostForm() {
       setCreated({ code: data.code, recoveryUrl });
       setSubmitting(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setErrors({
+        _form: err instanceof Error ? err.message : "Something went wrong",
+      });
       setSubmitting(false);
     }
+  }
+
+  function clearError(name: string) {
+    if (!errors[name]) return;
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next[name];
+      return next;
+    });
   }
 
   if (created) {
@@ -157,36 +224,60 @@ function HostForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-4 p-6">
-      <Field label="Workshop name" required>
+    <form onSubmit={onSubmit} className="flex flex-col gap-4 p-6" noValidate>
+      <Field
+        label="Workshop name"
+        hint={errors.workshop_name ?? undefined}
+        required
+      >
         <input
           className="t-input"
           value={workshopName}
-          onChange={(e) => setWorkshopName(e.target.value)}
+          onChange={(e) => {
+            setWorkshopName(e.target.value);
+            clearError("workshop_name");
+          }}
           placeholder="Q3 cross-functional kickoff"
           maxLength={80}
           required
+          aria-invalid={Boolean(errors.workshop_name)}
+          style={errorStyle(Boolean(errors.workshop_name))}
         />
       </Field>
 
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Video call link" required>
+        <Field
+          label="Video call link"
+          hint={errors.video_call_url ?? undefined}
+          required
+        >
           <input
             className="t-input"
             value={videoCallUrl}
-            onChange={(e) => setVideoCallUrl(e.target.value)}
+            onChange={(e) => {
+              setVideoCallUrl(e.target.value);
+              clearError("video_call_url");
+            }}
             placeholder="https://meet.google.com/…"
             required
-            type="url"
+            aria-invalid={Boolean(errors.video_call_url)}
+            style={errorStyle(Boolean(errors.video_call_url))}
           />
         </Field>
-        <Field label="Whiteboard" hint="optional">
+        <Field
+          label="Whiteboard"
+          hint={errors.whiteboard_url ?? "optional"}
+        >
           <input
             className="t-input"
             value={whiteboardUrl}
-            onChange={(e) => setWhiteboardUrl(e.target.value)}
+            onChange={(e) => {
+              setWhiteboardUrl(e.target.value);
+              clearError("whiteboard_url");
+            }}
             placeholder="https://miro.com/…"
-            type="url"
+            aria-invalid={Boolean(errors.whiteboard_url)}
+            style={errorStyle(Boolean(errors.whiteboard_url))}
           />
         </Field>
       </div>
@@ -248,9 +339,11 @@ function HostForm() {
         </div>
       )}
 
-      {error && (
+      {(errors._form || errors.builder_brief_custom || errors.guider_brief_custom) && (
         <p className="text-[13px] text-[var(--color-t-red)]" role="alert">
-          {error}
+          {errors._form ??
+            errors.builder_brief_custom ??
+            errors.guider_brief_custom}
         </p>
       )}
 

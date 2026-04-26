@@ -3,6 +3,7 @@ import { isValidGameCode } from "@/lib/game/code";
 import { readSessionForGame } from "@/lib/auth/session";
 import { getRepository } from "@/lib/game/getRepository";
 import { pickBrief } from "@/lib/briefs/orchestrator";
+import { publishGameEvent } from "@/lib/realtime/publish";
 import type { BriefRole } from "@/lib/game/repository";
 
 export const maxDuration = 15;
@@ -79,6 +80,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     title: fresh.title,
     rules: fresh.rules,
   });
+  void publishGameEvent(game.id, "brief_changed");
 
   return NextResponse.json({
     ok: true,

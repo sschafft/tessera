@@ -10,6 +10,7 @@ export function GuiderView({ state }: GuiderViewProps) {
   if (!state.round || state.round.status !== "running" || !state.goal) {
     return <WaitingForRound />;
   }
+  const showCoords = (state.round.complexity ?? 5) <= 4;
   return (
     <section className="relative mx-auto flex w-full max-w-[1100px] flex-1 flex-col items-center justify-center gap-6 p-6">
       <div className="absolute right-6 top-6 z-10 flex flex-col gap-3">
@@ -40,7 +41,7 @@ export function GuiderView({ state }: GuiderViewProps) {
         >
           ● THE GOAL · only you see this
         </span>
-        <PlayCanvas pieces={state.goal} />
+        <PlayCanvas pieces={state.goal} showCoords={showCoords} />
       </div>
       <p
         className="t-mono max-w-[520px] text-center text-[12px] text-[var(--color-ink-3)]"
@@ -65,7 +66,7 @@ export function GuiderView({ state }: GuiderViewProps) {
               className="overflow-hidden rounded-[10px]"
               style={{ transform: "scale(0.4)", transformOrigin: "top left", height: 200, marginBottom: -200 }}
             >
-              <PlayCanvas pieces={state.builder_snapshot} />
+              <PlayCanvas pieces={state.builder_snapshot} showCoords={showCoords} />
             </div>
           </div>
         </div>

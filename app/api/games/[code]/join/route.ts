@@ -6,6 +6,7 @@ import { isValidGameCode } from "@/lib/game/code";
 import { getRepository } from "@/lib/game/getRepository";
 import { colorFor } from "@/lib/game/colors";
 import { DuplicateNameError } from "@/lib/game/repository.memory";
+import { publishGameEvent } from "@/lib/realtime/publish";
 import type { ParticipantRole } from "@/lib/game/repository";
 
 export const runtime = "nodejs";
@@ -115,6 +116,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     throw err;
   }
 
+  void publishGameEvent(game.id, "lobby_changed");
   return successResponse({
     code,
     game,

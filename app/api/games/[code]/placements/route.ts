@@ -4,6 +4,7 @@ import { readSessionAndParticipant } from "@/lib/auth/session";
 import { getRepository } from "@/lib/game/getRepository";
 import { GRID_HEIGHT, GRID_WIDTH } from "@/lib/grid/coords";
 import { PlacementCellTakenError } from "@/lib/game/repository.memory";
+import { publishGameEvent } from "@/lib/realtime/publish";
 
 export const runtime = "nodejs";
 
@@ -108,6 +109,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       rot: body.rot,
       placed_by: me.id,
     });
+    void publishGameEvent(session.claims.game_id, "placement_added");
     return NextResponse.json({ ok: true, placement });
   } catch (err) {
     if (err instanceof PlacementCellTakenError) {

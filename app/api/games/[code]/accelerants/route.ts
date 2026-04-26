@@ -4,6 +4,7 @@ import { readSessionForGame } from "@/lib/auth/session";
 import { getRepository } from "@/lib/game/getRepository";
 import { generatePattern } from "@/lib/pattern/generator";
 import { pickBrief } from "@/lib/briefs/orchestrator";
+import { publishGameEvent } from "@/lib/realtime/publish";
 
 export const maxDuration = 15;
 import {
@@ -213,6 +214,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     kind: body.kind,
     payload: body.payload ?? {},
     triggered_by: claims.sub,
+  });
+  void publishGameEvent(game.id, "accelerant_triggered", {
+    kind: body.kind,
   });
 
   return NextResponse.json({

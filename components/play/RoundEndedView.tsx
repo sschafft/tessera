@@ -17,6 +17,7 @@ export function RoundEndedView({ state }: RoundEndedViewProps) {
   const placements = state.placements;
   const accuracy = state.accuracy;
   const briefs = collectBriefs(state);
+  const showCoords = (state.round?.complexity ?? 5) <= 4;
 
   return (
     <section className="mx-auto flex w-full max-w-[1100px] flex-1 flex-col gap-6 p-6">
@@ -51,11 +52,11 @@ export function RoundEndedView({ state }: RoundEndedViewProps) {
       <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
         <div className="t-card flex flex-col items-center gap-3 p-4">
           <PaneHeader title="What you built" colorVar="orange" />
-          <PlayCanvas pieces={placements} />
+          <PlayCanvas pieces={placements} showCoords={showCoords} />
         </div>
         <div className="t-card flex flex-col items-center gap-3 p-4">
           <PaneHeader title="What it should have been" colorVar="blue" />
-          <PlayCanvas pieces={goal} />
+          <PlayCanvas pieces={goal} showCoords={showCoords} />
         </div>
       </div>
 

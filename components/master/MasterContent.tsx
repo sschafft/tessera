@@ -7,6 +7,9 @@ import { MasterLobby } from "./MasterLobby";
 import { PairsPanel } from "./PairsPanel";
 import { TopBarControls } from "./TopBarControls";
 import { AccelerantsRail } from "./AccelerantsRail";
+import { EndGameModal } from "./EndGameModal";
+import { GameEndedView } from "@/components/play/GameEndedView";
+import { useGameEvents } from "@/lib/realtime/useGameEvents";
 
 export interface LobbyParticipant {
   id: string;
@@ -47,6 +50,7 @@ export interface AccelerantEvent {
 
 interface LobbyResponse {
   code: string;
+  game_id: string;
   workshop_name: string;
   team_mode: TeamMode;
   participant_cap: number;
@@ -58,7 +62,8 @@ interface LobbyResponse {
   accelerant_events: AccelerantEvent[];
 }
 
-const POLL_MS = 2000;
+// Realtime broadcasts drive the freshness; this poll is a safety net.
+const POLL_MS = 30_000;
 
 export interface MasterContentProps {
   code: string;
@@ -119,6 +124,9 @@ export function MasterContent({
       clearInterval(id);
     };
   }, [fetchSnapshot]);
+
+  // Realtime: refetch instantly on any game event.
+  useGameEvents(data?.game_id ?? null, fetchSnapshot);
 
   const toggleSelect = useCallback((id: string) => {
     setSelected((prev) => {
@@ -252,10 +260,12 @@ export function MasterContent({
     }
   }, [code, fetchSnapshot]);
 
-  const endGame = useCallback(async () => {
-    if (!confirm("End the game now? Players will see a final summary screen.")) {
-      return;
-    }
+  const [endGameModalOpen, setEndGameModalOpen] = useState(false);
+
+  const requestEndGame = useCallback(() => setEndGameModalOpen(true), []);
+  const cancelEndGame = useCallback(() => setEndGameModalOpen(false), []);
+
+  const confirmEndGame = useCallback(async () => {
     setBusy(true);
     setActionError(null);
     try {
@@ -268,9 +278,33 @@ export function MasterContent({
         const j = await res.json().catch(() => ({}));
         throw new Error(j.error || `status ${res.status}`);
       }
+      setEndGameModalOpen(false);
       await fetchSnapshot();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "end failed");
+    } finally {
+      setBusy(false);
+    }
+  }, [code, fetchSnapshot]);
+
+  const replay = useCallback(async () => {
+    setBusy(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/games/${code}/replay`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.message || j.error || `status ${res.status}`);
+      }
+      await fetchSnapshot();
+    } catch (err) {
+      setActionError(
+        err instanceof Error ? err.message : "replay failed",
+      );
     } finally {
       setBusy(false);
     }
@@ -303,6 +337,62 @@ export function MasterContent({
   const workshopName = data?.workshop_name ?? initialWorkshopName;
   const roundCount = data?.round_count ?? initialRoundCount;
   const cap = data?.participant_cap ?? 0;
+  const gameEnded = data?.status === "ended";
+
+  // Once the game has ended, the GM dashboard collapses to the same
+  // debrief summary the players see, plus a primary "Start another
+  // round" CTA + the standard "Back to home" + facilitator guide CTA.
+  if (gameEnded) {
+    return (
+      <>
+        <header
+          className="flex h-14 flex-shrink-0 items-center justify-between border-b border-[var(--color-line)] bg-white px-7"
+        >
+          <div className="flex items-center gap-3 text-[14px]">
+            <span className="t-mono text-[12px] text-[var(--color-ink-3)]">
+              {code}
+            </span>
+            <span className="font-bold">{workshopName}</span>
+            <span
+              className="t-mono rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-widest"
+              style={{
+                background: "var(--color-tint-green)",
+                color: "var(--color-t-green)",
+              }}
+            >
+              game ended
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={replay}
+              disabled={busy || pairs.length === 0}
+              className="t-btn t-btn--primary t-btn--sm"
+              title={
+                pairs.length === 0
+                  ? "No pairs to replay with."
+                  : undefined
+              }
+            >
+              {busy ? "Starting…" : "↻ Start another round"}
+            </button>
+          </div>
+        </header>
+        <div
+          className="flex flex-1 flex-col items-center overflow-y-auto"
+          style={{ background: "var(--color-paper-2)" }}
+        >
+          <GameEndedView code={code} workshopName={workshopName} />
+          {actionError && (
+            <p className="px-6 py-2 text-[12px] text-[var(--color-t-red)]">
+              {actionError}
+            </p>
+          )}
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -322,7 +412,7 @@ export function MasterContent({
         busy={busy}
         onStart={startRound}
         onEnd={endRound}
-        onEndGame={endGame}
+        onEndGame={requestEndGame}
       />
       <div
         className="grid min-h-0 flex-1"
@@ -372,9 +462,7 @@ export function MasterContent({
           className="flex flex-col gap-4 overflow-y-auto p-6"
           style={{ background: "var(--color-paper-2)" }}
         >
-          {data?.status === "ended" ? (
-            <GameOverPanel pairs={pairs.length} round={round} />
-          ) : focusedPair ? (
+          {focusedPair ? (
             <FocusedPairCard
               pair={focusedPair}
               participants={participants}
@@ -397,6 +485,12 @@ export function MasterContent({
           />
         </aside>
       </div>
+      <EndGameModal
+        open={endGameModalOpen}
+        busy={busy}
+        onConfirm={confirmEndGame}
+        onCancel={cancelEndGame}
+      />
     </>
   );
 }
@@ -427,28 +521,6 @@ function FocusedPairPlaceholder({
           </p>
         </>
       )}
-    </div>
-  );
-}
-
-function GameOverPanel({
-  pairs,
-  round,
-}: {
-  pairs: number;
-  round: LobbyRound | null;
-}) {
-  return (
-    <div className="t-card flex flex-col items-center justify-center gap-3 px-8 py-16 text-center">
-      <div className="t-mono text-[11px] tracking-widest text-[var(--color-ink-3)]">
-        GAME OVER
-      </div>
-      <h2 className="t-display text-[28px]">Workshop wrapped</h2>
-      <p className="max-w-md text-[14px] text-[var(--color-ink-2)]">
-        Players see a debrief screen with their goal vs. build, plus both
-        briefs. {round ? `${round.index} round${round.index === 1 ? "" : "s"}, ` : ""}
-        {pairs} pair{pairs === 1 ? "" : "s"}.
-      </p>
     </div>
   );
 }

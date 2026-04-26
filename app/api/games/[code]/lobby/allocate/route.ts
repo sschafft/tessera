@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isValidGameCode } from "@/lib/game/code";
 import { readSessionForGame } from "@/lib/auth/session";
 import { getRepository } from "@/lib/game/getRepository";
+import { publishGameEvent } from "@/lib/realtime/publish";
 import type { ParticipantRecord } from "@/lib/game/repository";
 
 export const runtime = "nodejs";
@@ -75,6 +76,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
   if (body.kind === "auto") {
     const result = await autoAllocate({ repo, game_id: game.id, participants });
+    void publishGameEvent(game.id, "allocation_changed");
     return NextResponse.json({ ok: true, ...result });
   }
 
@@ -91,6 +93,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     const builderId = body.builder_id;
     const guiderId = builderId === aId ? bId : aId;
     await repo.createPair(game.id, builderId, guiderId);
+    void publishGameEvent(game.id, "allocation_changed");
     return NextResponse.json({ ok: true });
   }
 
@@ -105,6 +108,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     if (!p) continue;
     await repo.assignObserver(pid, pair.id);
   }
+  void publishGameEvent(game.id, "allocation_changed");
   return NextResponse.json({ ok: true });
 }
 

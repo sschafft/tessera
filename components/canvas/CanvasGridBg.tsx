@@ -1,7 +1,10 @@
+import { CELL, PADDING } from "@/lib/grid/coords";
+
 /**
- * CanvasGridBg — the triangular tessellation background drawn under
- * canvases (builder, guider, observer, master). Renders as an absolutely
- * positioned SVG that fills its parent.
+ * Square cell-grid background for the canvas. One faint line every
+ * CELL pixels, padded to match the grid origin. The grid is the
+ * primary visual reference players use to align pieces; coordinate
+ * labels (A1, B2, …) sit on top via <CoordinateLabels />.
  */
 export function CanvasGridBg() {
   return (
@@ -11,27 +14,29 @@ export function CanvasGridBg() {
         inset: 0,
         width: "100%",
         height: "100%",
-        opacity: 0.5,
+        opacity: 0.6,
         pointerEvents: "none",
       }}
       aria-hidden="true"
     >
       <defs>
         <pattern
-          id="tri-grid"
-          width="60"
-          height="52"
+          id="square-grid"
+          width={CELL}
+          height={CELL}
+          x={PADDING}
+          y={PADDING}
           patternUnits="userSpaceOnUse"
         >
           <path
-            d="M0 0 L30 52 L60 0 M0 52 L30 0 L60 52"
+            d={`M ${CELL} 0 L 0 0 0 ${CELL}`}
             fill="none"
-            stroke="rgba(60,40,10,.10)"
+            stroke="rgba(60,40,10,.14)"
             strokeWidth="1"
           />
         </pattern>
       </defs>
-      <rect width="100%" height="100%" fill="url(#tri-grid)" />
+      <rect width="100%" height="100%" fill="url(#square-grid)" />
     </svg>
   );
 }

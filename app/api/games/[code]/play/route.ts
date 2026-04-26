@@ -58,6 +58,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       whiteboard_url: game.whiteboard_url,
       game_status: game.status,
       sound_on: game.sound_on,
+      game_id: game.id,
       role: me.role,
       me: meSummary(me),
       partner: null,
@@ -190,6 +191,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
 
   return NextResponse.json({
     code,
+    game_id: game.id,
     workshop_name: game.workshop_name,
     video_call_url: game.video_call_url,
     whiteboard_url: game.whiteboard_url,

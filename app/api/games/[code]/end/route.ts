@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isValidGameCode } from "@/lib/game/code";
 import { readSessionForGame } from "@/lib/auth/session";
 import { getRepository } from "@/lib/game/getRepository";
+import { publishGameEvent } from "@/lib/realtime/publish";
 
 export const runtime = "nodejs";
 
@@ -42,5 +43,6 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     await repo.endRound(round.id);
   }
   await repo.setGameStatus(game.id, "ended");
+  void publishGameEvent(game.id, "game_ended");
   return NextResponse.json({ ok: true });
 }

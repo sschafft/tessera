@@ -13,6 +13,7 @@ export function ObserverView({ state }: ObserverViewProps) {
   if (!state.round || state.round.status !== "running" || !state.goal) {
     return <WaitingForRound state={state} />;
   }
+  const showCoords = (state.round.complexity ?? 5) <= 4;
   return (
     <section className="grid w-full" style={{ gridTemplateColumns: "1fr 1fr", gridTemplateRows: "1fr auto" }}>
       {state.observer_briefs && state.observer_briefs.length > 0 && (
@@ -35,7 +36,7 @@ export function ObserverView({ state }: ObserverViewProps) {
           colorVar="orange"
         />
         <div className="mt-3">
-          <PlayCanvas pieces={state.placements} />
+          <PlayCanvas pieces={state.placements} showCoords={showCoords} />
         </div>
         <p className="t-mono mt-3 text-[11px] text-[var(--color-ink-3)]">
           live · updates every 2 seconds
@@ -54,7 +55,7 @@ export function ObserverView({ state }: ObserverViewProps) {
           >
             ● THE GOAL
           </span>
-          <PlayCanvas pieces={state.goal} />
+          <PlayCanvas pieces={state.goal} showCoords={showCoords} />
         </div>
       </div>
 

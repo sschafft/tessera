@@ -3,7 +3,7 @@
 > A no-login facilitation game for hybrid workshops. Pairs of **builders** and **guiders** collaborate over an off-platform video call to recreate a target geometric pattern they can't both see — while a **game master** triggers in-game mechanics that surface lessons about communication, prototyping, and shared context.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![Status: pre-alpha](https://img.shields.io/badge/status-pre--alpha-orange)](#status)
+[![Status: v1 alpha](https://img.shields.io/badge/status-v1%20alpha-green)](#status)
 
 Tessera is intentionally a *scaffold* for the conversation, not a chat tool. All voice, video, and whiteboarding happen off-platform (Meet, Zoom, Miro, etc.); Tessera links out to those.
 
@@ -11,7 +11,9 @@ Tessera is intentionally a *scaffold* for the conversation, not a chat tool. All
 
 ## Status
 
-🚧 **Pre-alpha.** Design and specs are in [`design/`](./design); implementation has not started. The PRD and TDD are open for review — see [`design/PRD.md`](./design/PRD.md) and [`design/TDD.md`](./design/TDD.md).
+✅ **v1 alpha — playable end-to-end** on the live deployment. The full game loop ships: host → join → allocate pairs → start round → place pieces → trigger accelerants → end round → debrief → start another round. Polling fallback paired with Supabase Realtime broadcast for sub-second placement sync.
+
+Spec lives in [`design/PRD.md`](./design/PRD.md) and [`design/TDD.md`](./design/TDD.md). Both docs include "implementation deltas" sections (PRD §10b, TDD §15) noting where the shipped behaviour diverges from the original plan.
 
 ---
 
@@ -26,9 +28,9 @@ It's loosely inspired by the classic [Lego Game](https://www.psychologytoday.com
 ## Roles
 
 - **Game master** — creates the game, allocates the lobby into pairs, runs the timer, triggers accelerants. Birds-eye view across all pairs.
-- **Builder** — drags geometric tiles onto a canvas to recreate a target they cannot see. May have a secret "translation" brief.
+- **Builder** — places geometric tiles on a canvas to recreate a target they cannot see. Click an empty cell to add; click an existing piece to enter Edit mode (move with another click, rotate, delete). May have a secret "translation" brief.
 - **Guider** — sees the goal and describes it to their builder over the off-platform call. May have a secret "constraint" brief.
-- **Observer** *(optional)* — read-only spectator assigned to one pair; sees both the build and the goal.
+- **Observer** *(optional)* — read-only spectator assigned to one pair; sees both the build and the goal. Can switch pairs from a bottom strip.
 
 Minimum viable game: 1 GM + 1 Builder + 1 Guider.
 
@@ -36,23 +38,32 @@ Minimum viable game: 1 GM + 1 Builder + 1 Guider.
 
 ## Features
 
-- **No accounts.** A 6-character game code (`HEX-934`) and a display name; that's it.
-- **Live multi-pair dashboard.** GM sees every pair's progress at a glance and can drill into any one.
-- **Sealed briefs.** Each player gets a private "translation" or "constraint" rule. Players can probe each other 20-questions-style but can't disclose their brief.
+- **No accounts.** A six-character game code (`HEX-934`) and a display name; that's it.
+- **Resume any in-flight game** from the home page — every browser tab with a live session cookie shows up as a "resume" pill.
+- **Cleaner canvas.** Square cell grid, optional letter+number coordinate labels (A1, B2, …) on lower complexities so guider+builder can speak in coordinates on the call.
+- **Add or edit explicit modes.** A clear "Add: red triangle" or "Editing: yellow hex at B3" banner makes it obvious what your next click will do. Click an existing piece to move/rotate/delete it instead of triggering a destructive action.
+- **Live multi-pair dashboard.** GM sees every pair's progress at a glance, drills into any one, and can re-roll briefs per-side.
+- **Sealed briefs from three sources.** Pre-seeded library (~30 entries), GM free-text custom briefs, or AI-generated via Gemini 1.5 Flash with atomic per-game / global daily caps and graceful fallback.
 - **Eight accelerants.** Prototype unlock, reveal briefs, test build, agile share, time pressure, vocab swap, randomizer, requirement change — each a single-click GM mechanic that maps to a real-world facilitation lesson.
-- **Multi-round.** Up to 5 rounds per game, complexity tunable per round, pairings persist unless the GM hits Shuffle.
+- **Realtime updates.** Supabase Realtime broadcast keeps every connected client in sync within ~200ms; a 30-second polling loop is the fallback when sockets drop.
+- **Multi-round + replay.** GM-configurable round count (1–5); after a game ends, the GM can launch a fresh round with the same players from the summary screen.
+- **Pair leaderboard at game end.** Sorted complete-first then by accuracy, with a CTA back to the home page.
+- **Tone.js sound effects.** Synthesised round-end ding, time-pressure sting, game-end fanfare. Respects the GM's per-game `sound_on` toggle.
+- **Host recovery.** Bookmark URL with a one-shot token in the fragment so the GM never gets locked out of their own dashboard if their tab dies.
 - **Auto-purge.** Games are soft-deleted 24h after the last interaction, hard-deleted after 7 days.
 
 ---
 
 ## Tech stack
 
-- **Next.js 15** (App Router) on **Vercel**
+- **Next.js 16** (App Router) on **Vercel**
 - **TypeScript** (strict)
 - **Supabase** Postgres + Realtime, with Row Level Security
-- **Tailwind CSS** + a small CSS layer porting the design tokens
-- **dnd-kit** for the canvas, **inline SVG** for tiles
+- **Tailwind CSS v4** + a small CSS layer porting the design tokens
+- **Inline SVG** for tiles (no Konva or Canvas2D)
 - **Gemini 1.5 Flash** for procedural brief generation (server-side only)
+- **Tone.js** for synthesised sound effects (no audio assets)
+- **jose** for HS256 JWTs, **bcryptjs** for the host-recovery token
 
 Full architecture is in [`design/TDD.md`](./design/TDD.md).
 
@@ -60,14 +71,12 @@ Full architecture is in [`design/TDD.md`](./design/TDD.md).
 
 ## Getting started
 
-> Coming soon — the codebase doesn't exist yet. The steps below are the planned developer flow as documented in the TDD.
-
 ### Prerequisites
 
 - Node 20+ (we develop on 21)
-- pnpm 9+
+- pnpm 10+ (the older pnpm 7 has a Node 21 incompatibility — `npm i -g pnpm@latest`)
 - Supabase CLI (`brew install supabase/tap/supabase` or [other install methods](https://supabase.com/docs/guides/cli))
-- A free [Supabase](https://supabase.com) account (we use one project for dev and one for prod)
+- A free [Supabase](https://supabase.com) account
 - A free [Vercel](https://vercel.com) account (for deploys + previews)
 
 > No Docker required — dev runs against a hosted Supabase project, which mirrors production exactly.
@@ -75,15 +84,16 @@ Full architecture is in [`design/TDD.md`](./design/TDD.md).
 ### Quickstart
 
 ```bash
-git clone https://github.com/<your-fork>/tessera.git
+git clone https://github.com/sschafft/tessera.git
 cd tessera
 pnpm install
 
 # 1. Create a Supabase project at https://supabase.com (call it tessera-dev)
-# 2. Copy its URL, anon key, service-role key, JWT secret into .env.local
+# 2. Copy its URL + anon key + service-role key into .env.local; generate
+#    a TESSERA_JWT_SECRET with `openssl rand -base64 32`.
 cp .env.example .env.local
 
-# 3. Link the CLI to your dev project and apply migrations
+# 3. Link the CLI to your project and apply migrations
 pnpm supabase link --project-ref <your-dev-project-ref>
 pnpm supabase db push
 
@@ -98,18 +108,18 @@ See [`design/TDD.md` §11](./design/TDD.md) for the full setup including Vercel 
 | Variable | Scope | Purpose |
 | --- | --- | --- |
 | `NEXT_PUBLIC_SUPABASE_URL` | client + server | |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | client + server | RLS-protected, safe in browser |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | client + server | Browser uses it for Realtime broadcast subscriptions |
 | `SUPABASE_SERVICE_ROLE_KEY` | server only | Used by route handlers; bypasses RLS |
 | `TESSERA_JWT_SECRET` | server | Signs our session JWTs (independent of Supabase's JWT secret) |
 | `TESSERA_PUBLIC_URL` | server | Used in host-recovery URLs |
-| `GEMINI_API_KEY` | server only | Procedural brief generation (Production only — preview/local fall back to library briefs) |
+| `GEMINI_API_KEY` | server only | Optional. When set, GMs can pick "AI-generated" as a brief source. Library is the always-on fallback. |
 
 ### Deploying to Vercel
 
 1. Connect this GitHub repo to a new Vercel project (Add New… → Project → Import).
-2. In the project's **Settings → Environment Variables**, add every row from the table above. Apply each to **Production**, **Preview**, and **Development** unless noted:
-   - `GEMINI_API_KEY` — Production only.
-   - `TESSERA_PUBLIC_URL` — set to your custom domain on Production, leave Preview unset (Vercel exposes `VERCEL_URL` for previews; we read this as a fallback).
+2. In **Settings → Environment Variables**, add every row from the table above. Apply each to **Production**, **Preview**, and **Development** unless noted:
+   - `GEMINI_API_KEY` — Production only is recommended (previews fall back to library to avoid burning the free-tier quota).
+   - `TESSERA_PUBLIC_URL` — set to your custom domain on Production.
 3. Push to `main` → Vercel deploys to Production.
 4. Push to a branch → Vercel deploys a preview against the same Supabase project.
 
@@ -121,20 +131,45 @@ Vercel's built-in cron runs the `/api/keepalive` endpoint daily to prevent Supab
 
 ```
 tessera/
-├── app/                  # Next.js App Router (pages + API)
-├── components/           # Canvas, envelope, lobby, accelerants, primitives
-├── lib/                  # Auth, supabase clients, grid math, brief generator
-├── styles/               # globals + tessera.css (design tokens)
-├── supabase/migrations/  # SQL migrations
-├── tests/                # vitest + playwright
-└── design/               # PRD, TDD, Claude Design handoff bundle
+├── app/                       # Next.js App Router pages + API routes
+│   ├── (marketing)            # /, /how-it-works, /facilitator-guide
+│   ├── api/                   # All mutation + read endpoints
+│   ├── g/[code]/              # /play (builder/guider/observer/lobby) + /master + /join
+│   └── host-recover/[code]/   # Bookmark-recovery flow for the GM
+├── components/
+│   ├── canvas/                # SVG canvas, grid, tiles, coordinate labels, interactive canvas
+│   ├── landing/               # Home hero + tabs + resume-games strip
+│   ├── master/                # GM dashboard (lobby, pairs, accelerant rail, end-game summary)
+│   ├── play/                  # Per-role views, brief envelope, round-ended + game-ended views
+│   ├── marketing/             # ContentLayout + OssFooter for the long-form pages
+│   └── primitives/            # Shared UI atoms (Wordmark, RoleChip, Avatar, Field…)
+├── lib/
+│   ├── auth/                  # JWT mint/verify, cookie helpers, host-token bcrypt
+│   ├── briefs/                # Library picker, Gemini integration, source orchestrator
+│   ├── game/                  # Repository (in-memory + Supabase backends)
+│   ├── grid/                  # Cell↔pixel math + canvas constants
+│   ├── pattern/               # Deterministic procedural goal-pattern generator
+│   ├── realtime/              # Server publish + client subscribe hook
+│   └── sound/                 # Tone.js wrappers
+├── styles/                    # globals.css + tessera.css design tokens
+├── supabase/migrations/       # 8 SQL migrations applied to tessera-dev
+├── public/                    # Static assets
+└── design/                    # PRD, TDD, Claude Design handoff bundle
 ```
+
+---
+
+## Open-source / scaling note
+
+Tessera runs on the **Vercel + Supabase free tier** and is built around those constraints — see TDD §13 for the per-service guardrails (Gemini per-game + per-day caps, Realtime drag-broadcast throttle, concurrent-game cap, Vercel `maxDuration`). It's plenty for facilitator workshops with up to ~50 participants per game.
+
+For production-scale or commercial use, fork and self-host: drop your own Supabase project + Vercel team in, raise the caps, and you're off.
 
 ---
 
 ## Contributing
 
-Tessera is in pre-alpha and not yet accepting external contributions. If you'd like to follow along or share feedback, open an issue. Once we hit alpha we'll publish a `CONTRIBUTING.md` with the development flow.
+Tessera is in v1 alpha. External contributions welcome via PR — please open an issue first to discuss anything bigger than a polish change. A formal `CONTRIBUTING.md` lands when we hit beta.
 
 ---
 

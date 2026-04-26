@@ -9,6 +9,7 @@ import {
   playRoundEnd,
   playTimePressure,
 } from "@/lib/sound";
+import { useGameEvents } from "@/lib/realtime/useGameEvents";
 
 export interface PlacedPiece {
   id: string;
@@ -38,6 +39,7 @@ type PlayRole = "lobby" | "builder" | "guider" | "observer";
 
 export interface PlayState {
   code: string;
+  game_id: string;
   workshop_name: string;
   video_call_url: string;
   whiteboard_url: string | null;
@@ -101,7 +103,10 @@ export interface PlayContentProps {
   initial: PlayState;
 }
 
-const POLL_MS = 2000;
+// Realtime broadcast handles the snappy updates; this polling cadence
+// is the safety net (e.g. when the WS connection drops or the
+// browser loses focus and pauses sockets).
+const POLL_MS = 30_000;
 
 export function PlayContent({ code, initial }: PlayContentProps) {
   const [state, setState] = useState<PlayState>(initial);
@@ -130,6 +135,9 @@ export function PlayContent({ code, initial }: PlayContentProps) {
       clearInterval(id);
     };
   }, [fetchState]);
+
+  // Realtime: refetch instantly when any mutation lands.
+  useGameEvents(state.game_id, fetchState);
 
   // Audio: arm on the first user click; trigger sound on state diffs.
   useEffect(() => {

@@ -454,6 +454,28 @@ export class SupabaseGameRepository implements GameRepository {
     return (count ?? 0) > 0;
   }
 
+  async updatePlacement(
+    id: string,
+    patch: { q?: number; r?: number; rot?: number },
+  ): Promise<PlacementRecord | null> {
+    const supabase = getServiceClient();
+    const update: Database["public"]["Tables"]["placements"]["Update"] = {};
+    if (patch.q !== undefined) update.q = patch.q;
+    if (patch.r !== undefined) update.r = patch.r;
+    if (patch.rot !== undefined) update.rot = patch.rot;
+    const { data, error } = await supabase
+      .from("placements")
+      .update(update)
+      .eq("id", id)
+      .select()
+      .maybeSingle();
+    if (error) {
+      if (error.code === "23505") throw new PlacementCellTakenError();
+      throw new Error(`updatePlacement: ${error.message}`);
+    }
+    return data ? toPlacementRecord(data) : null;
+  }
+
   async upsertBrief(input: {
     pair_round_id: string;
     role: BriefRole;

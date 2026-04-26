@@ -337,6 +337,32 @@ export class MemoryGameRepository implements GameRepository {
     return this.placements.delete(id);
   }
 
+  async updatePlacement(
+    id: string,
+    patch: { q?: number; r?: number; rot?: number },
+  ): Promise<PlacementRecord | null> {
+    const existing = this.placements.get(id);
+    if (!existing) return null;
+    const newQ = patch.q ?? existing.q;
+    const newR = patch.r ?? existing.r;
+    if (newQ !== existing.q || newR !== existing.r) {
+      for (const p of this.placements.values()) {
+        if (
+          p.id !== id &&
+          p.pair_round_id === existing.pair_round_id &&
+          p.q === newQ &&
+          p.r === newR
+        ) {
+          throw new PlacementCellTakenError();
+        }
+      }
+    }
+    existing.q = newQ;
+    existing.r = newR;
+    if (patch.rot !== undefined) existing.rot = patch.rot;
+    return existing;
+  }
+
   async upsertBrief(input: {
     pair_round_id: string;
     role: BriefRole;

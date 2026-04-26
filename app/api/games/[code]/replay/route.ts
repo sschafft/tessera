@@ -6,21 +6,18 @@ import { generatePattern } from "@/lib/pattern/generator";
 import { pickBrief } from "@/lib/briefs/orchestrator";
 import { publishGameEvent } from "@/lib/realtime/publish";
 
-export const maxDuration = 30;
-
 export const runtime = "nodejs";
+export const maxDuration = 30;
 
 interface RouteParams {
   params: Promise<{ code: string }>;
 }
 
-interface StartPayload {
-  /** Optional override; defaults to the game's default_complexity. */
-  complexity?: number;
-  /** Optional override; defaults to the game's round_duration_seconds. */
-  duration_seconds?: number;
-}
-
+/**
+ * Replay the game with the same pairs and players. Starts a fresh
+ * round even if game.status was 'ended'. Used by the GM's "Start
+ * another round" CTA on the end-game summary.
+ */
 export async function POST(req: NextRequest, { params }: RouteParams) {
   const { code } = await params;
   if (!isValidGameCode(code)) {
@@ -34,49 +31,38 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  let body: StartPayload = {};
-  try {
-    body = (await req.json()) as StartPayload;
-  } catch {
-    // Empty body is fine.
-  }
-
   const repo = getRepository();
   const game = await repo.findGameByCode(code);
   if (!game || game.id !== claims.game_id) {
     return NextResponse.json({ error: "game_not_found" }, { status: 404 });
   }
+  if (game.status === "purged") {
+    return NextResponse.json({ error: "game_purged" }, { status: 410 });
+  }
 
   const pairs = await repo.listPairs(game.id);
   if (pairs.length === 0) {
     return NextResponse.json(
-      { error: "no_pairs", message: "Allocate at least one pair first." },
+      { error: "no_pairs", message: "Allocate at least one pair before replaying." },
       { status: 400 },
     );
   }
 
+  // Reopen the game if it had ended.
+  if (game.status === "ended") {
+    await repo.setGameStatus(game.id, "running");
+  }
+
+  // Pick the next round index, extending round_count if we'd otherwise
+  // hit the all_rounds_complete cap.
   const latest = await repo.findLatestRound(game.id);
-  if (latest && latest.status === "running") {
-    return NextResponse.json(
-      { error: "round_already_running", round_id: latest.id },
-      { status: 409 },
-    );
-  }
   const nextIndex = (latest?.index ?? 0) + 1;
-  if (nextIndex > game.round_count) {
-    return NextResponse.json(
-      { error: "all_rounds_complete" },
-      { status: 409 },
-    );
-  }
+  // (round_count is just a planning ceiling; bumping it is the cheapest
+  // way to allow another round without a schema change.)
 
-  const complexity = clamp(body.complexity ?? game.default_complexity, 1, 8);
-  const duration =
-    body.duration_seconds && body.duration_seconds >= 60
-      ? body.duration_seconds
-      : game.round_duration_seconds;
+  const complexity = game.default_complexity;
+  const duration = game.round_duration_seconds;
 
-  // Create the round (status='pending') then per-pair patterns.
   const round = await repo.createRound({
     game_id: game.id,
     index: nextIndex,
@@ -93,10 +79,6 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       goal_pattern: goal,
       pattern_seed: seed,
     });
-
-    // Brief generation per pair, gated by per-side toggles. Only the
-    // 'library' source is wired in M5; 'gemini' / 'gm' source paths
-    // ship in M5.5 and M5.6.
     if (game.builder_brief_on) {
       const brief = await pickBrief({
         role: "builder",
@@ -132,7 +114,6 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
 
   await repo.startRound(round.id);
-  await repo.setGameStatus(game.id, "running");
   void publishGameEvent(game.id, "round_started");
 
   return NextResponse.json({
@@ -143,8 +124,4 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     duration_seconds: round.duration_seconds,
     pairs: pairs.length,
   });
-}
-
-function clamp(n: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, n));
 }

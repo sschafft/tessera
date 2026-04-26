@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { isValidGameCode } from "@/lib/game/code";
 import { readSessionAndParticipant } from "@/lib/auth/session";
+import { publishGameEvent } from "@/lib/realtime/publish";
 import { getRepository } from "@/lib/game/getRepository";
 
 export const runtime = "nodejs";
@@ -51,5 +52,6 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   // Reuse the existing assignObserver helper. Our observer was
   // already role='observer'; this only updates pair_id.
   await repo.assignObserver(me.id, pair.id);
+  void publishGameEvent(session.claims.game_id, "observer_switched");
   return NextResponse.json({ ok: true });
 }

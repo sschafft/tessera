@@ -7,10 +7,6 @@ import { PlayCanvas } from "@/components/canvas/PlayCanvas";
 import { BriefEnvelope } from "./BriefEnvelope";
 import type { PlacedPiece, PlayState } from "./PlayContent";
 
-export interface BuilderViewProps {
-  state: PlayState;
-}
-
 const TRAY_SHAPES: TileShape[] = [
   "tri-up",
   "tri-dn",
@@ -31,6 +27,25 @@ const PALETTE: TileColor[] = [
   "teal",
 ];
 
+const SHAPE_LABEL: Record<TileShape, string> = {
+  "tri-up": "triangle ▲",
+  "tri-dn": "triangle ▼",
+  sq: "square",
+  rhomb: "rhombus",
+  trap: "trapezoid",
+  hex: "hexagon",
+  pent: "pentagon",
+};
+
+const LETTERS = "ABCDEFGHIJKLMN";
+function cellLabel(q: number, r: number): string {
+  return `${LETTERS[q] ?? "?"}${r + 1}`;
+}
+
+export interface BuilderViewProps {
+  state: PlayState;
+}
+
 export function BuilderView({ state }: BuilderViewProps) {
   if (!state.round || state.round.status !== "running") {
     return <WaitingForRound />;
@@ -42,6 +57,7 @@ function BuilderInteractive({ state }: { state: PlayState }) {
   const [selectedShape, setSelectedShape] = useState<TileShape | null>(null);
   const [selectedColor, setSelectedColor] = useState<TileColor>("blue");
   const [selectedRotation, setSelectedRotation] = useState(0);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [optimistic, setOptimistic] = useState<PlacedPiece[]>([]);
   const [pendingDeletes, setPendingDeletes] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
@@ -51,6 +67,44 @@ function BuilderInteractive({ state }: { state: PlayState }) {
   const visiblePieces = [...state.placements, ...optimistic].filter(
     (p) => !pendingDeletes.has(p.id),
   );
+  const editingPiece =
+    editingId === null
+      ? null
+      : (visiblePieces.find((p) => p.id === editingId) ?? null);
+
+  // Selecting a tray shape exits edit mode (and vice versa).
+  const pickShape = (shape: TileShape | null) => {
+    setSelectedShape(shape);
+    if (shape !== null) setEditingId(null);
+  };
+  const startEditing = (piece: PlacedPiece) => {
+    setEditingId(piece.id);
+    setSelectedShape(null);
+  };
+  const stopEditing = useCallback(() => setEditingId(null), []);
+
+  // Esc cancels whichever mode is active.
+  useEffect(() => {
+    if (selectedShape === null && editingId === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setSelectedShape(null);
+        setEditingId(null);
+      } else if (e.key === "r" || e.key === "R") {
+        if (editingPiece) {
+          // Rotate the editing piece via API
+          void rotateEditing();
+        } else if (selectedShape !== null) {
+          setSelectedRotation((p) => (p + 1) % 6);
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // rotateEditing closes over editingPiece + state; it's stable in
+    // its own closure scope, but we recompute on dep change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedShape, editingId, editingPiece?.rot]);
 
   const place = useCallback(
     async (q: number, r: number) => {
@@ -83,8 +137,6 @@ function BuilderInteractive({ state }: { state: PlayState }) {
           const j = await res.json().catch(() => ({}));
           throw new Error(j.error || `status ${res.status}`);
         }
-        // Drop the optimistic copy; the next poll will surface the
-        // real row from the server.
         setOptimistic((prev) => prev.filter((p) => p.id !== tempId));
       } catch (err) {
         setOptimistic((prev) => prev.filter((p) => p.id !== tempId));
@@ -93,6 +145,107 @@ function BuilderInteractive({ state }: { state: PlayState }) {
     },
     [selectedShape, selectedColor, selectedRotation, state.code],
   );
+
+  const moveEditingTo = useCallback(
+    async (q: number, r: number) => {
+      if (!editingPiece) return;
+      // Optimistic: update the local view immediately.
+      const original = { q: editingPiece.q, r: editingPiece.r };
+      setOptimistic((prev) => [
+        ...prev,
+        { ...editingPiece, id: `move-${editingPiece.id}`, q, r },
+      ]);
+      setPendingDeletes((prev) => new Set(prev).add(editingPiece.id));
+
+      try {
+        const res = await fetch(
+          `/api/games/${state.code}/placements/${editingPiece.id}`,
+          {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ q, r }),
+          },
+        );
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          throw new Error(j.error || `status ${res.status}`);
+        }
+        setOptimistic((prev) =>
+          prev.filter((p) => p.id !== `move-${editingPiece.id}`),
+        );
+        setPendingDeletes((prev) => {
+          const next = new Set(prev);
+          next.delete(editingPiece.id);
+          return next;
+        });
+      } catch (err) {
+        // Roll back optimistic move.
+        setOptimistic((prev) =>
+          prev.filter((p) => p.id !== `move-${editingPiece.id}`),
+        );
+        setPendingDeletes((prev) => {
+          const next = new Set(prev);
+          next.delete(editingPiece.id);
+          return next;
+        });
+        const reason = err instanceof Error ? err.message : "move failed";
+        setError(
+          reason === "cell_taken" ? "That cell already has a piece." : reason,
+        );
+        // Restore "editing at original cell" state by ensuring editingId stays
+        // pointed at the same id; PlayContent's poll will resync.
+        void original; // appease lint when we don't use it
+      }
+    },
+    [editingPiece, state.code],
+  );
+
+  const rotateEditing = useCallback(async () => {
+    if (!editingPiece) return;
+    const newRot = (editingPiece.rot + 1) % 6;
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/games/${state.code}/placements/${editingPiece.id}`,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ rot: newRot }),
+        },
+      );
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || `status ${res.status}`);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "rotate failed");
+    }
+  }, [editingPiece, state.code]);
+
+  const deleteEditing = useCallback(async () => {
+    if (!editingPiece) return;
+    if (editingPiece.id.startsWith("temp-")) return;
+    setPendingDeletes((prev) => new Set(prev).add(editingPiece.id));
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/games/${state.code}/placements/${editingPiece.id}`,
+        { method: "DELETE" },
+      );
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || `status ${res.status}`);
+      }
+      setEditingId(null);
+    } catch (err) {
+      setPendingDeletes((prev) => {
+        const next = new Set(prev);
+        next.delete(editingPiece.id);
+        return next;
+      });
+      setError(err instanceof Error ? err.message : "delete failed");
+    }
+  }, [editingPiece, state.code]);
 
   const shareProgress = useCallback(async () => {
     setSharingProgress(true);
@@ -112,38 +265,22 @@ function BuilderInteractive({ state }: { state: PlayState }) {
     }
   }, [state.code]);
 
-  const remove = useCallback(
-    async (piece: PlacedPiece) => {
-      if (piece.id.startsWith("temp-")) return; // not yet committed
-      setPendingDeletes((prev) => new Set(prev).add(piece.id));
-      setError(null);
-      try {
-        const res = await fetch(
-          `/api/games/${state.code}/placements/${piece.id}`,
-          { method: "DELETE" },
-        );
-        if (!res.ok) {
-          const j = await res.json().catch(() => ({}));
-          throw new Error(j.error || `status ${res.status}`);
-        }
-      } catch (err) {
-        setPendingDeletes((prev) => {
-          const next = new Set(prev);
-          next.delete(piece.id);
-          return next;
-        });
-        setError(err instanceof Error ? err.message : "delete failed");
-      }
-    },
-    [state.code],
-  );
+  const showCoords = (state.round?.complexity ?? 5) <= 4;
 
   return (
     <div className="grid w-full" style={{ gridTemplateColumns: "280px 1fr" }}>
       <aside className="flex flex-col gap-5 border-r border-[var(--color-line)] bg-[var(--color-paper-2)] p-5">
+        <ModeBanner
+          shape={selectedShape}
+          color={selectedColor}
+          rotation={selectedRotation}
+          editing={editingPiece}
+          onClearAdd={() => setSelectedShape(null)}
+          onStopEditing={stopEditing}
+        />
         <Tray
           selected={selectedShape}
-          onSelect={setSelectedShape}
+          onSelect={pickShape}
           color={selectedColor}
           rotation={selectedRotation}
         />
@@ -180,19 +317,39 @@ function BuilderInteractive({ state }: { state: PlayState }) {
         </div>
         <div className="flex flex-col items-center gap-3">
           <PrototypeOverlay prototype={state.prototype} />
-          <InteractiveCanvas
-            pieces={visiblePieces}
-            selectedShape={selectedShape}
-            selectedColor={selectedColor}
-            selectedRotation={selectedRotation}
-            onPlace={place}
-            onPieceClick={remove}
-          />
-          <div className="flex items-center gap-3">
+
+          <div className="relative">
+            <InteractiveCanvas
+              pieces={visiblePieces}
+              selectedShape={selectedShape}
+              selectedColor={selectedColor}
+              selectedRotation={selectedRotation}
+              editingId={editingId}
+              showCoords={showCoords}
+              onPlace={place}
+              onPieceClick={startEditing}
+              onMoveTo={moveEditingTo}
+            />
+            {editingPiece && (
+              <EditingActionBar
+                piece={editingPiece}
+                onRotate={rotateEditing}
+                onDelete={deleteEditing}
+                onDone={stopEditing}
+              />
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
             <p className="t-mono text-[11px] text-[var(--color-ink-3)]">
-              {selectedShape
-                ? "click a cell to place · click an existing piece to remove"
-                : "pick a shape from the tray, then click on the canvas"}
+              {editingPiece
+                ? `editing ${SHAPE_LABEL[editingPiece.shape]} at ${cellLabel(
+                    editingPiece.q,
+                    editingPiece.r,
+                  )} · click an empty cell to move it · press R to rotate`
+                : selectedShape
+                  ? "click a cell to place · click any piece to edit it"
+                  : "pick a shape from the tray, or click an existing piece to move it"}
             </p>
             {state.test_enabled && state.accuracy && (
               <span className="t-mono rounded-full bg-[var(--color-paper-2)] px-3 py-1 text-[11px] font-bold">
@@ -217,6 +374,143 @@ function BuilderInteractive({ state }: { state: PlayState }) {
           </div>
         </div>
       </section>
+    </div>
+  );
+}
+
+function ModeBanner({
+  shape,
+  color,
+  rotation,
+  editing,
+  onClearAdd,
+  onStopEditing,
+}: {
+  shape: TileShape | null;
+  color: TileColor;
+  rotation: number;
+  editing: PlacedPiece | null;
+  onClearAdd: () => void;
+  onStopEditing: () => void;
+}) {
+  if (editing) {
+    return (
+      <div
+        className="flex items-center gap-2 rounded-[12px] border-[1.5px] px-3 py-2"
+        style={{
+          background: "var(--color-tint-orange)",
+          borderColor: "var(--color-t-orange)",
+        }}
+      >
+        <span
+          className="t-mono text-[10px] font-bold uppercase tracking-wide"
+          style={{ color: "var(--color-t-orange)" }}
+        >
+          Edit mode
+        </span>
+        <span className="text-[12px] font-semibold text-[var(--color-ink)]">
+          {SHAPE_LABEL[editing.shape]} at {cellLabel(editing.q, editing.r)}
+        </span>
+        <button
+          type="button"
+          onClick={onStopEditing}
+          className="t-mono ml-auto rounded-full px-2 py-0.5 text-[10px] underline"
+          style={{ color: "var(--color-t-orange)" }}
+        >
+          done
+        </button>
+      </div>
+    );
+  }
+  if (shape) {
+    return (
+      <div
+        className="flex items-center gap-2 rounded-[12px] border-[1.5px] px-3 py-2"
+        style={{
+          background: "var(--color-tint-blue)",
+          borderColor: "var(--color-t-blue)",
+        }}
+      >
+        <span
+          className="t-mono text-[10px] font-bold uppercase tracking-wide"
+          style={{ color: "var(--color-t-blue)" }}
+        >
+          Add mode
+        </span>
+        <span className="text-[12px] font-semibold text-[var(--color-ink)]">
+          {color} {SHAPE_LABEL[shape]}{rotation > 0 ? ` · ${rotation * 60}°` : ""}
+        </span>
+        <button
+          type="button"
+          onClick={onClearAdd}
+          className="t-mono ml-auto rounded-full px-2 py-0.5 text-[10px] underline"
+          style={{ color: "var(--color-t-blue)" }}
+        >
+          clear
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div
+      className="rounded-[12px] border border-[var(--color-line)] px-3 py-2 text-[12px] text-[var(--color-ink-3)]"
+      style={{ background: "#fff" }}
+    >
+      Pick a shape to add, or click a piece to move it.
+    </div>
+  );
+}
+
+function EditingActionBar({
+  piece,
+  onRotate,
+  onDelete,
+  onDone,
+}: {
+  piece: PlacedPiece;
+  onRotate: () => void;
+  onDelete: () => void;
+  onDone: () => void;
+}) {
+  return (
+    <div
+      className="absolute -top-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1 rounded-full bg-white px-1 py-1 shadow-md-soft"
+      style={{ border: "1.5px solid var(--color-t-orange)" }}
+    >
+      <span
+        className="t-mono px-2 text-[10px] font-bold uppercase tracking-wide"
+        style={{ color: "var(--color-t-orange)" }}
+      >
+        editing
+      </span>
+      <button
+        type="button"
+        onClick={onRotate}
+        title="Rotate (R)"
+        className="grid h-7 w-7 place-items-center rounded-full text-[14px] hover:bg-[var(--color-paper-2)]"
+      >
+        ↻
+      </button>
+      <button
+        type="button"
+        onClick={onDelete}
+        title="Delete"
+        className="grid h-7 w-7 place-items-center rounded-full text-[14px] hover:bg-[var(--color-tint-red)]"
+        style={{ color: "var(--color-t-red)" }}
+      >
+        ⌫
+      </button>
+      <button
+        type="button"
+        onClick={onDone}
+        title="Done (Esc)"
+        className="grid h-7 w-7 place-items-center rounded-full text-[14px] hover:bg-[var(--color-paper-2)]"
+      >
+        ✕
+      </button>
+      <span className="t-mono px-1 text-[10px] text-[var(--color-ink-3)]">
+        {SHAPE_LABEL[piece.shape]} {cellLabel(piece.q, piece.r)}
+      </span>
     </div>
   );
 }

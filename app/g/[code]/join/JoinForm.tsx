@@ -21,17 +21,23 @@ export interface JoinFormProps {
   defaultName: string;
 }
 
+type Field = "name" | null;
+interface FormError {
+  field: Field;
+  message: string;
+}
+
 export function JoinForm({ code, teamMode, defaultName }: JoinFormProps) {
   const router = useRouter();
   const [displayName, setDisplayName] = useState(defaultName);
   const [role, setRole] = useState<RoleLabel>("Builder");
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FormError | null>(null);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!displayName.trim()) {
-      setError("Display name is required.");
+      setError({ field: "name", message: "Pick a display name to continue." });
       return;
     }
     setSubmitting(true);
@@ -48,38 +54,76 @@ export function JoinForm({ code, teamMode, defaultName }: JoinFormProps) {
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         if (data.error === "name_taken") {
-          throw new Error("That display name is already in this game. Try another.");
+          setError({
+            field: "name",
+            message: "That name is already taken in this game. Try another.",
+          });
+          setSubmitting(false);
+          return;
         }
         if (data.error === "game_full") {
-          throw new Error("This game is full.");
+          setError({ field: null, message: "This game is full." });
+          setSubmitting(false);
+          return;
         }
         if (data.error === "game_closed") {
-          throw new Error("This game has ended.");
+          setError({ field: null, message: "This game has ended." });
+          setSubmitting(false);
+          return;
+        }
+        if (data.error === "game_not_found") {
+          setError({
+            field: null,
+            message: "Couldn't find a game for that code.",
+          });
+          setSubmitting(false);
+          return;
         }
         throw new Error(data.message || data.error || `Server error ${res.status}`);
       }
       const data: { redirect: string } = await res.json();
       router.push(data.redirect);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError({
+        field: null,
+        message: err instanceof Error ? err.message : "Something went wrong",
+      });
       setSubmitting(false);
     }
   }
+
+  const nameError = error?.field === "name" ? error.message : null;
+  const generalError = error?.field === null ? error.message : null;
 
   return (
     <form
       onSubmit={onSubmit}
       className="t-card flex flex-col gap-5 p-6"
     >
-      <Field label="Display name" hint="must be unique in this game">
+      <Field
+        label="Display name"
+        hint={nameError ?? "must be unique in this game"}
+      >
         <input
           className="t-input"
           value={displayName}
-          onChange={(e) => setDisplayName(e.target.value)}
+          onChange={(e) => {
+            setDisplayName(e.target.value);
+            if (error?.field === "name") setError(null);
+          }}
           placeholder="e.g. Sam · Design"
           maxLength={40}
           autoFocus
           required
+          aria-invalid={Boolean(nameError)}
+          style={
+            nameError
+              ? {
+                  borderColor: "var(--color-t-red)",
+                  boxShadow: "0 0 0 2px var(--color-tint-red)",
+                }
+              : undefined
+          }
         />
       </Field>
 
@@ -114,9 +158,9 @@ export function JoinForm({ code, teamMode, defaultName }: JoinFormProps) {
         </div>
       )}
 
-      {error && (
+      {generalError && (
         <p className="text-[13px] text-[var(--color-t-red)]" role="alert">
-          {error}
+          {generalError}
         </p>
       )}
 

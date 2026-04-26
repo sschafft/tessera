@@ -84,6 +84,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
 
   return NextResponse.json({
     code,
+    game_id: game.id,
     workshop_name: game.workshop_name,
     team_mode: game.team_mode,
     participant_cap: game.participant_cap,
