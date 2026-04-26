@@ -191,7 +191,10 @@ function LobbyRow({
           {participant.display_name}
         </span>
         <span className="block text-[10px] text-[var(--color-ink-3)]">
-          waiting · joined {formatJoinedAt(participant.joined_at)}
+          {participant.role === "lobby"
+            ? "no role yet"
+            : `picked ${participant.role}`}{" "}
+          · joined {formatJoinedAt(participant.joined_at)}
         </span>
       </span>
     </button>

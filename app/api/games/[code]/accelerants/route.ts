@@ -3,7 +3,9 @@ import { isValidGameCode } from "@/lib/game/code";
 import { readSessionForGame } from "@/lib/auth/session";
 import { getRepository } from "@/lib/game/getRepository";
 import { generatePattern } from "@/lib/pattern/generator";
-import { pickLibraryBrief } from "@/lib/briefs/library";
+import { pickBrief } from "@/lib/briefs/orchestrator";
+
+export const maxDuration = 15;
 import {
   POLICIES,
   checkPolicy,
@@ -131,9 +133,12 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         if (!pr) continue;
         const current = await repo.findBrief(pr.id, "guider");
         const exclude = current ? [current.title] : [];
-        const fresh = await pickLibraryBrief({
+        const fresh = await pickBrief({
           role: "guider",
           complexity: round.complexity,
+          source: game.guider_brief_source,
+          game_id: game.id,
+          custom: game.guider_brief_custom,
           exclude_titles: exclude,
         });
         await repo.upsertBrief({

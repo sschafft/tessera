@@ -277,8 +277,12 @@ export function MasterContent({
   }, [code, fetchSnapshot]);
 
   const participants = useMemo(() => data?.participants ?? [], [data]);
+  // Lobby panel = anyone unallocated (no pair) and not the GM. In
+  // players_pick mode, players self-select a role at join (builder /
+  // guider / observer); they're still in the lobby until paired.
   const lobbyMembers = useMemo(
-    () => participants.filter((p) => p.role === "lobby"),
+    () =>
+      participants.filter((p) => p.role !== "gm" && p.pair_id === null),
     [participants],
   );
   const pairs = useMemo(() => data?.pairs ?? [], [data]);

@@ -497,6 +497,14 @@ export type Database = {
           id: string
         }
       }
+      reserve_gemini_call: {
+        Args: {
+          p_game_id: string
+          p_per_game_max: number
+          p_per_day_max: number
+        }
+        Returns: Json
+      }
     }
     Enums: {
       accelerant_scope_t: "pair" | "all"

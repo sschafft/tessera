@@ -1,7 +1,12 @@
+import Link from "next/link";
 import { Tile } from "@/components/canvas/Tile";
 import { Wordmark } from "@/components/primitives/Wordmark";
 import { Bullet } from "@/components/primitives/Bullet";
+import { GithubIcon, OssFooter } from "@/components/marketing/OssFooter";
 import { LandingTabs } from "./LandingTabs";
+import { ResumeGames } from "./ResumeGames";
+
+const REPO_URL = "https://github.com/sschafft/tessera";
 
 const STEPS = [
   { n: "01", label: "Host", text: "Create a game and share the code.", dot: "red" as const },
@@ -16,31 +21,46 @@ export function LandingHero() {
       {/* Dotted background */}
       <div className="t-dots pointer-events-none absolute inset-0 opacity-35" />
 
-      {/* Decorative scattered tiles */}
-      <div className="pointer-events-none absolute inset-0 hidden lg:block">
-        <Tile kind="hex" color="yellow" x={92} y={120} size={120} rotate={-12} />
-        <Tile kind="tri-up" color="red" x={1230} y={90} size={96} rotate={14} />
-        <Tile kind="sq" color="blue" x={1180} y={620} size={84} rotate={20} />
-        <Tile kind="tri-dn" color="green" x={120} y={680} size={96} rotate={-10} />
-        <Tile kind="rhomb" color="purple" x={1300} y={360} size={70} rotate={6} />
-        <Tile kind="hex" color="teal" x={40} y={420} size={60} rotate={28} />
+      {/* Decorative scattered tiles. Positioned to live in the margins
+       * around the hero so they never cover the form or copy. Hidden on
+       * narrow viewports where they'd compete for space. */}
+      <div className="pointer-events-none absolute inset-0 hidden xl:block">
+        <Tile kind="hex" color="yellow" x={32} y={150} size={96} rotate={-12} />
+        <Tile kind="tri-up" color="red" x={1280} y={70} size={84} rotate={14} />
+        <Tile kind="rhomb" color="purple" x={1340} y={430} size={60} rotate={6} />
+        <Tile kind="tri-dn" color="green" x={70} y={760} size={80} rotate={-10} />
+        <Tile kind="hex" color="teal" x={1300} y={780} size={56} rotate={28} />
       </div>
 
       {/* Header */}
       <header className="relative z-10 flex items-center justify-between px-14 py-7">
         <Wordmark size={26} />
-        <nav className="flex items-center gap-1.5">
-          {["How it works", "Facilitator guide", "Examples"].map((l) => (
-            <a
-              key={l}
-              href="#"
-              className="cursor-pointer px-3.5 py-2 text-[13px] font-medium text-[var(--color-ink-2)]"
-            >
-              {l}
-            </a>
-          ))}
+        <nav className="flex items-center gap-1">
+          <Link
+            href="/how-it-works"
+            className="cursor-pointer px-3.5 py-2 text-[13px] font-medium text-[var(--color-ink-2)] hover:text-[var(--color-ink)]"
+          >
+            How it works
+          </Link>
+          <Link
+            href="/facilitator-guide"
+            className="cursor-pointer px-3.5 py-2 text-[13px] font-medium text-[var(--color-ink-2)] hover:text-[var(--color-ink)]"
+          >
+            Facilitator guide
+          </Link>
+          <a
+            href={REPO_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Source on GitHub"
+            className="ml-1 inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-[var(--color-ink-2)] hover:text-[var(--color-ink)]"
+          >
+            <GithubIcon size={18} />
+          </a>
         </nav>
       </header>
+
+      <ResumeGames />
 
       {/* Main two-column hero */}
       <section className="relative z-[1] grid items-start gap-14 px-20 pt-6 lg:grid-cols-[1.05fr_.95fr]">
@@ -150,6 +170,8 @@ export function LandingHero() {
           </div>
         ))}
       </section>
+
+      <OssFooter />
     </div>
   );
 }

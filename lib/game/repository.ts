@@ -367,6 +367,21 @@ export interface GameRepository {
   decrementRoundDuration(round_id: string, delta: number): Promise<void>;
 
   /**
+   * Atomic check-and-increment for the Gemini budget. Returns:
+   *   - { ok: true, perGame, perDay } when both caps are still under
+   *   - { ok: false, reason } otherwise (without incrementing)
+   * Both caps configured in TDD §13.1 (30/game, 800/day).
+   */
+  reserveGeminiCall(input: {
+    game_id: string;
+    perGameMax: number;
+    perDayMax: number;
+  }): Promise<
+    | { ok: true; perGame: number; perDay: number }
+    | { ok: false; reason: "per_game_cap" | "per_day_cap" }
+  >;
+
+  /**
    * Set Prototype-glimpse visibility window. Builder play state will
    * surface a degraded preview of the goal until `until` passes.
    */

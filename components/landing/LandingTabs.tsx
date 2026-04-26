@@ -67,12 +67,12 @@ interface CreatedInfo {
   recoveryUrl: string;
 }
 
-type BriefSource = "library" | "gm";
+type BriefSource = "library" | "gm" | "gemini";
 
 function HostForm() {
   const router = useRouter();
-  const [workshopName, setWorkshopName] = useState("Q3 cross-functional kickoff");
-  const [videoCallUrl, setVideoCallUrl] = useState("https://meet.google.com/example");
+  const [workshopName, setWorkshopName] = useState("");
+  const [videoCallUrl, setVideoCallUrl] = useState("");
   const [whiteboardUrl, setWhiteboardUrl] = useState("");
   const [team, setTeam] = useState<TeamLabel>("Players pick");
   const [complexity, setComplexity] = useState(5);
@@ -158,11 +158,12 @@ function HostForm() {
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4 p-6">
-      <Field label="Workshop name">
+      <Field label="Workshop name" required>
         <input
           className="t-input"
           value={workshopName}
           onChange={(e) => setWorkshopName(e.target.value)}
+          placeholder="Q3 cross-functional kickoff"
           maxLength={80}
           required
         />
@@ -174,7 +175,7 @@ function HostForm() {
             className="t-input"
             value={videoCallUrl}
             onChange={(e) => setVideoCallUrl(e.target.value)}
-            placeholder="meet.google.com/…"
+            placeholder="https://meet.google.com/…"
             required
             type="url"
           />
@@ -184,7 +185,7 @@ function HostForm() {
             className="t-input"
             value={whiteboardUrl}
             onChange={(e) => setWhiteboardUrl(e.target.value)}
-            placeholder="miro.com/…"
+            placeholder="https://miro.com/…"
             type="url"
           />
         </Field>
@@ -296,6 +297,7 @@ function JoinForm() {
           className="t-input"
           value={displayName}
           onChange={(e) => setDisplayName(e.target.value)}
+          placeholder="e.g. Sam"
           maxLength={40}
           required
         />
@@ -339,9 +341,10 @@ function JoinForm() {
   );
 }
 
-const BRIEF_SOURCE_OPTIONS = ["library", "gm"] as const;
+const BRIEF_SOURCE_OPTIONS = ["library", "gemini", "gm"] as const;
 const BRIEF_SOURCE_LABELS: Record<BriefSource, string> = {
   library: "Library",
+  gemini: "AI",
   gm: "Custom",
 };
 

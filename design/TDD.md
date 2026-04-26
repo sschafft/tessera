@@ -1,6 +1,8 @@
 # Tessera — Technical Design Doc (TDD v0.1)
 
-> **Status:** Draft for review. Open implementation questions in §13.
+> **Status:** v1 shipped 2026-04-26. Schema migrations 1–7 applied to
+> `tessera-dev`. Section §15 documents implementation deltas vs the
+> original plan.
 > **Reads alongside:** `./PRD.md`, `./tessera/` (Claude Design handoff bundle).
 
 ---
@@ -664,6 +666,105 @@ Edge middleware for the two unauthenticated endpoints uses an in-memory sliding 
 | 12 | **Gemini default source:** library. Gemini is explicit opt-in at game create; see §13 for budget guardrails. |
 | 13 | **JWT expiry:** 4h (down from initial 12h sketch). |
 | 14 | **Cookie:** `HttpOnly`, `Secure`, `SameSite=Lax`, path `/`, named `ts_<code>` per game. |
+
+---
+
+## 15. Implementation deltas (post-launch)
+
+The architecture below differs from the original plan in a handful of
+small, deliberate ways. Every delta below is in the shipped code.
+
+### 15.1 Authorization model
+
+The original plan in §5.1 had the JWT's `role` claim as authoritative
+for non-GM routes. That broke the moment the GM allocates someone in
+the lobby — a participant who joined as `observer` and got promoted to
+`builder` in the DB still carried `role: observer` in their JWT, so
+`POST /placements` rejected them.
+
+Fix: routes that gate on non-GM roles call `readSessionAndParticipant(code)`
+instead of `readSessionForGame(code)`. That helper verifies the JWT for
+identity, then loads the live `participants.role` from the DB. The JWT
+is treated as a pure identity token; current role lives in Postgres.
+
+### 15.2 RPCs
+
+Three SECURITY DEFINER RPCs ship as of v1:
+
+- `create_pair_with_roles(p_game_id, p_builder_id, p_guider_id)` —
+  atomic pair creation + role assignment.
+- `clear_allocations(p_game_id)` — wipes pairs + resets participants
+  to `role='lobby'` (used by Auto-allocate's idempotency).
+- `reserve_gemini_call(p_game_id, p_per_game_max, p_per_day_max)` —
+  atomic check-and-increment for both the per-game (`games.gemini_calls_used`)
+  and global daily (`gemini_budget`) caps, with row-level locking.
+
+All three are revoked from anon/authenticated; the service role is the
+only caller.
+
+### 15.3 Brief orchestration
+
+Original §9 sketched the brief pipeline as a single endpoint. Shipped
+shape: `lib/briefs/orchestrator.ts` chooses a source per call:
+
+- `gm` source uses the `games.${role}_brief_custom` jsonb. Falls back
+  to library if the column is null.
+- `gemini` source reserves via `reserve_gemini_call` first; on
+  reservation failure (cap hit) or Gemini error (auth/schema/etc.),
+  falls back to library. The reservation isn't refunded on failure
+  because failures are rare and refunds add complexity.
+- `library` source is the default and the universal fallback.
+
+`maxDuration` set to 30s on `/rounds/start` (multiple Gemini calls in
+parallel during round start), 15s on `/briefs/reroll` and
+`/accelerants` (single calls).
+
+### 15.4 Schema migrations applied
+
+In dependency order:
+1. `tessera_v1_schema` — initial tables.
+2. `tessera_v1_harden` — pinned search_path, anon revoke.
+3. `tessera_v1_seed_brief_library` — 33-entry library.
+4. `tessera_v1_pair_rpcs` — RPCs above.
+5. `tessera_v1_briefs_revealed` — Reveal-briefs state.
+6. `tessera_v1_prototype_and_snapshot` — Prototype + Agile-share state.
+7. `tessera_v1_custom_briefs` — GM free-text brief storage.
+8. `tessera_v1_gemini_reserve_rpc` — atomic budget reservation.
+
+### 15.5 New routes shipped beyond §10
+
+- `POST /api/games/[code]/host-recover` — bcrypt verify + JWT mint for
+  bookmark-recovery.
+- `POST /api/games/[code]/agile-share` — builder-triggered snapshot.
+- `POST /api/games/[code]/observe` — observer pair switcher.
+- `POST /api/games/[code]/end` — end game.
+- `POST /api/games/[code]/rounds/end` — end round.
+- `POST /api/games/[code]/briefs/reroll` — re-roll a single brief.
+- `GET  /api/games/[code]/summary` — per-pair final accuracy.
+- `GET  /api/games/[code]/play` — role-aware play state (this was
+  always planned, listing for completeness).
+- `GET  /api/me/active-games` — cookie-driven resume-games list.
+- `GET  /api/keepalive` — Vercel cron + Supabase pause prevention.
+
+### 15.6 Realtime is still polling-based
+
+§8 sketched a postgres_changes + broadcast topology. v1 ships with a
+2-second polling loop on the lobby + play endpoints instead. Two
+reasons: (a) workshop-pace play tolerates 2-second freshness — the
+real conversation is on the off-platform call, (b) the JWT/RLS work
+to safely subscribe from the browser was deferred. Realtime will land
+in v1.x.
+
+### 15.7 Marketing surface
+
+Not in the original spec but shipped:
+- `/how-it-works` and `/facilitator-guide` content pages, sharing a
+  `ContentLayout` shell + `OssFooter`.
+- "Resume game" banner on the home page, driven by the new
+  `/api/me/active-games` endpoint that reads every `ts_*` cookie and
+  filters out invalid/ended/purged sessions.
+- Game-over screen now renders a per-pair leaderboard with final
+  accuracy + a CTA back to the home page.
 
 ---
 

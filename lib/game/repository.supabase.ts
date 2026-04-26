@@ -598,6 +598,35 @@ export class SupabaseGameRepository implements GameRepository {
     if (error) throw new Error(`updateGoalPattern: ${error.message}`);
   }
 
+  async reserveGeminiCall(input: {
+    game_id: string;
+    perGameMax: number;
+    perDayMax: number;
+  }): Promise<
+    | { ok: true; perGame: number; perDay: number }
+    | { ok: false; reason: "per_game_cap" | "per_day_cap" }
+  > {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase.rpc("reserve_gemini_call", {
+      p_game_id: input.game_id,
+      p_per_game_max: input.perGameMax,
+      p_per_day_max: input.perDayMax,
+    });
+    if (error || !data) {
+      throw new Error(`reserveGeminiCall: ${error?.message ?? "no data"}`);
+    }
+    const j = data as {
+      reserved: boolean;
+      reason?: "per_game_cap" | "per_day_cap";
+      per_game?: number;
+      per_day?: number;
+    };
+    if (j.reserved && typeof j.per_game === "number" && typeof j.per_day === "number") {
+      return { ok: true, perGame: j.per_game, perDay: j.per_day };
+    }
+    return { ok: false, reason: j.reason ?? "per_game_cap" };
+  }
+
   async decrementRoundDuration(
     round_id: string,
     delta: number,

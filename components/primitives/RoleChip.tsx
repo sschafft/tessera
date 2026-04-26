@@ -9,6 +9,21 @@ const ROLE_COLOR: Record<Role, TileColor> = {
   "Game master": "red",
 };
 
+/**
+ * Per-role darker text colours so the pill reads cleanly against the
+ * tinted background without `filter: brightness()` muddying it.
+ */
+const ROLE_TEXT: Record<TileColor, string> = {
+  red: "#a92626",
+  orange: "#a55810",
+  yellow: "#7a5b00",
+  green: "#2c7a44",
+  blue: "#1c54a8",
+  purple: "#5a3aa8",
+  pink: "#a8447a",
+  teal: "#117c79",
+};
+
 export interface RoleChipProps {
   role: Role;
   color?: TileColor;
@@ -21,8 +36,8 @@ export function RoleChip({ role, color }: RoleChipProps) {
       className="t-chip"
       style={{
         background: `var(--color-tint-${c})`,
-        color: `var(--color-t-${c})`,
-        filter: "brightness(.7)",
+        color: ROLE_TEXT[c],
+        fontWeight: 700,
       }}
     >
       <span

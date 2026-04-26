@@ -76,6 +76,7 @@ export function JoinForm({ code, teamMode, defaultName }: JoinFormProps) {
           className="t-input"
           value={displayName}
           onChange={(e) => setDisplayName(e.target.value)}
+          placeholder="e.g. Sam · Design"
           maxLength={40}
           autoFocus
           required

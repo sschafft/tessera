@@ -213,7 +213,9 @@ export function PlayContent({ code, initial }: PlayContentProps) {
 
 function renderBody(state: PlayState) {
   if (state.game_status === "ended") {
-    return <GameEndedView workshopName={state.workshop_name} />;
+    return (
+      <GameEndedView code={state.code} workshopName={state.workshop_name} />
+    );
   }
   // Round ended but game still running → debrief view (everyone sees it).
   if (state.round?.status === "ended" && state.pair_round) {

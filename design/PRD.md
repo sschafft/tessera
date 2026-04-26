@@ -1,6 +1,10 @@
 # Tessera — Product Requirements (PRD v0.1)
 
-> **Status:** Decisions locked. See TDD §13–14 for free-tier guardrails and security hardening.
+> **Status:** v1 implemented as of 2026-04-26. All locked decisions shipped, plus
+> a polish batch: cookie-based "resume game" on home, How-it-works + Facilitator-
+> guide pages, GitHub link + open-source footer, free-text custom briefs, AI-
+> generated briefs (Gemini), favicon, host recovery flow, role-pill colour pass,
+> game-end pair leaderboard, fix for the players_pick lobby filter.
 > **Sources:** User brief + Claude Design handoff bundle (`Tessera mockups.html`, 5-screen prototype) + chat transcript with the design assistant.
 
 ---
@@ -265,6 +269,41 @@ All write paths go through Supabase Row Level Security checks against the JWT's 
 | 13 | GM is GM only — cannot fill a Builder/Guider/Observer slot. |
 | 14 | Brief sources: GM free-text, curated library, or Gemini-generated. GM picks per side at create-time and can re-roll any time. |
 
+
+---
+
+## 10b. Implementation deltas vs the locked decisions
+
+A few small adjustments surfaced during implementation; they're folded
+into the live build and listed here so the PRD stays honest.
+
+- **Brief sources expanded.** Decision #14 said "library OR Gemini OR
+  free text"; all three ship. The Host form has a per-side `Library /
+  AI / Custom` segmented picker. Library is still the default at game
+  create.
+- **Player-selected role visibility.** `team_mode='players_pick'` now
+  shows ALL unallocated players (not just `role='lobby'`) in the GM's
+  Lobby panel. Self-selected role appears as "picked builder/guider/
+  observer" on the row so the GM can pair sympathetically.
+- **Authorization in route handlers consults the live DB role.** The
+  JWT carries an initial role at join time but isn't re-minted when
+  the GM allocates someone in the lobby. To fix the "Sam joined as
+  observer, GM promoted to builder, can't actually place tiles" bug,
+  every non-GM-gated route resolves the requester's current role from
+  `participants.role` rather than trusting the JWT claim. JWT is
+  identity-only.
+- **Resume games via cookie.** Home page reads every `ts_*` cookie,
+  filters out invalid/ended/purged, and renders a banner of in-flight
+  games to jump back into.
+- **Game-end pair leaderboard.** Game-over screen shows per-pair final
+  accuracy + a complete/incomplete badge; sorted complete-first then
+  by ratio. Plus a CTA back to the home page.
+- **Marketing pages.** Added `/how-it-works` and `/facilitator-guide`
+  long-form content. The "Examples" nav item from the design was
+  dropped — there are no public examples in v1.
+- **Open-source footer.** Footer on landing + content pages calls out
+  that Tessera is open source on free-tier infra; for production,
+  fork and self-host. GitHub link in the nav.
 
 ---
 

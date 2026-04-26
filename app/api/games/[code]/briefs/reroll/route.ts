@@ -2,8 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isValidGameCode } from "@/lib/game/code";
 import { readSessionForGame } from "@/lib/auth/session";
 import { getRepository } from "@/lib/game/getRepository";
-import { pickLibraryBrief } from "@/lib/briefs/library";
+import { pickBrief } from "@/lib/briefs/orchestrator";
 import type { BriefRole } from "@/lib/game/repository";
+
+export const maxDuration = 15;
 
 export const runtime = "nodejs";
 
@@ -58,9 +60,16 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
   const current = await repo.findBrief(pairRound.id, role);
   const exclude = current ? [current.title] : [];
-  const fresh = await pickLibraryBrief({
+  const sourceForRole =
+    role === "builder" ? game.builder_brief_source : game.guider_brief_source;
+  const customForRole =
+    role === "builder" ? game.builder_brief_custom : game.guider_brief_custom;
+  const fresh = await pickBrief({
     role,
     complexity: round.complexity,
+    source: sourceForRole,
+    game_id: game.id,
+    custom: customForRole,
     exclude_titles: exclude,
   });
   const inserted = await repo.upsertBrief({

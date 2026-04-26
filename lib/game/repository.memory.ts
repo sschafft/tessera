@@ -452,6 +452,31 @@ export class MemoryGameRepository implements GameRepository {
     }
   }
 
+  private geminiBudgetByDay = new Map<string, number>();
+
+  async reserveGeminiCall(input: {
+    game_id: string;
+    perGameMax: number;
+    perDayMax: number;
+  }): Promise<
+    | { ok: true; perGame: number; perDay: number }
+    | { ok: false; reason: "per_game_cap" | "per_day_cap" }
+  > {
+    const game = [...this.games.values()].find((g) => g.id === input.game_id);
+    if (!game) return { ok: false, reason: "per_game_cap" };
+    if (game.gemini_calls_used >= input.perGameMax) {
+      return { ok: false, reason: "per_game_cap" };
+    }
+    const day = new Date().toISOString().slice(0, 10);
+    const used = this.geminiBudgetByDay.get(day) ?? 0;
+    if (used >= input.perDayMax) {
+      return { ok: false, reason: "per_day_cap" };
+    }
+    game.gemini_calls_used += 1;
+    this.geminiBudgetByDay.set(day, used + 1);
+    return { ok: true, perGame: game.gemini_calls_used, perDay: used + 1 };
+  }
+
   async decrementRoundDuration(
     round_id: string,
     delta: number,
