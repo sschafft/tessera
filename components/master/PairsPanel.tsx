@@ -1,7 +1,7 @@
 "use client";
 
 import { Avatar } from "@/components/primitives/Avatar";
-import type { LobbyPair, LobbyParticipant } from "./MasterDashboard";
+import type { LobbyPair, LobbyParticipant } from "./MasterContent";
 
 export interface PairsPanelProps {
   pairs: LobbyPair[];

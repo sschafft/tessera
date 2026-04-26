@@ -4,7 +4,9 @@ import type {
   GameRecord,
   GameRepository,
   PairRecord,
+  PairRoundRecord,
   ParticipantRecord,
+  RoundRecord,
 } from "./repository";
 
 export class DuplicateNameError extends Error {
@@ -22,6 +24,8 @@ export class MemoryGameRepository implements GameRepository {
   private games = new Map<string, GameRecord>();
   private participants = new Map<string, ParticipantRecord>();
   private pairs = new Map<string, PairRecord>();
+  private rounds = new Map<string, RoundRecord>();
+  private pairRounds = new Map<string, PairRoundRecord>();
 
   async createGame(
     input: CreateGameInput & {
@@ -162,6 +166,75 @@ export class MemoryGameRepository implements GameRepository {
     }
     for (const [id, pair] of this.pairs.entries()) {
       if (pair.game_id === game_id) this.pairs.delete(id);
+    }
+  }
+
+  async createRound(input: {
+    game_id: string;
+    index: number;
+    complexity: number;
+    duration_seconds: number;
+  }): Promise<RoundRecord> {
+    const round: RoundRecord = {
+      id: crypto.randomUUID(),
+      game_id: input.game_id,
+      index: input.index,
+      complexity: input.complexity,
+      duration_seconds: input.duration_seconds,
+      status: "pending",
+      started_at: null,
+      ended_at: null,
+    };
+    this.rounds.set(round.id, round);
+    return round;
+  }
+
+  async startRound(round_id: string): Promise<void> {
+    const r = this.rounds.get(round_id);
+    if (r) {
+      r.status = "running";
+      r.started_at = new Date().toISOString();
+    }
+  }
+
+  async findLatestRound(game_id: string): Promise<RoundRecord | null> {
+    const rs = [...this.rounds.values()]
+      .filter((r) => r.game_id === game_id)
+      .sort((a, b) => b.index - a.index);
+    return rs[0] ?? null;
+  }
+
+  async createPairRound(input: {
+    round_id: string;
+    pair_id: string;
+    goal_pattern: unknown;
+    pattern_seed: string;
+  }): Promise<PairRoundRecord> {
+    const pr: PairRoundRecord = {
+      id: crypto.randomUUID(),
+      round_id: input.round_id,
+      pair_id: input.pair_id,
+      goal_pattern: input.goal_pattern,
+      pattern_seed: input.pattern_seed,
+      test_enabled: false,
+      shares_remaining: 3,
+    };
+    this.pairRounds.set(pr.id, pr);
+    return pr;
+  }
+
+  async listPairRoundsForRound(round_id: string): Promise<PairRoundRecord[]> {
+    return [...this.pairRounds.values()].filter(
+      (pr) => pr.round_id === round_id,
+    );
+  }
+
+  async setGameStatus(
+    game_id: string,
+    status: "lobby" | "running" | "ended" | "purged",
+  ): Promise<void> {
+    for (const g of this.games.values()) {
+      if (g.id === game_id) g.status = status;
     }
   }
 }

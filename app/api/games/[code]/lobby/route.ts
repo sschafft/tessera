@@ -34,9 +34,10 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "game_not_found" }, { status: 404 });
   }
 
-  const [active, pairs] = await Promise.all([
+  const [active, pairs, round] = await Promise.all([
     repo.listActiveParticipants(game.id),
     repo.listPairs(game.id),
+    repo.findLatestRound(game.id),
   ]);
 
   const participants = active.map((p) => ({
@@ -53,6 +54,8 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     workshop_name: game.workshop_name,
     team_mode: game.team_mode,
     participant_cap: game.participant_cap,
+    status: game.status,
+    round_count: game.round_count,
     participants,
     pairs: pairs.map((p) => ({
       id: p.id,
@@ -60,5 +63,16 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       guider_id: p.guider_id,
       created_at: p.created_at,
     })),
+    round: round
+      ? {
+          id: round.id,
+          index: round.index,
+          complexity: round.complexity,
+          duration_seconds: round.duration_seconds,
+          status: round.status,
+          started_at: round.started_at,
+          ended_at: round.ended_at,
+        }
+      : null,
   });
 }

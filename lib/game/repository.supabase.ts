@@ -9,12 +9,16 @@ import type {
   GameRecord,
   GameRepository,
   PairRecord,
+  PairRoundRecord,
   ParticipantRecord,
+  RoundRecord,
 } from "./repository";
 
 type DbGame = Database["public"]["Tables"]["games"]["Row"];
 type DbParticipant = Database["public"]["Tables"]["participants"]["Row"];
 type DbPair = Database["public"]["Tables"]["pairs"]["Row"];
+type DbRound = Database["public"]["Tables"]["rounds"]["Row"];
+type DbPairRound = Database["public"]["Tables"]["pair_rounds"]["Row"];
 
 function toGameRecord(row: DbGame): GameRecord {
   return {
@@ -229,6 +233,96 @@ export class SupabaseGameRepository implements GameRepository {
     });
     if (error) throw new Error(`clearAllocations: ${error.message}`);
   }
+
+  async createRound(input: {
+    game_id: string;
+    index: number;
+    complexity: number;
+    duration_seconds: number;
+  }): Promise<RoundRecord> {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase
+      .from("rounds")
+      .insert({
+        game_id: input.game_id,
+        index: input.index,
+        complexity: input.complexity,
+        duration_seconds: input.duration_seconds,
+      })
+      .select()
+      .single();
+    if (error || !data) {
+      throw new Error(`createRound: ${error?.message ?? "unknown"}`);
+    }
+    return toRoundRecord(data);
+  }
+
+  async startRound(round_id: string): Promise<void> {
+    const supabase = getServiceClient();
+    const { error } = await supabase
+      .from("rounds")
+      .update({ status: "running", started_at: new Date().toISOString() })
+      .eq("id", round_id);
+    if (error) throw new Error(`startRound: ${error.message}`);
+  }
+
+  async findLatestRound(game_id: string): Promise<RoundRecord | null> {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase
+      .from("rounds")
+      .select("*")
+      .eq("game_id", game_id)
+      .order("index", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw new Error(`findLatestRound: ${error.message}`);
+    return data ? toRoundRecord(data) : null;
+  }
+
+  async createPairRound(input: {
+    round_id: string;
+    pair_id: string;
+    goal_pattern: unknown;
+    pattern_seed: string;
+  }): Promise<PairRoundRecord> {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase
+      .from("pair_rounds")
+      .insert({
+        round_id: input.round_id,
+        pair_id: input.pair_id,
+        goal_pattern: input.goal_pattern as never,
+        pattern_seed: input.pattern_seed,
+      })
+      .select()
+      .single();
+    if (error || !data) {
+      throw new Error(`createPairRound: ${error?.message ?? "unknown"}`);
+    }
+    return toPairRoundRecord(data);
+  }
+
+  async listPairRoundsForRound(round_id: string): Promise<PairRoundRecord[]> {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase
+      .from("pair_rounds")
+      .select("*")
+      .eq("round_id", round_id);
+    if (error) throw new Error(`listPairRoundsForRound: ${error.message}`);
+    return (data ?? []).map(toPairRoundRecord);
+  }
+
+  async setGameStatus(
+    game_id: string,
+    status: "lobby" | "running" | "ended" | "purged",
+  ): Promise<void> {
+    const supabase = getServiceClient();
+    const { error } = await supabase
+      .from("games")
+      .update({ status })
+      .eq("id", game_id);
+    if (error) throw new Error(`setGameStatus: ${error.message}`);
+  }
 }
 
 function toPairRecord(row: DbPair): PairRecord {
@@ -238,5 +332,30 @@ function toPairRecord(row: DbPair): PairRecord {
     builder_id: row.builder_id,
     guider_id: row.guider_id,
     created_at: row.created_at,
+  };
+}
+
+function toRoundRecord(row: DbRound): RoundRecord {
+  return {
+    id: row.id,
+    game_id: row.game_id,
+    index: row.index,
+    complexity: row.complexity,
+    duration_seconds: row.duration_seconds,
+    status: row.status,
+    started_at: row.started_at,
+    ended_at: row.ended_at,
+  };
+}
+
+function toPairRoundRecord(row: DbPairRound): PairRoundRecord {
+  return {
+    id: row.id,
+    round_id: row.round_id,
+    pair_id: row.pair_id,
+    goal_pattern: row.goal_pattern,
+    pattern_seed: row.pattern_seed,
+    test_enabled: row.test_enabled,
+    shares_remaining: row.shares_remaining,
   };
 }

@@ -69,6 +69,29 @@ export interface PairRecord {
   created_at: string;
 }
 
+export type RoundStatus = "pending" | "running" | "ended";
+
+export interface RoundRecord {
+  id: string;
+  game_id: string;
+  index: number;
+  complexity: number;
+  duration_seconds: number;
+  status: RoundStatus;
+  started_at: string | null;
+  ended_at: string | null;
+}
+
+export interface PairRoundRecord {
+  id: string;
+  round_id: string;
+  pair_id: string;
+  goal_pattern: unknown;
+  pattern_seed: string;
+  test_enabled: boolean;
+  shares_remaining: number;
+}
+
 export interface GameRepository {
   createGame(
     input: CreateGameInput & {
@@ -136,4 +159,44 @@ export interface GameRepository {
    * existing pairs. Used as the precondition for auto-allocate.
    */
   clearAllocations(game_id: string): Promise<void>;
+
+  /**
+   * Round + pair_round operations.
+   */
+  createRound(input: {
+    game_id: string;
+    index: number;
+    complexity: number;
+    duration_seconds: number;
+  }): Promise<RoundRecord>;
+
+  /**
+   * Mark a round running by setting started_at = now() and status = 'running'.
+   */
+  startRound(round_id: string): Promise<void>;
+
+  /**
+   * Find the most recent (highest index) round for a game.
+   */
+  findLatestRound(game_id: string): Promise<RoundRecord | null>;
+
+  /**
+   * Insert a pair_round row with a pre-generated goal pattern.
+   */
+  createPairRound(input: {
+    round_id: string;
+    pair_id: string;
+    goal_pattern: unknown;
+    pattern_seed: string;
+  }): Promise<PairRoundRecord>;
+
+  listPairRoundsForRound(round_id: string): Promise<PairRoundRecord[]>;
+
+  /**
+   * Update the game status (lobby → running → ended → purged).
+   */
+  setGameStatus(
+    game_id: string,
+    status: "lobby" | "running" | "ended" | "purged",
+  ): Promise<void>;
 }

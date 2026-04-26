@@ -1,0 +1,300 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { TeamMode } from "@/lib/game/repository";
+import type { TileColor } from "@/components/canvas/Tile";
+import { MasterLobby } from "./MasterLobby";
+import { PairsPanel } from "./PairsPanel";
+import { TopBarControls } from "./TopBarControls";
+
+export interface LobbyParticipant {
+  id: string;
+  display_name: string;
+  role: "lobby" | "builder" | "guider" | "observer" | "gm";
+  pair_id: string | null;
+  color: TileColor;
+  joined_at: string;
+}
+
+export interface LobbyPair {
+  id: string;
+  builder_id: string | null;
+  guider_id: string | null;
+  created_at: string;
+}
+
+export interface LobbyRound {
+  id: string;
+  index: number;
+  complexity: number;
+  duration_seconds: number;
+  status: "pending" | "running" | "ended";
+  started_at: string | null;
+  ended_at: string | null;
+}
+
+interface LobbyResponse {
+  code: string;
+  workshop_name: string;
+  team_mode: TeamMode;
+  participant_cap: number;
+  status: "lobby" | "running" | "ended" | "purged";
+  round_count: number;
+  participants: LobbyParticipant[];
+  pairs: LobbyPair[];
+  round: LobbyRound | null;
+}
+
+const POLL_MS = 2000;
+
+export interface MasterContentProps {
+  code: string;
+  teamMode: TeamMode;
+  /** Initial workshop name from server-side render — used until first poll lands. */
+  initialWorkshopName: string;
+  /** Initial round count for the round counter in the top bar. */
+  initialRoundCount: number;
+  /** Default complexity from game settings — shown next to the round counter. */
+  defaultComplexity: number;
+  /** Initial round duration to display before any round starts. */
+  initialDurationSeconds: number;
+}
+
+/**
+ * Single client-side owner of the master dashboard's dynamic state.
+ * Wraps the top-bar round controls and the sidebar (lobby + pairs).
+ */
+export function MasterContent({
+  code,
+  teamMode,
+  initialWorkshopName,
+  initialRoundCount,
+  defaultComplexity,
+  initialDurationSeconds,
+}: MasterContentProps) {
+  const [data, setData] = useState<LobbyResponse | null>(null);
+  const [pollError, setPollError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const fetchSnapshot = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/games/${code}/lobby`, {
+        cache: "no-store",
+      });
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      const json: LobbyResponse = await res.json();
+      setData(json);
+      setPollError(null);
+    } catch (err) {
+      setPollError(err instanceof Error ? err.message : "fetch failed");
+    }
+  }, [code]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const tick = async () => {
+      if (cancelled) return;
+      await fetchSnapshot();
+    };
+    tick();
+    const id = setInterval(tick, POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [fetchSnapshot]);
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+  const clearSelection = useCallback(() => setSelected(new Set()), []);
+
+  const allocate = useCallback(
+    async (body: object) => {
+      setBusy(true);
+      setActionError(null);
+      try {
+        const res = await fetch(`/api/games/${code}/lobby/allocate`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          throw new Error(j.error || `status ${res.status}`);
+        }
+        clearSelection();
+        await fetchSnapshot();
+      } catch (err) {
+        setActionError(err instanceof Error ? err.message : "allocate failed");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [code, clearSelection, fetchSnapshot],
+  );
+
+  const startRound = useCallback(async () => {
+    setBusy(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/games/${code}/rounds/start`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.message || j.error || `status ${res.status}`);
+      }
+      await fetchSnapshot();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "start failed");
+    } finally {
+      setBusy(false);
+    }
+  }, [code, fetchSnapshot]);
+
+  const participants = useMemo(() => data?.participants ?? [], [data]);
+  const lobbyMembers = useMemo(
+    () => participants.filter((p) => p.role === "lobby"),
+    [participants],
+  );
+  const pairs = useMemo(() => data?.pairs ?? [], [data]);
+
+  const round = data?.round ?? null;
+  const workshopName = data?.workshop_name ?? initialWorkshopName;
+  const roundCount = data?.round_count ?? initialRoundCount;
+  const cap = data?.participant_cap ?? 0;
+
+  return (
+    <>
+      <TopBarControls
+        code={code}
+        workshopName={workshopName}
+        roundCount={roundCount}
+        complexity={round?.complexity ?? defaultComplexity}
+        round={round}
+        durationSeconds={round?.duration_seconds ?? initialDurationSeconds}
+        canStart={pairs.length > 0 && (round === null || round.status === "ended")}
+        busy={busy}
+        onStart={startRound}
+      />
+      <div
+        className="grid min-h-0 flex-1"
+        style={{ gridTemplateColumns: "320px 1fr 360px" }}
+      >
+        <aside className="flex flex-col border-r border-[var(--color-line)] bg-white">
+          <MasterLobby
+            code={code}
+            teamMode={teamMode}
+            members={lobbyMembers}
+            cap={cap}
+            selected={selected}
+            toggleSelect={toggleSelect}
+            clearSelection={clearSelection}
+            pollError={pollError}
+            actionError={actionError}
+            busy={busy}
+            pairs={pairs}
+            participants={participants}
+            onAuto={() => allocate({ kind: "auto" })}
+            onPair={(builderId) => {
+              const arr = Array.from(selected);
+              if (arr.length !== 2) return;
+              allocate({
+                kind: "pair",
+                participant_ids: arr,
+                builder_id: builderId,
+              });
+            }}
+            onObserver={(pairId) =>
+              allocate({
+                kind: "observer",
+                participant_ids: Array.from(selected),
+                pair_id: pairId,
+              })
+            }
+          />
+          <PairsPanel pairs={pairs} participants={participants} />
+        </aside>
+
+        <main
+          className="flex flex-col gap-4 overflow-y-auto p-6"
+          style={{ background: "var(--color-paper-2)" }}
+        >
+          <FocusedPairPlaceholder round={round} pairs={pairs.length} />
+        </main>
+
+        <aside className="flex flex-col border-l border-[var(--color-line)] bg-white">
+          <AccelerantsPlaceholder />
+        </aside>
+      </div>
+    </>
+  );
+}
+
+function FocusedPairPlaceholder({
+  round,
+  pairs,
+}: {
+  round: LobbyRound | null;
+  pairs: number;
+}) {
+  return (
+    <div className="t-card flex flex-col items-center justify-center gap-3 px-8 py-16 text-center">
+      <div className="t-mono text-[11px] tracking-widest text-[var(--color-ink-3)]">
+        FOCUSED PAIR
+      </div>
+      {round?.status === "running" ? (
+        <>
+          <h2 className="t-display text-2xl">
+            Round {round.index} live · {pairs} pair{pairs === 1 ? "" : "s"}
+          </h2>
+          <p className="max-w-md text-[14px] text-[var(--color-ink-2)]">
+            Pair canvas previews land in the next milestone. For now, builders
+            see an empty canvas + tile tray; guiders see the goal pattern.
+          </p>
+        </>
+      ) : (
+        <>
+          <h2 className="t-display text-2xl">Waiting for the round to start</h2>
+          <p className="max-w-md text-[14px] text-[var(--color-ink-2)]">
+            Once you allocate pairs in the sidebar, the <b>Start round</b>{" "}
+            button up top generates a fresh goal pattern for each pair and the
+            canvas previews appear here.
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
+function AccelerantsPlaceholder() {
+  return (
+    <div className="px-5 py-6">
+      <div className="mb-1 flex items-center gap-2">
+        <span
+          className="grid h-6 w-6 place-items-center rounded-md text-[14px] font-extrabold text-white"
+          style={{ background: "var(--color-t-red)" }}
+        >
+          ⚡
+        </span>
+        <span className="t-display text-[14px] font-bold">Accelerants</span>
+      </div>
+      <p className="text-[12px] leading-tight text-[var(--color-ink-3)]">
+        Trigger mechanics on a pair (or all pairs) once the round is running.
+      </p>
+      <p className="mt-4 text-[12px] text-[var(--color-ink-3)]">
+        Wires up in milestone 6.
+      </p>
+    </div>
+  );
+}

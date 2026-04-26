@@ -3,10 +3,7 @@
 import { useState } from "react";
 import { Avatar } from "@/components/primitives/Avatar";
 import type { TeamMode } from "@/lib/game/repository";
-import type {
-  LobbyParticipant,
-  LobbyPair,
-} from "./MasterDashboard";
+import type { LobbyParticipant, LobbyPair } from "./MasterContent";
 
 export interface MasterLobbyProps {
   code: string;
