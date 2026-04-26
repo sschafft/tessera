@@ -73,14 +73,20 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     round !== null ? await repo.findPairRound(round.id, me.pair_id) : null;
 
   // What the player can see — role-gated:
-  //   builder: never sees the goal
-  //   guider:  always sees the goal once the round exists
-  //   observer: always sees the goal
+  //   builder: never sees the goal; sees own placements
+  //   guider:  always sees the goal once the round exists; placements
+  //            gated by Agile share accelerant (M6) — empty for now
+  //   observer: always sees the goal + builder's placements live
   const showGoal = me.role === "guider" || me.role === "observer";
+  const showPlacements = me.role === "builder" || me.role === "observer";
   const goal: GoalPattern | null =
     showGoal && pairRound
       ? (pairRound.goal_pattern as GoalPattern)
       : null;
+  const placements =
+    showPlacements && pairRound
+      ? await repo.listPlacements(pairRound.id)
+      : [];
 
   return NextResponse.json({
     code,
@@ -107,6 +113,14 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
         }
       : null,
     goal,
+    placements: placements.map((p) => ({
+      id: p.id,
+      shape: p.shape,
+      color: p.color,
+      q: p.q,
+      r: p.r,
+      rot: p.rot,
+    })),
   });
 }
 

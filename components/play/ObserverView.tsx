@@ -12,12 +12,16 @@ export function ObserverView({ state }: ObserverViewProps) {
   return (
     <section className="grid w-full" style={{ gridTemplateColumns: "1fr 1fr" }}>
       <div className="flex flex-col items-center justify-center border-r border-[var(--color-line)] p-6">
-        <PaneHeader title="Builder" subtitle="placing pieces" colorVar="orange" />
+        <PaneHeader
+          title="Builder"
+          subtitle={`${state.placements.length} piece${state.placements.length === 1 ? "" : "s"} placed`}
+          colorVar="orange"
+        />
         <div className="mt-3">
-          <PlayCanvas pieces={[]} />
+          <PlayCanvas pieces={state.placements} />
         </div>
         <p className="t-mono mt-3 text-[11px] text-[var(--color-ink-3)]">
-          live placement view lands in 3.2
+          live · updates every 2 seconds
         </p>
       </div>
       <div className="flex flex-col items-center justify-center p-6">

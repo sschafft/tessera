@@ -45,6 +45,7 @@ export default async function PlayPage({ params }: PageProps) {
   let pair = null;
   let pairRound = null;
   let partner = null;
+  let placementsRaw: Awaited<ReturnType<typeof repo.listPlacements>> = [];
   if (me.pair_id) {
     pair = await repo.findPairById(me.pair_id);
     if (round) {
@@ -58,6 +59,9 @@ export default async function PlayPage({ params }: PageProps) {
             ? pair.builder_id
             : pair.builder_id;
       if (partnerId) partner = await repo.findParticipantById(partnerId);
+    }
+    if (pairRound && (me.role === "builder" || me.role === "observer")) {
+      placementsRaw = await repo.listPlacements(pairRound.id);
     }
   }
 
@@ -107,6 +111,14 @@ export default async function PlayPage({ params }: PageProps) {
         }
       : null,
     goal,
+    placements: placementsRaw.map((p) => ({
+      id: p.id,
+      shape: p.shape as PlayState["placements"][number]["shape"],
+      color: p.color as TileColor,
+      q: p.q,
+      r: p.r,
+      rot: p.rot,
+    })),
   };
 
   return <PlayContent code={code} initial={initial} />;

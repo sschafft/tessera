@@ -2,7 +2,10 @@ import "server-only";
 
 import { getServiceClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
-import { DuplicateNameError } from "./repository.memory";
+import {
+  DuplicateNameError,
+  PlacementCellTakenError,
+} from "./repository.memory";
 import type {
   CreateGameInput,
   CreateParticipantInput,
@@ -11,6 +14,7 @@ import type {
   PairRecord,
   PairRoundRecord,
   ParticipantRecord,
+  PlacementRecord,
   RoundRecord,
 } from "./repository";
 
@@ -19,6 +23,7 @@ type DbParticipant = Database["public"]["Tables"]["participants"]["Row"];
 type DbPair = Database["public"]["Tables"]["pairs"]["Row"];
 type DbRound = Database["public"]["Tables"]["rounds"]["Row"];
 type DbPairRound = Database["public"]["Tables"]["pair_rounds"]["Row"];
+type DbPlacement = Database["public"]["Tables"]["placements"]["Row"];
 
 function toGameRecord(row: DbGame): GameRecord {
   return {
@@ -349,6 +354,83 @@ export class SupabaseGameRepository implements GameRepository {
       .eq("id", game_id);
     if (error) throw new Error(`setGameStatus: ${error.message}`);
   }
+
+  async createPlacement(input: {
+    pair_round_id: string;
+    shape: string;
+    color: string;
+    q: number;
+    r: number;
+    rot: number;
+    placed_by: string;
+  }): Promise<PlacementRecord> {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase
+      .from("placements")
+      .insert({
+        pair_round_id: input.pair_round_id,
+        shape: input.shape,
+        color: input.color,
+        q: input.q,
+        r: input.r,
+        rot: input.rot,
+        placed_by: input.placed_by,
+      })
+      .select()
+      .single();
+    if (error || !data) {
+      // 23505 = unique_violation on (pair_round_id, q, r).
+      if (error?.code === "23505") throw new PlacementCellTakenError();
+      throw new Error(`createPlacement: ${error?.message ?? "unknown"}`);
+    }
+    return toPlacementRecord(data);
+  }
+
+  async listPlacements(pair_round_id: string): Promise<PlacementRecord[]> {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase
+      .from("placements")
+      .select("*")
+      .eq("pair_round_id", pair_round_id)
+      .order("placed_at", { ascending: true });
+    if (error) throw new Error(`listPlacements: ${error.message}`);
+    return (data ?? []).map(toPlacementRecord);
+  }
+
+  async findPlacement(id: string): Promise<PlacementRecord | null> {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase
+      .from("placements")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    if (error) throw new Error(`findPlacement: ${error.message}`);
+    return data ? toPlacementRecord(data) : null;
+  }
+
+  async deletePlacement(id: string): Promise<boolean> {
+    const supabase = getServiceClient();
+    const { error, count } = await supabase
+      .from("placements")
+      .delete({ count: "exact" })
+      .eq("id", id);
+    if (error) throw new Error(`deletePlacement: ${error.message}`);
+    return (count ?? 0) > 0;
+  }
+}
+
+function toPlacementRecord(row: DbPlacement): PlacementRecord {
+  return {
+    id: row.id,
+    pair_round_id: row.pair_round_id,
+    shape: row.shape,
+    color: row.color,
+    q: row.q,
+    r: row.r,
+    rot: row.rot,
+    placed_by: row.placed_by,
+    placed_at: row.placed_at,
+  };
 }
 
 function toPairRecord(row: DbPair): PairRecord {

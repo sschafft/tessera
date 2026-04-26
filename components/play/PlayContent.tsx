@@ -1,8 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { TileColor } from "@/components/canvas/Tile";
+import type { TileColor, TileShape } from "@/components/canvas/Tile";
 import type { GoalPattern } from "@/lib/pattern/types";
+
+export interface PlacedPiece {
+  id: string;
+  shape: TileShape;
+  color: TileColor;
+  q: number;
+  r: number;
+  rot: number;
+}
 import { PlayTopBar } from "./PlayTopBar";
 import { BuilderView } from "./BuilderView";
 import { GuiderView } from "./GuiderView";
@@ -40,6 +49,7 @@ export interface PlayState {
     shares_remaining: number;
   } | null;
   goal: GoalPattern | null;
+  placements: PlacedPiece[];
 }
 
 export interface PlayContentProps {

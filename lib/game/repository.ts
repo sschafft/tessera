@@ -92,6 +92,18 @@ export interface PairRoundRecord {
   shares_remaining: number;
 }
 
+export interface PlacementRecord {
+  id: string;
+  pair_round_id: string;
+  shape: string;
+  color: string;
+  q: number;
+  r: number;
+  rot: number;
+  placed_by: string;
+  placed_at: string;
+}
+
 export interface GameRepository {
   createGame(
     input: CreateGameInput & {
@@ -205,6 +217,35 @@ export interface GameRepository {
    * Find a pair by id (used for play-state lookups).
    */
   findPairById(pair_id: string): Promise<PairRecord | null>;
+
+  /**
+   * Place a tile on the canvas. Throws PlacementCellTakenError when
+   * the (pair_round, q, r) cell is already occupied.
+   */
+  createPlacement(input: {
+    pair_round_id: string;
+    shape: string;
+    color: string;
+    q: number;
+    r: number;
+    rot: number;
+    placed_by: string;
+  }): Promise<PlacementRecord>;
+
+  /**
+   * Returns placements ordered by placed_at ascending.
+   */
+  listPlacements(pair_round_id: string): Promise<PlacementRecord[]>;
+
+  /**
+   * Read a single placement (for ownership check before delete).
+   */
+  findPlacement(id: string): Promise<PlacementRecord | null>;
+
+  /**
+   * Delete a placement by id. Returns true on delete, false if not found.
+   */
+  deletePlacement(id: string): Promise<boolean>;
 
   /**
    * Update the game status (lobby → running → ended → purged).

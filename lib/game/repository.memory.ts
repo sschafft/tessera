@@ -6,6 +6,7 @@ import type {
   PairRecord,
   PairRoundRecord,
   ParticipantRecord,
+  PlacementRecord,
   RoundRecord,
 } from "./repository";
 
@@ -13,6 +14,13 @@ export class DuplicateNameError extends Error {
   constructor() {
     super("display_name already exists in this game");
     this.name = "DuplicateNameError";
+  }
+}
+
+export class PlacementCellTakenError extends Error {
+  constructor() {
+    super("a placement already exists at this (q, r)");
+    this.name = "PlacementCellTakenError";
   }
 }
 
@@ -26,6 +34,7 @@ export class MemoryGameRepository implements GameRepository {
   private pairs = new Map<string, PairRecord>();
   private rounds = new Map<string, RoundRecord>();
   private pairRounds = new Map<string, PairRoundRecord>();
+  private placements = new Map<string, PlacementRecord>();
 
   async createGame(
     input: CreateGameInput & {
@@ -250,6 +259,53 @@ export class MemoryGameRepository implements GameRepository {
     for (const g of this.games.values()) {
       if (g.id === game_id) g.status = status;
     }
+  }
+
+  async createPlacement(input: {
+    pair_round_id: string;
+    shape: string;
+    color: string;
+    q: number;
+    r: number;
+    rot: number;
+    placed_by: string;
+  }): Promise<PlacementRecord> {
+    for (const p of this.placements.values()) {
+      if (
+        p.pair_round_id === input.pair_round_id &&
+        p.q === input.q &&
+        p.r === input.r
+      ) {
+        throw new PlacementCellTakenError();
+      }
+    }
+    const record: PlacementRecord = {
+      id: crypto.randomUUID(),
+      pair_round_id: input.pair_round_id,
+      shape: input.shape,
+      color: input.color,
+      q: input.q,
+      r: input.r,
+      rot: input.rot,
+      placed_by: input.placed_by,
+      placed_at: new Date().toISOString(),
+    };
+    this.placements.set(record.id, record);
+    return record;
+  }
+
+  async listPlacements(pair_round_id: string): Promise<PlacementRecord[]> {
+    return [...this.placements.values()]
+      .filter((p) => p.pair_round_id === pair_round_id)
+      .sort((a, b) => a.placed_at.localeCompare(b.placed_at));
+  }
+
+  async findPlacement(id: string): Promise<PlacementRecord | null> {
+    return this.placements.get(id) ?? null;
+  }
+
+  async deletePlacement(id: string): Promise<boolean> {
+    return this.placements.delete(id);
   }
 }
 
