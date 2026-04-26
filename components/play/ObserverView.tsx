@@ -1,4 +1,5 @@
 import { PlayCanvas } from "@/components/canvas/PlayCanvas";
+import { BriefEnvelope } from "./BriefEnvelope";
 import type { PlayState } from "./PlayContent";
 
 export interface ObserverViewProps {
@@ -11,6 +12,19 @@ export function ObserverView({ state }: ObserverViewProps) {
   }
   return (
     <section className="grid w-full" style={{ gridTemplateColumns: "1fr 1fr" }}>
+      {state.observer_briefs && state.observer_briefs.length > 0 && (
+        <div className="absolute right-6 top-20 z-20 flex flex-col gap-2">
+          {state.observer_briefs.map((b) => (
+            <BriefEnvelope
+              key={b.role}
+              role={b.role}
+              title={b.title}
+              rules={b.rules}
+              defaultOpen
+            />
+          ))}
+        </div>
+      )}
       <div className="flex flex-col items-center justify-center border-r border-[var(--color-line)] p-6">
         <PaneHeader
           title="Builder"

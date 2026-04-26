@@ -88,12 +88,61 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       ? await repo.listPlacements(pairRound.id)
       : [];
 
-  // Each player sees only their own brief (until Reveal Briefs in M6).
-  // Observers don't have a brief themselves; we surface null.
+  // Each player sees only their own brief by default. Reveal Briefs
+  // accelerant flips pair_rounds.briefs_revealed; once set, builder +
+  // guider can see each other's. Observers see neither (until the
+  // accelerant fires, then they see both too).
   const myBrief =
     pairRound && (me.role === "builder" || me.role === "guider")
       ? await repo.findBrief(pairRound.id, me.role)
       : null;
+  const partnerBrief =
+    pairRound && pairRound.briefs_revealed
+      ? me.role === "builder"
+        ? await repo.findBrief(pairRound.id, "guider")
+        : me.role === "guider"
+          ? await repo.findBrief(pairRound.id, "builder")
+          : null
+      : null;
+  const observerBriefs =
+    pairRound && pairRound.briefs_revealed && me.role === "observer"
+      ? await repo.listBriefsForPairRound(pairRound.id)
+      : null;
+
+  // Test-build accelerant: builder + observer get per-placement
+  // correctness flags computed against the goal. The builder still
+  // never sees the raw goal pattern.
+  const testEnabled = pairRound?.test_enabled ?? false;
+  let placementsWithCorrect: Array<{
+    id: string;
+    shape: string;
+    color: string;
+    q: number;
+    r: number;
+    rot: number;
+    correct?: boolean;
+  }> = placements.map((p) => ({
+    id: p.id,
+    shape: p.shape,
+    color: p.color,
+    q: p.q,
+    r: p.r,
+    rot: p.rot,
+  }));
+  let accuracy: { correct: number; total: number } | null = null;
+  if (testEnabled && pairRound) {
+    const goalPieces = (pairRound.goal_pattern as GoalPattern) ?? [];
+    const goalKey = (g: { shape: string; color: string; q: number; r: number; rot: number }) =>
+      `${g.shape}|${g.color}|${g.q},${g.r}|${g.rot}`;
+    const goalSet = new Set(goalPieces.map(goalKey));
+    let correctCount = 0;
+    placementsWithCorrect = placementsWithCorrect.map((p) => {
+      const ok = goalSet.has(goalKey(p));
+      if (ok) correctCount += 1;
+      return { ...p, correct: ok };
+    });
+    accuracy = { correct: correctCount, total: goalPieces.length };
+  }
 
   return NextResponse.json({
     code,
@@ -120,20 +169,30 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
         }
       : null,
     goal,
-    placements: placements.map((p) => ({
-      id: p.id,
-      shape: p.shape,
-      color: p.color,
-      q: p.q,
-      r: p.r,
-      rot: p.rot,
-    })),
+    placements: placementsWithCorrect,
+    accuracy,
+    test_enabled: testEnabled,
+    briefs_revealed: pairRound?.briefs_revealed ?? false,
     brief: myBrief
       ? {
           role: myBrief.role,
           title: myBrief.title,
           rules: myBrief.rules,
         }
+      : null,
+    partner_brief: partnerBrief
+      ? {
+          role: partnerBrief.role,
+          title: partnerBrief.title,
+          rules: partnerBrief.rules,
+        }
+      : null,
+    observer_briefs: observerBriefs
+      ? observerBriefs.map((b) => ({
+          role: b.role,
+          title: b.title,
+          rules: b.rules,
+        }))
       : null,
   });
 }

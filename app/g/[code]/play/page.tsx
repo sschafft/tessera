@@ -124,6 +124,9 @@ export default async function PlayPage({ params }: PageProps) {
       r: p.r,
       rot: p.rot,
     })),
+    accuracy: null,
+    test_enabled: pairRound?.test_enabled ?? false,
+    briefs_revealed: pairRound?.briefs_revealed ?? false,
     brief: myBrief
       ? {
           role: myBrief.role,
@@ -131,6 +134,8 @@ export default async function PlayPage({ params }: PageProps) {
           rules: myBrief.rules,
         }
       : null,
+    partner_brief: null,
+    observer_briefs: null,
   };
 
   return <PlayContent code={code} initial={initial} />;

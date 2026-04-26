@@ -141,15 +141,23 @@ function BuilderInteractive({ state }: { state: PlayState }) {
         )}
       </aside>
       <section className="relative flex items-start justify-center overflow-auto p-6">
-        {state.brief && state.brief.role === "builder" && (
-          <div className="absolute right-6 top-6 z-10">
+        <div className="absolute right-6 top-6 z-10 flex flex-col gap-3">
+          {state.brief && state.brief.role === "builder" && (
             <BriefEnvelope
               role="builder"
               title={state.brief.title}
               rules={state.brief.rules}
             />
-          </div>
-        )}
+          )}
+          {state.partner_brief && (
+            <BriefEnvelope
+              role={state.partner_brief.role}
+              title={state.partner_brief.title}
+              rules={state.partner_brief.rules}
+              defaultOpen
+            />
+          )}
+        </div>
         <div className="flex flex-col items-center gap-3">
           <InteractiveCanvas
             pieces={visiblePieces}
@@ -159,11 +167,18 @@ function BuilderInteractive({ state }: { state: PlayState }) {
             onPlace={place}
             onPieceClick={remove}
           />
-          <p className="t-mono text-[11px] text-[var(--color-ink-3)]">
-            {selectedShape
-              ? "click a cell to place · click an existing piece to remove"
-              : "pick a shape from the tray, then click on the canvas"}
-          </p>
+          <div className="flex items-center gap-3">
+            <p className="t-mono text-[11px] text-[var(--color-ink-3)]">
+              {selectedShape
+                ? "click a cell to place · click an existing piece to remove"
+                : "pick a shape from the tray, then click on the canvas"}
+            </p>
+            {state.test_enabled && state.accuracy && (
+              <span className="t-mono rounded-full bg-[var(--color-paper-2)] px-3 py-1 text-[11px] font-bold">
+                ✓ {state.accuracy.correct} / {state.accuracy.total} correct
+              </span>
+            )}
+          </div>
         </div>
       </section>
     </div>

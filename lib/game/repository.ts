@@ -90,6 +90,7 @@ export interface PairRoundRecord {
   pattern_seed: string;
   test_enabled: boolean;
   shares_remaining: number;
+  briefs_revealed: boolean;
 }
 
 export interface PlacementRecord {
@@ -311,4 +312,36 @@ export interface GameRepository {
     game_id: string,
     status: "lobby" | "running" | "ended" | "purged",
   ): Promise<void>;
+
+  // ─── Accelerants ───────────────────────────────────────────────────
+  createAccelerantEvent(input: {
+    round_id: string;
+    scope: "pair" | "all";
+    pair_id: string | null;
+    kind: string;
+    payload?: unknown;
+    triggered_by: string;
+  }): Promise<{ id: string; triggered_at: string }>;
+
+  listAccelerantEvents(round_id: string): Promise<
+    Array<{
+      id: string;
+      kind: string;
+      scope: "pair" | "all";
+      pair_id: string | null;
+      triggered_at: string;
+    }>
+  >;
+
+  setBriefsRevealed(pair_round_id: string): Promise<void>;
+
+  setTestEnabled(pair_round_id: string, enabled: boolean): Promise<void>;
+
+  updateGoalPattern(
+    pair_round_id: string,
+    pattern: unknown,
+    seed: string,
+  ): Promise<void>;
+
+  decrementRoundDuration(round_id: string, delta: number): Promise<void>;
 }

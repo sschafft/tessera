@@ -223,6 +223,7 @@ export type Database = {
       }
       pair_rounds: {
         Row: {
+          briefs_revealed: boolean
           goal_pattern: Json
           id: string
           pair_id: string
@@ -232,6 +233,7 @@ export type Database = {
           test_enabled: boolean
         }
         Insert: {
+          briefs_revealed?: boolean
           goal_pattern: Json
           id?: string
           pair_id: string
@@ -241,6 +243,7 @@ export type Database = {
           test_enabled?: boolean
         }
         Update: {
+          briefs_revealed?: boolean
           goal_pattern?: Json
           id?: string
           pair_id?: string

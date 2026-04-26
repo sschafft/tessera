@@ -12,15 +12,23 @@ export function GuiderView({ state }: GuiderViewProps) {
   }
   return (
     <section className="relative mx-auto flex w-full max-w-[1100px] flex-1 flex-col items-center justify-center gap-6 p-6">
-      {state.brief && state.brief.role === "guider" && (
-        <div className="absolute right-6 top-6 z-10">
+      <div className="absolute right-6 top-6 z-10 flex flex-col gap-3">
+        {state.brief && state.brief.role === "guider" && (
           <BriefEnvelope
             role="guider"
             title={state.brief.title}
             rules={state.brief.rules}
           />
-        </div>
-      )}
+        )}
+        {state.partner_brief && (
+          <BriefEnvelope
+            role={state.partner_brief.role}
+            title={state.partner_brief.title}
+            rules={state.partner_brief.rules}
+            defaultOpen
+          />
+        )}
+      </div>
       <div className="relative">
         <span
           className="t-stamp absolute -left-2 -top-4 z-10"

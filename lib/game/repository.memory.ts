@@ -40,6 +40,17 @@ export class MemoryGameRepository implements GameRepository {
   private pairRounds = new Map<string, PairRoundRecord>();
   private placements = new Map<string, PlacementRecord>();
   private briefs = new Map<string, BriefRecord>();
+  private accelerantEvents = new Map<
+    string,
+    {
+      id: string;
+      round_id: string;
+      kind: string;
+      scope: "pair" | "all";
+      pair_id: string | null;
+      triggered_at: string;
+    }
+  >();
 
   async createGame(
     input: CreateGameInput & {
@@ -232,6 +243,7 @@ export class MemoryGameRepository implements GameRepository {
       pattern_seed: input.pattern_seed,
       test_enabled: false,
       shares_remaining: 3,
+      briefs_revealed: false,
     };
     this.pairRounds.set(pr.id, pr);
     return pr;
@@ -367,6 +379,82 @@ export class MemoryGameRepository implements GameRepository {
     // Returning [] forces the orchestrator to fall back to a built-in
     // emergency brief if it ever runs against the in-memory store.
     return [];
+  }
+
+  async createAccelerantEvent(input: {
+    round_id: string;
+    scope: "pair" | "all";
+    pair_id: string | null;
+    kind: string;
+    payload?: unknown;
+    triggered_by: string;
+  }): Promise<{ id: string; triggered_at: string }> {
+    const event = {
+      id: crypto.randomUUID(),
+      round_id: input.round_id,
+      kind: input.kind,
+      scope: input.scope,
+      pair_id: input.pair_id,
+      triggered_at: new Date().toISOString(),
+    };
+    this.accelerantEvents.set(event.id, event);
+    return { id: event.id, triggered_at: event.triggered_at };
+  }
+
+  async listAccelerantEvents(round_id: string): Promise<
+    Array<{
+      id: string;
+      kind: string;
+      scope: "pair" | "all";
+      pair_id: string | null;
+      triggered_at: string;
+    }>
+  > {
+    return [...this.accelerantEvents.values()].filter(
+      (e) => e.round_id === round_id,
+    );
+  }
+
+  async setBriefsRevealed(pair_round_id: string): Promise<void> {
+    const pr = this.pairRounds.get(pair_round_id);
+    if (pr) pr.briefs_revealed = true;
+  }
+
+  async setTestEnabled(
+    pair_round_id: string,
+    enabled: boolean,
+  ): Promise<void> {
+    const pr = this.pairRounds.get(pair_round_id);
+    if (pr) pr.test_enabled = enabled;
+  }
+
+  async updateGoalPattern(
+    pair_round_id: string,
+    pattern: unknown,
+    seed: string,
+  ): Promise<void> {
+    const pr = this.pairRounds.get(pair_round_id);
+    if (pr) {
+      pr.goal_pattern = pattern;
+      pr.pattern_seed = seed;
+    }
+  }
+
+  async decrementRoundDuration(
+    round_id: string,
+    delta: number,
+  ): Promise<void> {
+    const r = this.rounds.get(round_id);
+    if (r) {
+      // Compute current remaining; floor at 30s.
+      const startedMs = r.started_at
+        ? new Date(r.started_at).getTime()
+        : Date.now();
+      const elapsed = Math.floor((Date.now() - startedMs) / 1000);
+      const remaining = r.duration_seconds - elapsed;
+      const newRemaining = Math.max(30, remaining - delta);
+      r.duration_seconds = elapsed + newRemaining;
+    }
   }
 }
 

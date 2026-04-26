@@ -6,6 +6,7 @@ import type { TileColor } from "@/components/canvas/Tile";
 import { MasterLobby } from "./MasterLobby";
 import { PairsPanel } from "./PairsPanel";
 import { TopBarControls } from "./TopBarControls";
+import { AccelerantsRail } from "./AccelerantsRail";
 
 export interface LobbyParticipant {
   id: string;
@@ -37,6 +38,13 @@ export interface LobbyRound {
   ended_at: string | null;
 }
 
+export interface AccelerantEvent {
+  kind: string;
+  scope: "pair" | "all";
+  pair_id: string | null;
+  triggered_at: string;
+}
+
 interface LobbyResponse {
   code: string;
   workshop_name: string;
@@ -47,6 +55,7 @@ interface LobbyResponse {
   participants: LobbyParticipant[];
   pairs: LobbyPair[];
   round: LobbyRound | null;
+  accelerant_events: AccelerantEvent[];
 }
 
 const POLL_MS = 2000;
@@ -144,6 +153,37 @@ export function MasterContent({
       }
     },
     [code, clearSelection, fetchSnapshot],
+  );
+
+  const triggerAccelerant = useCallback(
+    async (
+      kind: string,
+      scope: "pair" | "all",
+      pairId: string | null,
+      payload?: Record<string, unknown>,
+    ) => {
+      setBusy(true);
+      setActionError(null);
+      try {
+        const res = await fetch(`/api/games/${code}/accelerants`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ kind, scope, pair_id: pairId, payload }),
+        });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          throw new Error(j.error || `status ${res.status}`);
+        }
+        await fetchSnapshot();
+      } catch (err) {
+        setActionError(
+          err instanceof Error ? err.message : "accelerant failed",
+        );
+      } finally {
+        setBusy(false);
+      }
+    },
+    [code, fetchSnapshot],
   );
 
   const rerollBrief = useCallback(
@@ -290,7 +330,13 @@ export function MasterContent({
         </main>
 
         <aside className="flex flex-col border-l border-[var(--color-line)] bg-white">
-          <AccelerantsPlaceholder />
+          <AccelerantsRail
+            events={data?.accelerant_events ?? []}
+            roundRunning={round?.status === "running"}
+            focusedPair={focusedPair}
+            busy={busy}
+            onTrigger={triggerAccelerant}
+          />
         </aside>
       </div>
     </>
@@ -450,24 +496,3 @@ function BriefCard({
   );
 }
 
-function AccelerantsPlaceholder() {
-  return (
-    <div className="px-5 py-6">
-      <div className="mb-1 flex items-center gap-2">
-        <span
-          className="grid h-6 w-6 place-items-center rounded-md text-[14px] font-extrabold text-white"
-          style={{ background: "var(--color-t-red)" }}
-        >
-          ⚡
-        </span>
-        <span className="t-display text-[14px] font-bold">Accelerants</span>
-      </div>
-      <p className="text-[12px] leading-tight text-[var(--color-ink-3)]">
-        Trigger mechanics on a pair (or all pairs) once the round is running.
-      </p>
-      <p className="mt-4 text-[12px] text-[var(--color-ink-3)]">
-        Wires up in milestone 6.
-      </p>
-    </div>
-  );
-}

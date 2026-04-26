@@ -122,6 +122,17 @@ export async function POST(req: NextRequest) {
     host_token_hash: hostTokenHash,
     gm_participant_id: gmParticipantId,
   });
+  // Insert a corresponding participants row so the GM can satisfy
+  // foreign-key references (accelerant_events.triggered_by, etc.).
+  // The lobby UI filters by role='lobby', so this row never appears
+  // in the player-facing list.
+  await repo.createParticipant({
+    id: gmParticipantId,
+    game_id: game.id,
+    display_name: "Facilitator",
+    role: "gm",
+    color: "red",
+  });
 
   const token = await mintSession({
     sub: gmParticipantId,

@@ -119,6 +119,7 @@ export function InteractiveCanvas({
               y={y - offset}
               size={size}
               rotate={p.rot * 60}
+              correct={p.correct ?? null}
             />
             {pendingDeleteId === p.id && (
               <span

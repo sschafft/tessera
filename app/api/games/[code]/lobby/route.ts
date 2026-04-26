@@ -40,6 +40,12 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     repo.findLatestRound(game.id),
   ]);
 
+  // Accelerant events for the current round (used to render usage
+  // counters + cooldowns on the dashboard rail).
+  const accelerantEvents = round
+    ? await repo.listAccelerantEvents(round.id)
+    : [];
+
   // Build a map of (pair_id → { builder_brief, guider_brief }) for the
   // current round. Only populated when a round is in flight.
   const briefsByPair = new Map<
@@ -102,5 +108,11 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
           ended_at: round.ended_at,
         }
       : null,
+    accelerant_events: accelerantEvents.map((e) => ({
+      kind: e.kind,
+      scope: e.scope,
+      pair_id: e.pair_id,
+      triggered_at: e.triggered_at,
+    })),
   });
 }

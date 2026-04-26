@@ -483,6 +483,122 @@ export class SupabaseGameRepository implements GameRepository {
     return (data ?? []).map(toBriefRecord);
   }
 
+  async createAccelerantEvent(input: {
+    round_id: string;
+    scope: "pair" | "all";
+    pair_id: string | null;
+    kind: string;
+    payload?: unknown;
+    triggered_by: string;
+  }): Promise<{ id: string; triggered_at: string }> {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase
+      .from("accelerant_events")
+      .insert({
+        round_id: input.round_id,
+        scope: input.scope,
+        pair_id: input.pair_id,
+        kind: input.kind as never,
+        payload: (input.payload ?? {}) as never,
+        triggered_by: input.triggered_by,
+      })
+      .select("id, triggered_at")
+      .single();
+    if (error || !data) {
+      throw new Error(`createAccelerantEvent: ${error?.message ?? "unknown"}`);
+    }
+    return { id: data.id, triggered_at: data.triggered_at };
+  }
+
+  async listAccelerantEvents(round_id: string): Promise<
+    Array<{
+      id: string;
+      kind: string;
+      scope: "pair" | "all";
+      pair_id: string | null;
+      triggered_at: string;
+    }>
+  > {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase
+      .from("accelerant_events")
+      .select("id, kind, scope, pair_id, triggered_at")
+      .eq("round_id", round_id);
+    if (error) throw new Error(`listAccelerantEvents: ${error.message}`);
+    return (data ?? []).map((e) => ({
+      id: e.id,
+      kind: e.kind as string,
+      scope: e.scope as "pair" | "all",
+      pair_id: e.pair_id,
+      triggered_at: e.triggered_at,
+    }));
+  }
+
+  async setBriefsRevealed(pair_round_id: string): Promise<void> {
+    const supabase = getServiceClient();
+    const { error } = await supabase
+      .from("pair_rounds")
+      .update({ briefs_revealed: true })
+      .eq("id", pair_round_id);
+    if (error) throw new Error(`setBriefsRevealed: ${error.message}`);
+  }
+
+  async setTestEnabled(
+    pair_round_id: string,
+    enabled: boolean,
+  ): Promise<void> {
+    const supabase = getServiceClient();
+    const { error } = await supabase
+      .from("pair_rounds")
+      .update({ test_enabled: enabled })
+      .eq("id", pair_round_id);
+    if (error) throw new Error(`setTestEnabled: ${error.message}`);
+  }
+
+  async updateGoalPattern(
+    pair_round_id: string,
+    pattern: unknown,
+    seed: string,
+  ): Promise<void> {
+    const supabase = getServiceClient();
+    const { error } = await supabase
+      .from("pair_rounds")
+      .update({ goal_pattern: pattern as never, pattern_seed: seed })
+      .eq("id", pair_round_id);
+    if (error) throw new Error(`updateGoalPattern: ${error.message}`);
+  }
+
+  async decrementRoundDuration(
+    round_id: string,
+    delta: number,
+  ): Promise<void> {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase
+      .from("rounds")
+      .select("started_at, duration_seconds")
+      .eq("id", round_id)
+      .single();
+    if (error || !data) {
+      throw new Error(
+        `decrementRoundDuration read: ${error?.message ?? "unknown"}`,
+      );
+    }
+    const startedMs = data.started_at
+      ? new Date(data.started_at).getTime()
+      : Date.now();
+    const elapsed = Math.floor((Date.now() - startedMs) / 1000);
+    const remaining = data.duration_seconds - elapsed;
+    const newRemaining = Math.max(30, remaining - delta);
+    const newDuration = elapsed + newRemaining;
+    const { error: updErr } = await supabase
+      .from("rounds")
+      .update({ duration_seconds: newDuration })
+      .eq("id", round_id);
+    if (updErr) {
+      throw new Error(`decrementRoundDuration write: ${updErr.message}`);
+    }
+  }
+
   async listLibraryBriefs(input: {
     role: BriefRole;
     complexity: number;
@@ -580,5 +696,6 @@ function toPairRoundRecord(row: DbPairRound): PairRoundRecord {
     pattern_seed: row.pattern_seed,
     test_enabled: row.test_enabled,
     shares_remaining: row.shares_remaining,
+    briefs_revealed: row.briefs_revealed,
   };
 }

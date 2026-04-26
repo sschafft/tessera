@@ -11,6 +11,14 @@ export interface PlacedPiece {
   q: number;
   r: number;
   rot: number;
+  /** Set when test_enabled is true; matches goal pattern equality. */
+  correct?: boolean;
+}
+
+export interface BriefSummary {
+  role: "builder" | "guider";
+  title: string;
+  rules: string[];
 }
 import { PlayTopBar } from "./PlayTopBar";
 import { BuilderView } from "./BuilderView";
@@ -50,11 +58,15 @@ export interface PlayState {
   } | null;
   goal: GoalPattern | null;
   placements: PlacedPiece[];
-  brief: {
-    role: "builder" | "guider";
-    title: string;
-    rules: string[];
-  } | null;
+  /** Server-computed accuracy gauge when test_enabled is true. */
+  accuracy: { correct: number; total: number } | null;
+  test_enabled: boolean;
+  briefs_revealed: boolean;
+  brief: BriefSummary | null;
+  /** Builder + guider see their partner's brief when revealed. */
+  partner_brief: BriefSummary | null;
+  /** Observers see both briefs when revealed. */
+  observer_briefs: BriefSummary[] | null;
 }
 
 export interface PlayContentProps {
