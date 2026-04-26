@@ -81,6 +81,7 @@ export default async function PlayPage({ params }: PageProps) {
     workshop_name: game.workshop_name,
     video_call_url: game.video_call_url,
     whiteboard_url: game.whiteboard_url ?? null,
+    game_status: game.status,
     role: asPlayRole(me.role),
     me: {
       id: me.id,

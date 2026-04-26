@@ -56,6 +56,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       workshop_name: game.workshop_name,
       video_call_url: game.video_call_url,
       whiteboard_url: game.whiteboard_url,
+      game_status: game.status,
       role: me.role,
       me: meSummary(me),
       partner: null,
@@ -63,6 +64,13 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       round: roundSummary(round),
       pair_round: null,
       goal: null,
+      placements: [],
+      accuracy: null,
+      test_enabled: false,
+      briefs_revealed: false,
+      brief: null,
+      partner_brief: null,
+      observer_briefs: null,
     });
   }
 
@@ -77,8 +85,14 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
   //   guider:  always sees the goal once the round exists; placements
   //            gated by Agile share accelerant (M6) — empty for now
   //   observer: always sees the goal + builder's placements live
-  const showGoal = me.role === "guider" || me.role === "observer";
-  const showPlacements = me.role === "builder" || me.role === "observer";
+  // After the round ends, everyone sees the goal + everyone's
+  // placements + everyone's brief, so the pair can debrief together.
+  const roundEnded = round?.status === "ended";
+
+  const showGoal =
+    me.role === "guider" || me.role === "observer" || roundEnded;
+  const showPlacements =
+    me.role === "builder" || me.role === "observer" || roundEnded;
   const goal: GoalPattern | null =
     showGoal && pairRound
       ? (pairRound.goal_pattern as GoalPattern)
@@ -91,13 +105,15 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
   // Each player sees only their own brief by default. Reveal Briefs
   // accelerant flips pair_rounds.briefs_revealed; once set, builder +
   // guider can see each other's. Observers see neither (until the
-  // accelerant fires, then they see both too).
+  // accelerant fires, then they see both too). After round end,
+  // everyone sees both briefs (debrief mode).
+  const briefsOpen = pairRound && (pairRound.briefs_revealed || roundEnded);
   const myBrief =
     pairRound && (me.role === "builder" || me.role === "guider")
       ? await repo.findBrief(pairRound.id, me.role)
       : null;
   const partnerBrief =
-    pairRound && pairRound.briefs_revealed
+    pairRound && briefsOpen
       ? me.role === "builder"
         ? await repo.findBrief(pairRound.id, "guider")
         : me.role === "guider"
@@ -105,14 +121,15 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
           : null
       : null;
   const observerBriefs =
-    pairRound && pairRound.briefs_revealed && me.role === "observer"
+    pairRound && briefsOpen && me.role === "observer"
       ? await repo.listBriefsForPairRound(pairRound.id)
       : null;
 
   // Test-build accelerant: builder + observer get per-placement
-  // correctness flags computed against the goal. The builder still
-  // never sees the raw goal pattern.
-  const testEnabled = pairRound?.test_enabled ?? false;
+  // correctness flags computed against the goal. After the round ends,
+  // we surface correctness to everyone for the debrief regardless of
+  // whether Test Build was triggered.
+  const testEnabled = (pairRound?.test_enabled ?? false) || roundEnded;
   let placementsWithCorrect: Array<{
     id: string;
     shape: string;
@@ -149,6 +166,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     workshop_name: game.workshop_name,
     video_call_url: game.video_call_url,
     whiteboard_url: game.whiteboard_url,
+    game_status: game.status,
     role: me.role,
     me: meSummary(me),
     partner: partner

@@ -222,6 +222,14 @@ export class MemoryGameRepository implements GameRepository {
     }
   }
 
+  async endRound(round_id: string): Promise<void> {
+    const r = this.rounds.get(round_id);
+    if (r && r.status !== "ended") {
+      r.status = "ended";
+      r.ended_at = new Date().toISOString();
+    }
+  }
+
   async findLatestRound(game_id: string): Promise<RoundRecord | null> {
     const rs = [...this.rounds.values()]
       .filter((r) => r.game_id === game_id)

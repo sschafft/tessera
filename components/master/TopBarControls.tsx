@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Wordmark } from "@/components/primitives/Wordmark";
 import { RoleChip } from "@/components/primitives/RoleChip";
 import type { LobbyRound } from "./MasterContent";
@@ -13,8 +13,14 @@ export interface TopBarControlsProps {
   round: LobbyRound | null;
   durationSeconds: number;
   canStart: boolean;
+  /** True when the game has been ended. Hides round controls. */
+  gameEnded: boolean;
+  /** True when round.status='ended' and we've reached round_count. */
+  allRoundsDone: boolean;
   busy: boolean;
   onStart: () => void;
+  onEnd: () => void;
+  onEndGame: () => void;
 }
 
 export function TopBarControls({
@@ -25,12 +31,33 @@ export function TopBarControls({
   round,
   durationSeconds,
   canStart,
+  gameEnded,
+  allRoundsDone,
   busy,
   onStart,
+  onEnd,
+  onEndGame,
 }: TopBarControlsProps) {
   const remaining = useTimer(round, durationSeconds);
   const isRunning = round?.status === "running";
+  const isRoundEnded = round?.status === "ended";
   const idx = round?.index ?? 1;
+  const nextIdx = isRoundEnded ? idx + 1 : idx;
+
+  // Auto-fire end-round when timer hits 0 while running. The endpoint
+  // is idempotent so multiple clients firing is harmless.
+  const autoFiredRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      isRunning &&
+      remaining === 0 &&
+      round &&
+      autoFiredRef.current !== round.id
+    ) {
+      autoFiredRef.current = round.id;
+      onEnd();
+    }
+  }, [isRunning, remaining, round, onEnd]);
 
   return (
     <header className="flex h-16 flex-shrink-0 items-center justify-between border-b border-[var(--color-line)] bg-white px-7">
@@ -52,32 +79,54 @@ export function TopBarControls({
         >
           ⏱ {formatDuration(remaining)}
         </span>
-        {isRunning ? (
-          <>
-            <button
-              className="t-btn t-btn--ghost t-btn--sm"
-              disabled
-              title="Pause lands in milestone 7"
-            >
-              Pause round
-            </button>
-            <button
-              className="t-btn t-btn--primary t-btn--sm"
-              disabled
-              title="End round lands in milestone 7"
-            >
-              End round
-            </button>
-          </>
+
+        {gameEnded ? (
+          <span
+            className="t-mono rounded-full px-4 py-2 text-[12px] font-bold"
+            style={{
+              background: "var(--color-tint-green)",
+              color: "var(--color-t-green)",
+            }}
+          >
+            game ended
+          </span>
+        ) : isRunning ? (
+          <button
+            type="button"
+            className="t-btn t-btn--primary t-btn--sm disabled:opacity-50"
+            onClick={onEnd}
+            disabled={busy}
+          >
+            {busy ? "Ending…" : "End round"}
+          </button>
+        ) : isRoundEnded && allRoundsDone ? (
+          <button
+            type="button"
+            className="t-btn t-btn--primary t-btn--sm disabled:opacity-50"
+            onClick={onEndGame}
+            disabled={busy}
+          >
+            {busy ? "Ending…" : "End game"}
+          </button>
         ) : (
           <button
             type="button"
             className="t-btn t-btn--primary t-btn--sm disabled:opacity-50"
-            disabled={!canStart || busy}
             onClick={onStart}
+            disabled={!canStart || busy}
             title={canStart ? undefined : "Allocate at least one pair first."}
           >
-            {busy ? "Starting…" : `Start round ${idx}`}
+            {busy ? "Starting…" : `Start round ${nextIdx}`}
+          </button>
+        )}
+
+        {!gameEnded && !isRunning && !isRoundEnded && (
+          <button
+            type="button"
+            onClick={onEndGame}
+            className="t-mono text-[10px] text-[var(--color-ink-3)] underline"
+          >
+            end game
           </button>
         )}
       </div>

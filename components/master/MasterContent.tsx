@@ -231,6 +231,51 @@ export function MasterContent({
     }
   }, [code, fetchSnapshot]);
 
+  const endRound = useCallback(async () => {
+    setBusy(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/games/${code}/rounds/end`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || `status ${res.status}`);
+      }
+      await fetchSnapshot();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "end failed");
+    } finally {
+      setBusy(false);
+    }
+  }, [code, fetchSnapshot]);
+
+  const endGame = useCallback(async () => {
+    if (!confirm("End the game now? Players will see a final summary screen.")) {
+      return;
+    }
+    setBusy(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/games/${code}/end`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || `status ${res.status}`);
+      }
+      await fetchSnapshot();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "end failed");
+    } finally {
+      setBusy(false);
+    }
+  }, [code, fetchSnapshot]);
+
   const participants = useMemo(() => data?.participants ?? [], [data]);
   const lobbyMembers = useMemo(
     () => participants.filter((p) => p.role === "lobby"),
@@ -265,8 +310,15 @@ export function MasterContent({
         round={round}
         durationSeconds={round?.duration_seconds ?? initialDurationSeconds}
         canStart={pairs.length > 0 && (round === null || round.status === "ended")}
+        gameEnded={data?.status === "ended"}
+        allRoundsDone={
+          round?.status === "ended" &&
+          (round?.index ?? 0) >= (data?.round_count ?? roundCount)
+        }
         busy={busy}
         onStart={startRound}
+        onEnd={endRound}
+        onEndGame={endGame}
       />
       <div
         className="grid min-h-0 flex-1"
@@ -316,7 +368,9 @@ export function MasterContent({
           className="flex flex-col gap-4 overflow-y-auto p-6"
           style={{ background: "var(--color-paper-2)" }}
         >
-          {focusedPair ? (
+          {data?.status === "ended" ? (
+            <GameOverPanel pairs={pairs.length} round={round} />
+          ) : focusedPair ? (
             <FocusedPairCard
               pair={focusedPair}
               participants={participants}
@@ -369,6 +423,28 @@ function FocusedPairPlaceholder({
           </p>
         </>
       )}
+    </div>
+  );
+}
+
+function GameOverPanel({
+  pairs,
+  round,
+}: {
+  pairs: number;
+  round: LobbyRound | null;
+}) {
+  return (
+    <div className="t-card flex flex-col items-center justify-center gap-3 px-8 py-16 text-center">
+      <div className="t-mono text-[11px] tracking-widest text-[var(--color-ink-3)]">
+        GAME OVER
+      </div>
+      <h2 className="t-display text-[28px]">Workshop wrapped</h2>
+      <p className="max-w-md text-[14px] text-[var(--color-ink-2)]">
+        Players see a debrief screen with their goal vs. build, plus both
+        briefs. {round ? `${round.index} round${round.index === 1 ? "" : "s"}, ` : ""}
+        {pairs} pair{pairs === 1 ? "" : "s"}.
+      </p>
     </div>
   );
 }

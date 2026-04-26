@@ -211,6 +211,12 @@ export interface GameRepository {
   startRound(round_id: string): Promise<void>;
 
   /**
+   * Mark a round ended by setting status='ended' and ended_at = now().
+   * Idempotent — calling on an already-ended round is a no-op.
+   */
+  endRound(round_id: string): Promise<void>;
+
+  /**
    * Find the most recent (highest index) round for a game.
    */
   findLatestRound(game_id: string): Promise<RoundRecord | null>;

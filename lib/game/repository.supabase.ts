@@ -277,6 +277,16 @@ export class SupabaseGameRepository implements GameRepository {
     if (error) throw new Error(`startRound: ${error.message}`);
   }
 
+  async endRound(round_id: string): Promise<void> {
+    const supabase = getServiceClient();
+    const { error } = await supabase
+      .from("rounds")
+      .update({ status: "ended", ended_at: new Date().toISOString() })
+      .eq("id", round_id)
+      .neq("status", "ended");
+    if (error) throw new Error(`endRound: ${error.message}`);
+  }
+
   async findLatestRound(game_id: string): Promise<RoundRecord | null> {
     const supabase = getServiceClient();
     const { data, error } = await supabase

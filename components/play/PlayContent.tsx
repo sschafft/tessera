@@ -25,6 +25,8 @@ import { BuilderView } from "./BuilderView";
 import { GuiderView } from "./GuiderView";
 import { ObserverView } from "./ObserverView";
 import { LobbyWaiting } from "./LobbyWaiting";
+import { RoundEndedView } from "./RoundEndedView";
+import { GameEndedView } from "./GameEndedView";
 
 type PlayRole = "lobby" | "builder" | "guider" | "observer";
 
@@ -33,6 +35,7 @@ export interface PlayState {
   workshop_name: string;
   video_call_url: string;
   whiteboard_url: string | null;
+  game_status: "lobby" | "running" | "ended" | "purged";
   role: PlayRole;
   me: { id: string; display_name: string; role: PlayRole; color: TileColor };
   partner: {
@@ -122,11 +125,8 @@ export function PlayContent({ code, initial }: PlayContentProps) {
         videoCallUrl={state.video_call_url}
         whiteboardUrl={state.whiteboard_url}
       />
-      <main className="flex flex-1 overflow-hidden">
-        {state.role === "lobby" && <LobbyWaiting workshopName={state.workshop_name} />}
-        {state.role === "builder" && <BuilderView state={state} />}
-        {state.role === "guider" && <GuiderView state={state} />}
-        {state.role === "observer" && <ObserverView state={state} />}
+      <main className="relative flex flex-1 overflow-hidden">
+        {renderBody(state)}
       </main>
       {error && (
         <p className="px-6 py-2 text-[11px] text-[var(--color-t-red)]">
@@ -135,6 +135,23 @@ export function PlayContent({ code, initial }: PlayContentProps) {
       )}
     </div>
   );
+}
+
+function renderBody(state: PlayState) {
+  if (state.game_status === "ended") {
+    return <GameEndedView workshopName={state.workshop_name} />;
+  }
+  // Round ended but game still running → debrief view (everyone sees it).
+  if (state.round?.status === "ended" && state.pair_round) {
+    return <RoundEndedView state={state} />;
+  }
+  if (state.role === "lobby") {
+    return <LobbyWaiting workshopName={state.workshop_name} />;
+  }
+  if (state.role === "builder") return <BuilderView state={state} />;
+  if (state.role === "guider") return <GuiderView state={state} />;
+  if (state.role === "observer") return <ObserverView state={state} />;
+  return null;
 }
 
 function roleLabel(r: PlayRole) {
