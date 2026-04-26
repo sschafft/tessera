@@ -99,9 +99,21 @@ See [`design/TDD.md` §11](./design/TDD.md) for the full setup including Vercel 
 | --- | --- | --- |
 | `NEXT_PUBLIC_SUPABASE_URL` | client + server | |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | client + server | RLS-protected, safe in browser |
-| `SUPABASE_SERVICE_ROLE_KEY` | server only | Used by route handlers |
-| `TESSERA_JWT_SECRET` | server | Also configured as Supabase JWT secret |
-| `GEMINI_API_KEY` | server only | Procedural brief generation |
+| `SUPABASE_SERVICE_ROLE_KEY` | server only | Used by route handlers; bypasses RLS |
+| `TESSERA_JWT_SECRET` | server | Signs our session JWTs (independent of Supabase's JWT secret) |
+| `TESSERA_PUBLIC_URL` | server | Used in host-recovery URLs |
+| `GEMINI_API_KEY` | server only | Procedural brief generation (Production only — preview/local fall back to library briefs) |
+
+### Deploying to Vercel
+
+1. Connect this GitHub repo to a new Vercel project (Add New… → Project → Import).
+2. In the project's **Settings → Environment Variables**, add every row from the table above. Apply each to **Production**, **Preview**, and **Development** unless noted:
+   - `GEMINI_API_KEY` — Production only.
+   - `TESSERA_PUBLIC_URL` — set to your custom domain on Production, leave Preview unset (Vercel exposes `VERCEL_URL` for previews; we read this as a fallback).
+3. Push to `main` → Vercel deploys to Production.
+4. Push to a branch → Vercel deploys a preview against the same Supabase project.
+
+Vercel's built-in cron runs the `/api/keepalive` endpoint daily to prevent Supabase from auto-pausing the project after a week of inactivity (see [`vercel.json`](./vercel.json) and TDD §13.3).
 
 ---
 
