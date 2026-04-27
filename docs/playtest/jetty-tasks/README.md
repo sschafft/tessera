@@ -7,11 +7,12 @@ Workflow definitions deployed to the `jettyio` Jetty collection. Each `.json` he
 | File | Task | Purpose |
 |------|------|---------|
 | `tessera-tl.json` | `tessera-tl` | Adversarial code review on every PR. Wired up via `.github/workflows/tessera-tl.yml`. |
-| `tessera-playtest-orchestrator.json` | `tessera-playtest-orchestrator` | Self-contained 10-role concurrent playtest. One agent creates the game itself, opens up to 10 Playwright contexts (1 GM + 3 builders + 3 guiders + 3 observers), drives them through a round, and emits one aggregated JSON. No fan-out. |
+| `tessera-playtest-role.json` | `tessera-playtest-role` | Single-role child workflow used by the shell-script orchestrator. Empty `init_params` (no defaults) so the rendered instruction passes through cleanly. Don't run directly. |
+| `tessera-playtest-orchestrator.json` | `tessera-playtest-orchestrator` | Stub — kept around as a placeholder. Jetty's `list_emit_await` doesn't pass per-item values to children (verified 2026-04-27 across three variants), so the working orchestrator lives in `docs/playtest/run-orchestrator.sh` and shells out to `tessera-playtest-scenario` ten times in parallel. |
 
-The existing `tessera-playtest-scenario` task is **kept** (no JSON in this dir; it predates the canon). It accepts an arbitrary instruction via `init_params.instruction` and is the right tool for ad-hoc / single-scenario runs — cheaper than the 10-role orchestrator when you only want to test one path.
+`tessera-playtest-scenario` is **kept** (no JSON in this dir; it predates the canon). It accepts an arbitrary instruction via `init_params.instruction` and is what `run-orchestrator.sh` fans out to as the per-role child.
 
-Deleted (no longer in use, removed from Jetty 2026-04-27): `tessera-smoke` (early hello-world), `tessera-playtest-player` (was the per-role child of the abandoned fan-out orchestrator design — Jetty's `list_emit_await` + path expressions didn't behave as documented, so we collapsed orchestrator + player into a single self-contained agent).
+Deleted (no longer in use, removed from Jetty 2026-04-27): `tessera-smoke` (early hello-world), `tessera-playtest-player` (was the per-role child of the original fan-out design — superseded by `tessera-playtest-role`).
 
 ## Deploy / update
 

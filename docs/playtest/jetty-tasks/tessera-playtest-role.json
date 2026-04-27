@@ -1,0 +1,27 @@
+{
+  "name": "tessera-playtest-role",
+  "description": "Single-role child workflow for the orchestrator. One Daytona container, one Playwright browser, one role for one game. Receives the full pre-rendered instruction via init_params.instruction (NO placeholder default — that previously won the merge against list_emit_await's pass-through). Emits a per-role JSON report on stdout.",
+  "workflow": {
+    "init_params": {},
+    "step_configs": {
+      "play": {
+        "activity": "runbook",
+        "agent": "claude-code",
+        "model": "claude-sonnet-4-6",
+        "instruction_path": "init_params.instruction",
+        "snapshot": "prism-playwright",
+        "timeout_sec": 1800,
+        "memory": "2G",
+        "cpus": 2,
+        "network_enabled": true,
+        "mcp_servers": {
+          "playwright": {
+            "command": "npx",
+            "args": ["@playwright/mcp@latest", "--browser", "chromium"]
+          }
+        }
+      }
+    },
+    "steps": ["play"]
+  }
+}

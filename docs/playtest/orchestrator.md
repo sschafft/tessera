@@ -1,152 +1,119 @@
-# tessera-playtest-orchestrator — 10-role concurrent playtest
+# tessera orchestrator — 10-role concurrent playtest
 
-The orchestrator runs a full Tessera workshop end-to-end with **one agent driving 10 Playwright browser contexts** (1 GM + 3 builders + 3 guiders + 3 observers). Each context is an isolated cookie jar so role sessions don't bleed; the agent multiplexes its attention across them while the round runs.
+The orchestrator runs a full Tessera workshop with **10 isolated Daytona sandboxes** (1 GM + 3 builders + 3 guiders + 3 observers), each with its own Playwright browser and its own session cookie. Each sandbox plays one role; findings get aggregated client-side.
 
 **What it tests:**
-- **Per-role UX** — what each role experiences during a round, captured as a per-role summary in the final JSON.
-- **Concurrency / realtime** — pair-rename propagation, super-power broadcast, agile-share thumbnail updates across tabs.
-- **Server-side load** — round-trip latency with 10 active sockets, snapshot fetch p95, broadcast fan-out timings (sampled in the agent's `latency_samples_ms`).
+- **Per-role UX** — what each role experiences during a round, captured as a per-role JSON report.
+- **Concurrency / realtime** — pair-rename propagation, super-power broadcast, agile-share thumbnail updates with all 10 sockets active.
+- **Server-side load** — round-trip latency under 10 concurrent players, snapshot fetch p95.
+- **Cookie isolation correctness** — each role really is a separate browser; multi-context bleeding (the bug that blocked the single-agent multi-tab orchestrator) is gone.
 
-Use this when you've changed something system-level (realtime, scoring, layout) and want a real read before shipping. For a single-scenario quick playtest (one pair, one role focus), use `tessera-playtest-scenario` instead — it's lighter.
+Use this when you've changed something system-level (realtime, scoring, layout) and want a real read before shipping. For a single-scenario quick playtest (one pair, one role focus), use `tessera-playtest-scenario` directly.
 
 ---
 
 ## Architecture
 
-One step. One agent. One trajectory. No fan-out.
+The orchestration happens in `docs/playtest/run-orchestrator.sh` rather than as a single Jetty workflow. Why: Jetty's `list_emit_await` activity does not pass per-item values into child workflows' `init_params` (verified across three variants 2026-04-27 — see `memory/reference_jetty.md`). Until Jetty fixes that, fan-out lives client-side.
 
 ```
-tessera-playtest-orchestrator
-└─ play   runbook  → claude-sonnet-4-6 in a prism-playwright container with
-                     8GB / 4 CPUs and Playwright MCP. The agent:
-                       1. POSTs /api/games to create the workshop (no UI),
-                          captures code + host_token from the response.
-                       2. Opens 10 browser contexts, navigates each to its
-                          role-specific page (host-recover for GM, /join
-                          for the 9 players).
-                       3. GM allocates 3 pairs + 3 observers, starts the round.
-                       4. Drives all 10 tabs through their playbooks during
-                          the round.
-                       5. Aggregates per-role findings, console errors,
-                          network errors, latency samples into ONE JSON
-                          object on stdout.
+run-orchestrator.sh
+├─ 1. POST /api/games on tessera.schaffters.com   → code + host_token
+├─ 2. render-roster.py                            → 10 rendered instructions
+├─ 3. for each instruction: curl POST /api/v1/run/jettyio/tessera-playtest-scenario
+│       ↳ each Jetty child = 1 Daytona container
+│         + 1 Playwright browser
+│         + isolated cookies
+├─ 4. poll all 10 trajectories until completed
+└─ 5. fetch each child's stdout JSON → aggregate.json
 ```
 
-Earlier iterations tried a multi-step fan-out via `list_emit_await` + a separate `tessera-playtest-player` child task. That design hit several Jetty quirks (`child_init_params` path expressions don't resolve at parent runtime, `extract_from_trajectories` schema-vs-runtime drift, `simple_judge` parameter name drift, etc.). Collapsing into one self-contained agent sidesteps all of them.
+Child workflow used: `tessera-playtest-scenario` (existing, proven). Each child receives one rendered instruction via `init_params.instruction` and runs ~10–15 minutes.
 
----
-
-## Inputs (orchestrator init_params)
-
-The deployed task has sensible defaults — you can fire it with `init_params={}`:
-
-```json
-{
-  "tessera_url": "https://tessera.schaffters.com",
-  "complexity": 5,
-  "round_duration_sec": 600,
-  "scoring_correct_pts": 10,
-  "scoring_wrong_pts": -1,
-  "workshop_name": "Orchestrator playtest",
-  "max_roles": 10
-}
-```
-
-The roster is hard-coded into the agent's instruction (1 GM + 3 builders + 3 guiders + 3 observers). The agent generates display names. If you want a custom roster, edit the instruction in `tessera-playtest-orchestrator.json` and re-deploy via PUT.
-
----
-
-## Output (final stdout JSON)
-
-```json
-{
-  "scenario_id": "orchestrator-c5-1round-10roles",
-  "game_code": "ABC-123",
-  "duration_sec": 720,
-  "outcome": "passed | partial | failed",
-  "executive_summary": "<one paragraph>",
-  "per_role_summary": {
-    "gm": "...",
-    "builder": "...",
-    "guider": "...",
-    "observer": "..."
-  },
-  "latency_samples_ms": {
-    "place_to_visible": [42, 38, 51, 47, 39],
-    "broadcast_to_ui_update": [180, 165, 192],
-    "pair_rename_propagation": [1180, 1240]
-  },
-  "concurrency_findings": [ "<latency or fan-out observation>" ],
-  "scaling_findings": [ "<server-side perf observation>" ],
-  "findings": [
-    {
-      "severity": "blocker | major | minor | nit",
-      "role": "gm | builder | guider | observer | shared",
-      "category": "bug | ux-confusion | slowness | copy | accessibility | visual | performance",
-      "title": "...",
-      "detail": "...",
-      "corroborators": 2,
-      "evidence": "screenshot path or console excerpt"
-    }
-  ],
-  "console_errors": [],
-  "network_errors": []
-}
-```
-
-**Outcome rules:**
-- `passed` — no blockers, ≤2 majors.
-- `partial` — no blockers, 3+ majors OR any console error.
-- `failed` — ≥1 blocker OR the agent did not complete the round.
+There IS a `tessera-playtest-orchestrator` task deployed on Jetty too, but it currently does nothing useful (parents 10 children that all get empty `init_params.instruction`). Kept around as a placeholder until `list_emit_await` is fixed; do not call it.
 
 ---
 
 ## How to invoke
 
 ```sh
-JETTY_API_KEY=$(grep '^JETTY_API_KEY=' /Users/schaffter/www/tessera/.env.local | cut -d= -f2)
-
-# Fire with defaults — agent picks everything from its hard-coded scenario.
-curl -X POST -H "Authorization: Bearer $JETTY_API_KEY" \
-  -F 'init_params={}' \
-  https://flows-api.jetty.io/api/v1/run/jettyio/tessera-playtest-orchestrator
-
-# Or override defaults — write a JSON file, pass it via the `<file` form syntax.
-echo '{"complexity": 7, "round_duration_sec": 900}' > /tmp/orch.json
-curl -X POST -H "Authorization: Bearer $JETTY_API_KEY" \
-  -F "init_params=</tmp/orch.json" \
-  https://flows-api.jetty.io/api/v1/run/jettyio/tessera-playtest-orchestrator
+./docs/playtest/run-orchestrator.sh
 ```
 
-**Curl form syntax matters.** Use `-F "init_params=<file"` (less-than only, no `@`). The `<@file` and `--form-string` variants silently fail to set init_params on Jetty's API — see `memory/reference_jetty.md`.
+Env overrides:
+- `TESSERA_URL` — defaults to `https://tessera.schaffters.com`
+- `COMPLEXITY` — defaults to 5
+- `DURATION_MIN` — defaults to 10
 
-A run takes ~30–45 minutes (round_duration + setup + writeup). Watch the trajectory:
+The script fires the 10 curls in sequence (each one returns immediately with a trajectory_id), then polls all 10 in parallel until they complete. Total wall-clock ≈ 15–20 min. Findings aggregated into `/tmp/orch-<timestamp>/aggregate.json`.
+
+For a one-off run with a custom scenario:
 
 ```sh
-TRAJ=$(echo "$RESPONSE" | jq -r '.workflow_id' | sed 's/.*--//')
-until [[ "$(curl -sS -H "Authorization: Bearer $JETTY_API_KEY" \
-  https://flows-api.jetty.io/api/v1/db/trajectory/jettyio/tessera-playtest-orchestrator/$TRAJ \
-  | jq -r .status)" =~ ^(completed|failed|cancelled)$ ]]; do sleep 60; done
+TESSERA_URL=https://your-preview.vercel.app COMPLEXITY=8 DURATION_MIN=5 \
+  ./docs/playtest/run-orchestrator.sh
 ```
 
-The agent's stdout JSON is in the trajectory's agent log file:
+---
 
-```
-https://flows-api.jetty.io/api/v1/file/jettyio/tessera-playtest-orchestrator/0000/<TRAJ>.runbook.0000.agent_claude-code.txt
+## Output (`aggregate.json`)
+
+Each child's JSON output is collected:
+
+```json
+{
+  "trajectories": [
+    {
+      "name": "00-gm-facilitator",
+      "trajectory_id": "abc12345",
+      "report": {
+        "scenario_id": "orchestrator-gm-facilitator",
+        "outcome": "passed | partial | failed",
+        "duration_sec": 720,
+        "role": "gm",
+        "name": "Facilitator",
+        "pair_idx": null,
+        "findings": [
+          {
+            "severity": "blocker | major | minor | nit",
+            "area": "gm",
+            "category": "bug | ux-confusion | slowness | copy | accessibility | visual",
+            "title": "...",
+            "detail": "...",
+            "url_or_route": "/g/<CODE>/play",
+            "evidence": "..."
+          }
+        ],
+        "console_errors": [],
+        "network_errors": []
+      }
+    }
+  ]
+}
 ```
 
-Parse line-delimited JSON; the LAST `result` event holds the final aggregated JSON.
+The script also prints a console summary with finding counts grouped by severity.
 
 ---
 
 ## Cost expectations
 
-One Sonnet container running ~30–45 minutes. Compute is the bulk of the cost (8GB / 4 CPUs); model usage is moderate (one long agent session, not 10 parallel ones). Significantly cheaper than the original 11-container fan-out design, in exchange for less true-concurrent server load.
+Ten Sonnet containers running ~10–15 min each in parallel. Compute is the bulk of the cost; model usage is ten parallel agent sessions. Significantly more expensive than `tessera-playtest-scenario` solo runs — reserve for milestone playtests and post-major-refactor verification.
+
+---
+
+## When to use vs alternatives
+
+| Need | Use |
+|---|---|
+| Real load + cookie-isolated 10-role test | `run-orchestrator.sh` (this) |
+| Single scenario, quick iterate on copy / one bug | `tessera-playtest-scenario` directly |
+| Adversarial code review | `tessera-tl` (auto-fires on PR open) |
 
 ---
 
 ## Known limitations
 
-- **Voice channel is mocked.** Agents don't talk to each other; the guider doesn't actually describe the goal. The agent plays each role mechanically (placements per builder are random within constraints). This is fine for layout / latency / pair-rename / super-power testing — **not** fine for "does the brief make sense" testing. Use `tessera-playtest-scenario` with a single-tab linguistic playtest for that.
-- **Single-agent attention multiplexing.** The agent driving 10 tabs is faster than 10 humans but slower than 10 truly-parallel agents. Server load measurements are approximate, not stress-test grade.
-- **Pair-name nudge timing** assumes the agent opens + closes each brief once; if the agent skips that on a tab, the modal won't fire there.
+- **Voice channel is mocked.** Agents don't talk to each other; the guider doesn't actually describe the goal. The agents play their roles mechanically (placements per builder are random within constraints). Fine for layout / latency / pair-rename / super-power testing — **not** fine for "does the brief make sense" testing.
+- **Jetty `list_emit_await` is broken** for our use case. Tracked in `memory/reference_jetty.md`. Until Jetty fixes the per-item value pass-through, fan-out has to live client-side.
+- **No streaming aggregation.** The script waits for all 10 children to finish before aggregating, so total wall-clock is governed by the slowest child. A streaming variant (aggregate as each child finishes) would shave 2–3 min on average.
