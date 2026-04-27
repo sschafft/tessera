@@ -1,11 +1,58 @@
-# Tessera — Product Requirements (PRD v0.1)
+# Tessera — Product Requirements (PRD v1.1)
 
-> **Status:** v1 implemented as of 2026-04-26. All locked decisions shipped, plus
-> a polish batch: cookie-based "resume game" on home, How-it-works + Facilitator-
-> guide pages, GitHub link + open-source footer, free-text custom briefs, AI-
-> generated briefs (Gemini), favicon, host recovery flow, role-pill colour pass,
-> game-end pair leaderboard, fix for the players_pick lobby filter.
-> **Sources:** User brief + Claude Design handoff bundle (`Tessera mockups.html`, 5-screen prototype) + chat transcript with the design assistant.
+> **Status:** v1.1 shipped 2026-04-27. Builder canvas rewritten on a
+> complexity-scaled square grid, scoring system added, super-power
+> deck reworked, brief-open gate, pair self-naming, GM debrief
+> prompts, time extension + last-2-min drama. v1.0 highlights still
+> apply: cookie-based resume on home, How-it-works + Facilitator-guide
+> pages, GitHub link + OSS footer, custom briefs, Gemini brief
+> generation, host recovery, role-pill palette, game-end leaderboard.
+> **Sources:** User brief + Claude Design handoff bundle (`Tessera
+> mockups.html`, 5-screen prototype) + chat transcript with the design
+> assistant + v1.1 playtest follow-ups.
+
+## v1.1 changelog (key product changes from v1.0)
+
+- **Square grid scales with complexity.** 3×3 at c=1 up to 9×9 at
+  c=8; replaces the fixed 9×7 envelope. (§6.4, §6.5)
+- **Builder palette trimmed** to 4 fixed shapes (sq, tri-up, rhomb,
+  hex) and a 3..6 colour set sized to complexity. Same set powers the
+  goal generator. (§6.4)
+- **Optimistic builder UI.** Local React state is the source of truth
+  during a round; debounced server sync. Place / move / rotate /
+  convert / delete all feel instant. (§6.4, TDD §X1)
+- **Tap-cell flow with overwrite.** Tapping an occupied cell while a
+  shape is selected converts the piece in place. Otherwise enters
+  edit mode for that piece. (§6.4)
+- **Rotation increments are 90° in 4 steps** (was 60° / 6 steps).
+- **Test solution + scoring.** Builder-triggered "Test solution" CTA
+  computes the score against the goal at any time. Default 10 pts
+  per correct, 0 penalty; GM-tunable up to −1 flat penalty for any
+  wrong placements. Per-round scores sum into a game-end leaderboard.
+  (§6.11)
+- **Super-power deck reshaped.** Vocab swap → "Change guider brief";
+  new "Change builder brief" mirror; both unlimited. New "Make it
+  harder" / "Make it easier" — re-roll the goal at complexity ±1
+  while pinning the round's grid. Scoring tile (per-correct stepper +
+  Punish Wrong toggle). Prototype glimpse duration is now adjustable
+  in 3s/5s/10s/15s. (§6.3)
+- **Time extension.** GM gets +30s / +1m / +2m chip buttons next to
+  the timer; new POST /rounds/extend endpoint. Last-two-minutes
+  triggers a red timer pulse + a single warm chime. (§6.6)
+- **Brief-open gate.** Builder + Guider canvases are gated behind a
+  glassy overlay until the player taps their sealed envelope. The
+  envelope itself pulses while the gate is up. The "don't disclose
+  contents — answer Yes/No questions" framing is reinforced both on
+  the gate and inside the open envelope. (§6.2, §6.9)
+- **Pair self-naming.** Pairs can pick a name ("The Pelicans"); falls
+  back to "<builder> ↔ <guider>" until set. Editable from BuilderView
+  + GuiderView. (§6.10)
+- **GM debrief prompts.** Game-end view ships with three suggested
+  retro questions to seed the post-game conversation. (§5.6)
+- **Surface failures with explicit recovery.** Gemini brief failures
+  now show a modal with "Use preset briefs" / "Cancel" instead of
+  500'ing. Orphan pending rounds auto-clean on retry. (§6.2)
+- **Vercel Analytics** mounted in the root layout.
 
 ---
 
@@ -135,50 +182,108 @@ Two-tab card: **Host a game** | **Join a game**.
 - Brief sources, in priority order: (a) **GM free-text** authored at create-time or via Re-roll, (b) **curated library** — the default at game create (a ~30-brief set shipped with the app, covering all complexity buckets), (c) **Gemini-generated** server-side — explicit opt-in only, never the default. The GM picks the source per side (Builder / Guider) at create-time and can change it any time via Re-roll.
 - The Gemini key is owner-provided as a Vercel server env var; the client never sees it. Multiple layers of rate limits protect the free-tier quota — see TDD §13.1.
 
-### 6.3 Accelerants (full spec)
+### 6.3 Super powers (full spec)
 
-| Accelerant | Trigger scope | Effect | Cooldown / cap (default) |
+The right rail is now labelled "Super powers" in the UI (was
+"Accelerants" in v1.0; the underlying type names + table still use
+the historic name).
+
+| Super power | Trigger scope | Effect | Cooldown / cap (default) |
 | --- | --- | --- | --- |
-| Prototype unlock | per-pair or all | Builder sees a degraded preview of the goal: portions in grayscale, ~10–20% wrong pieces, "PROTOTYPE — not 100% accurate" banner. Lasts 5s by default. | 4 uses / round, 12s cooldown |
+| Prototype unlock | per-pair or all | Builder sees a degraded preview of the goal: portions in grayscale, ~10–20% wrong pieces, "PROTOTYPE — not 100% accurate" banner. **Duration is GM-adjustable**: 3s / 5s / 10s / 15s; 5s default. | 4 uses / round, 12s cooldown |
 | Reveal briefs | per-pair or all | Both players in the pair see each other's brief. **Irreversible** within the round. | 1 use / round |
-| Test build | per-pair or all | Toggles per-piece correctness highlights for the builder + a "% accurate" gauge. Stays on once enabled. | ∞ |
-| Agile share | per-pair or all | Builder gets a "Share progress" button; uses are limited (default 3). Each share pushes a snapshot to the guider's preview thumbnail. | 3 uses / round |
+| Test build | per-pair or all | GM-side counterpart to the builder's "Test solution" CTA — flips per-piece correctness highlights + accuracy gauge. Stays on once enabled. | ∞ |
+| Agile share | per-pair or all | Builder gets a "Share progress" button; uses are limited (default 3). Each share pushes a snapshot to the guider's preview thumbnail. **Guider can now full-screen the snapshot** (§6.7). | 3 uses / round |
 | Time pressure | per-pair or all | Subtracts a configurable amount (default 3:00) from the round timer. Plays an optional sting. | 2 uses / round |
-| Vocab swap | per-pair or all | Re-rolls **just** the guider's brief mid-round (Gemini-generated). | 1 use / round |
-| Randomizer | per-pair or all | Resets that pair's (or all pairs') goal pattern. | unbounded |
-| Requirement change | per-pair or all | Mutates **one** element in the target pattern (color, position, or shape). | unbounded |
+| Change guider brief *(historic name: vocab swap)* | per-pair or all | Re-rolls **just** the guider's brief mid-round. | ∞ |
+| Change builder brief | per-pair or all | Mirror of the above for the builder side. | ∞ |
+| Randomizer | per-pair or all | Resets that pair's (or all pairs') goal pattern at the same complexity. | ∞ |
+| Requirement change | per-pair or all | Mutates **one** element in the target pattern (color, position, shape, rotation). | ∞ |
+| Make it harder | per-pair or all | Re-rolls the goal at +1 complexity while keeping the round's grid envelope intact. | ∞ |
+| Make it easier | per-pair or all | Re-rolls the goal at −1 complexity, same grid. | ∞ |
 
-> Note: the prototype's "Whisper to pair" accelerant was removed during design iteration ("no on-platform communication"). All eight accelerants are first-class buttons in the right-rail; the rail is vertically scrollable.
+In addition to triggered super powers, the rail has a **Scoring tile**
+that lives at the top: a stepper for points-per-correct (1..100,
+default 10) and a "Punish wrong attempts" toggle that flips the
+flat-wrong penalty between 0 and −1. Changes apply game-wide and
+recompute every visible / cumulative score immediately.
 
 ### 6.4 Canvas, pieces, and "correctness"
-- **Pieces:** tri-up, tri-dn, square, hexagon, rhombus, trapezoid (7 shapes incl. variants).
-- **Colors:** the 8 brand primaries from the token palette.
-- **Grid:** triangular by default (matches the "tessellation" framing). Square/hex selectable as tweaks.
-- **Placement model:** snap-to-grid. A piece's position is `(grid_cell_x, grid_cell_y, rotation_step, color, shape)`. This makes correctness a pure equality check, no tolerance heuristics.
-- **Goal pattern** is generated server-side from a complexity input (§6.6) and stored on the round record. The Guider gets the full pattern; the Builder gets an empty canvas (or a Prototype-modified version under accelerant).
-- **Per-piece "correct"** = a goal piece exists at the same `(x, y, rotation, color, shape)`. **Round complete** = builder has placed exactly the goal pieces with no extras.
-- **Test build** accelerant toggles a green check / red dot on each placed piece + a `% correct = correct_pieces / total_goal_pieces` gauge.
+- **Pieces:** the builder picks from a fixed set of 4 shapes —
+  **square, triangle, rhombus, hexagon**. The Tile component still
+  supports the original 7 shapes for any historic data; new patterns
+  use only these 4.
+- **Colors:** sized to complexity — 2 at c=1 up to 6 at c=8, drawn
+  from `red / blue / yellow / green / orange / purple` in that order.
+  The same set powers the goal generator and the builder palette.
+- **Grid:** **square**, sized to complexity. 3×3 at c=1 up to 9×9 at
+  c=8 (see §6.5 table). One shape per cell; the cell is the position
+  unit.
+- **Placement model:** tap-cell-with-shape-selected places; tap an
+  occupied cell with a shape selected **converts in place** to the
+  new shape/colour/rotation; tap an occupied cell with no selection
+  enters edit mode (rotate, delete, drag-to-move). Position is
+  `(q, r, rot, color, shape)` with `rot ∈ {0..3}` rendered as
+  `rot × 90°`.
+- **Optimistic UI.** Every mutation updates local React state
+  immediately and fires the server call in the background; field-
+  level patches are GC'd once the server echoes back. The builder
+  never waits on a roundtrip mid-place. (TDD §X1 covers reconciliation.)
+- **Goal pattern** is generated server-side from a complexity input
+  (§6.5) and stored on the round record. The Guider gets the full
+  pattern; the Builder gets the goal piece *count* (for the progress
+  counter) but never the layout.
+- **Per-piece "correct"** = a goal piece exists at the same
+  `(q, r, rot, color, shape)`. **Round complete** = the builder has
+  placed exactly the goal pieces with no extras.
+- **Test solution** (builder-fired) and **Test build** (GM-fired)
+  both surface per-piece green/red highlights + an accuracy gauge.
+  Test solution additionally returns the score breakdown — see §6.11.
+- **Clear all** wipes every placement on the builder's canvas
+  (builder-only, two-tap confirm).
+- **Progress counter.** "X / Y placed" sits above the canvas hint
+  row at all times during a running round, exposing only the count
+  to avoid leaking the layout.
 
 ### 6.5 Complexity scale (1–8)
-Reconciled with the design (`max=8`); user brief's 1–10 collapses to this. Complexity drives:
+Complexity drives the grid envelope, piece count, and the size of the
+shape + colour pools the builder works with. Both the goal generator
+and the builder palette share these numbers.
 
-| Lv | Pieces in goal | Distinct shapes | Distinct colors | Notes |
-| --- | --- | --- | --- | --- |
-| 1 | 3 | 1 | 1 | Single-shape stack |
-| 2 | 4 | 2 | 2 | Mock from design |
-| 3 | 5 | 2 | 3 | |
-| 4 | 6–7 | 3 | 3 | |
-| 5 | 8 | 3 | 4 | Default |
-| 6 | 10 | 4 | 5 | |
-| 7 | 12 | 5 | 6 | First true tessellation |
-| 8 | 14–16 | 6 | 7 | Edge piece logic, max diversity |
+| Lv | Grid | Pieces in goal | Distinct shapes | Distinct colors | Notes |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 3×3 | 3 | 1 | 2 | Single-shape stack |
+| 2 | 4×4 | 4 | 2 | 3 | |
+| 3 | 4×4 | 5 | 2 | 3 | |
+| 4 | 5×5 | 6–7 | 3 | 3 | |
+| 5 | 6×6 | 8 | 3 | 4 | Default |
+| 6 | 7×7 | 9–10 | 4 | 4 | |
+| 7 | 8×8 | 11–12 | 4 | 5 | |
+| 8 | 9×9 | 13–16 | 4 | 6 | Edge piece logic, max diversity |
 
-Brief complexity scales similarly (e.g. complexity 1–2 = single rule, 7–8 = three+ rules with cross-effects).
+The shape pool maxes at 4 (sq, tri-up, rhomb, hex) at every
+complexity above 5; complexity scales colour variety + grid + piece
+count rather than shape count, so the builder's tray stays scannable.
+
+Brief complexity scales similarly (e.g. complexity 1–2 = single rule,
+7–8 = three+ rules with cross-effects). The GM picks complexity at
+game-create as the default and can override with the inline stepper
+on the Start button each round.
 
 ### 6.6 Timer
-- GM sets a per-round duration (default 15:00). Counts down at the top of every screen.
+- GM sets a per-round duration (default 15:00). Counts down at the
+  top of every screen.
 - At 0 the round ends and (optionally) plays a "time's up" sting.
-- The **Time pressure** accelerant subtracts time mid-round.
+- **Time pressure** super power subtracts time mid-round.
+- **GM time extension.** While a round is running the GM has +30s /
+  +1m / +2m chip buttons next to the timer. POST /rounds/extend with
+  delta_seconds 30..600. Reuses the existing duration adjuster (the
+  30s floor only applies when shrinking, so extending is unbounded
+  upward up to 10 minutes per click).
+- **Last two minutes** drama: when remaining ≤ 2:00 the timer pill
+  turns red and runs a subtle jiggle keyframe in every role's top
+  bar. Players hear a single warm "F5 → D5" chime once per round
+  when the live remaining first crosses into the last two minutes.
 
 ### 6.7 Team assignment
 - **Game master picks:** GM uses the Lobby's manual controls and Auto-allocate.
@@ -187,6 +292,57 @@ Brief complexity scales similarly (e.g. complexity 1–2 = single rule, 7–8 = 
 ### 6.8 Capacity
 - Soft cap: **50 participants per game** (GM-configurable down to fewer at create-time, never up).
 - The cap exists to stay inside Supabase free-tier connection limits and to keep the GM dashboard usable.
+
+### 6.9 Brief-open gate
+- When the round starts and a player has a confidential brief, the
+  builder canvas (or guider goal canvas) is gated behind a glassy
+  overlay until they tap their sealed envelope. The envelope itself
+  pulses in a red ring while the gate is up.
+- Once they open it, the gate lifts permanently for that brief. If
+  the GM re-rolls (Change builder/guider brief super power), the gate
+  re-arms with the new brief.
+- The "don't disclose contents — answer Yes/No questions like 20-
+  questions" framing lives both on the gate and inside the open
+  envelope so players see it twice.
+
+### 6.10 Pair self-naming
+- Pairs can pick a custom display name like "The Pelicans" (40-char
+  cap, free-form). Falls back to "<my-name> ↔ <partner-name>" until
+  set, where my-name and partner-name are the player's perspective.
+- Editable from BuilderView (sidebar badge above the mode toggle) and
+  GuiderView (top-left badge). Anyone in the pair, plus the GM, can
+  rename. Empty / whitespace clears the name back to the default.
+- New pair_name event broadcasts to all participants on save so the
+  badge updates everywhere immediately.
+
+### 6.11 Test solution + scoring
+- The builder has a primary "Test solution" CTA at the bottom of the
+  canvas. Tapping it computes the score against the goal pattern at
+  any time during a running round. No cap on uses.
+- Score formula:
+  - `score = correct_pts × correct_count + (any_wrong > 0 ? wrong_pts : 0)`
+  - `correct_pts` defaults to 10 (GM-tunable 1..100 in the Scoring
+    tile).
+  - `wrong_pts` defaults to 0 — i.e. wrong placements just don't earn
+    points. The GM can flip the "Punish wrong attempts" toggle to set
+    `wrong_pts = -1`, applying a single flat −1 if there's at least
+    one wrong placement (regardless of how many). Examples:
+    - 1 right, 3 wrong with penalty on → `+10 − 1 = 9`
+    - 0 right, 2 wrong with penalty on → `0 − 1 = −1`
+- Test solution flips `pair_round.test_enabled = true` so green/red
+  per-piece highlights persist for the rest of the round, and a
+  celebratory tone (Tone.js arpeggio sized to the correct count)
+  plays for the builder + a pulse animation on the result banner.
+- The guider, observers, and GM all see the result via realtime
+  broadcast — the builder is the only writer but the score is shared.
+- The game-end leaderboard ranks pairs by **total score across every
+  round**, with per-round score chips ("R1 · 5/8 · 50") below each
+  pair row for the debrief.
+
+### 6.12 GM debrief prompts
+- The game-end view (shared between players + GM) ships with a
+  "Debrief prompts" card containing three suggested retro questions
+  to seed the conversation on the call.
 
 ---
 
@@ -213,25 +369,41 @@ games          (id pk, code unique, host_workshop_name, video_call_url, whiteboa
                 team_mode enum('gm_picks','players_pick'),
                 complexity int, builder_brief_on bool, guider_brief_on bool,
                 round_duration_seconds int, sound_on bool,
-                status enum('lobby','running','ended'),
+                status enum('lobby','running','ended','purged'),
+                scoring_correct_pts int default 10,    -- v1.1
+                scoring_wrong_pts int default 0,       -- v1.1
                 created_at, ended_at, gm_session_id)
 
-participants   (id pk, game_id fk, display_name, role enum('gm','builder','guider','observer','unallocated'),
+participants   (id pk, game_id fk, display_name, role enum('gm','builder','guider','observer','lobby'),
                 pair_id fk null, color, joined_at, last_seen_at)
 
-pairs          (id pk, game_id fk, builder_id fk, guider_id fk)
+pairs          (id pk, game_id fk, builder_id fk, guider_id fk,
+                display_name text null)                 -- v1.1
 
 rounds         (id pk, game_id fk, index int, started_at, ended_at, status,
-                duration_seconds, goal_pattern jsonb)
-                -- goal_pattern: [{shape, color, x, y, rot}, ...]
+                duration_seconds)
 
-placements     (id pk, round_id fk, pair_id fk, shape, color, x, y, rot, placed_by fk, placed_at)
+pair_rounds    (id pk, round_id fk, pair_id fk,
+                goal_pattern jsonb, pattern_seed text,
+                test_enabled bool, briefs_revealed bool,
+                shares_remaining int default 3,
+                prototype_until timestamptz null,
+                builder_snapshot jsonb null)
+                -- goal_pattern: [{shape, color, q, r, rot}, ...]
 
-briefs         (id pk, round_id fk, pair_id fk, role enum('builder','guider'),
-                content jsonb, source enum('gm','gemini'), revealed bool default false)
+placements     (id pk, pair_round_id fk, shape, color, q, r, rot, placed_by fk, placed_at)
+                -- unique (pair_round_id, q, r) — one shape per cell
+
+briefs         (id pk, pair_round_id fk, role enum('builder','guider'),
+                source enum('gm','library','gemini'), title text, rules jsonb,
+                revealed bool default false)
 
 accelerant_events (id pk, round_id fk, scope enum('pair','all'), pair_id fk null,
                    kind, payload jsonb, triggered_by fk, triggered_at)
+                -- v1.1 enum kinds: prototype, reveal_briefs, test_build,
+                -- agile_share, time_pressure, vocab_swap (historic
+                -- "change guider brief"), change_builder_brief,
+                -- randomizer, requirement_change, harder, easier
 ```
 
 All write paths go through Supabase Row Level Security checks against the JWT's `game_id` and `role`. Realtime channels are scoped per game (`game:<id>`) and per pair (`pair:<id>`) so observers and GMs subscribe to the right slices.

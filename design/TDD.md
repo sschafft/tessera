@@ -1,9 +1,104 @@
-# Tessera — Technical Design Doc (TDD v0.1)
+# Tessera — Technical Design Doc (TDD v1.1)
 
-> **Status:** v1 shipped 2026-04-26. Schema migrations 1–7 applied to
-> `tessera-dev`. Section §15 documents implementation deltas vs the
-> original plan.
+> **Status:** v1.1 shipped 2026-04-27. Schema migrations 1–11 applied
+> to the live project. Section §15 documents implementation deltas
+> vs the original plan; the v1.1 changelog directly below this
+> summary covers the build-mode rewrite + scoring system at depth.
 > **Reads alongside:** `./PRD.md`, `./tessera/` (Claude Design handoff bundle).
+
+## v1.1 changelog (key technical changes from v1.0)
+
+**New migrations (8–11):**
+- `add_scoring_fields_to_games` — `games.scoring_correct_pts` (int
+  default 10) + `games.scoring_wrong_pts` (int default 0).
+- `add_change_builder_brief_accelerant` — adds the per-side brief
+  swap kind to `accelerant_t` enum. `vocab_swap` retained as the
+  historic guider-side equivalent.
+- `add_harder_easier_accelerants` — adds `harder` + `easier` to
+  `accelerant_t`.
+- `add_pair_display_name` — `pairs.display_name` (text null) for
+  pair self-naming.
+
+**New endpoints:**
+- `POST /api/games/[code]/test-solution` — builder-only, computes
+  the score breakdown against the goal and flips test_enabled so
+  per-piece highlights persist.
+- `POST /api/games/[code]/scoring` — GM-only, patches
+  `games.scoring_*` (correct_pts 1..100, wrong_pts -10..0).
+- `POST /api/games/[code]/rounds/extend` — GM-only, adds 30..600
+  seconds to the running round timer.
+- `PATCH /api/games/[code]/pairs/[pair_id]/name` — anyone in the
+  pair (or the GM) sets / clears `pairs.display_name`. 40-char cap.
+- `DELETE /api/games/[code]/placements` — builder-only, wipes every
+  placement on their pair_round (Clear all).
+
+**Endpoint changes:**
+- `POST /api/games/[code]/placements` is now upsert-by-cell — if a
+  placement already exists at `(pair_round, q, r)`, it's deleted
+  before the new one is inserted. Lets `tap-occupied-cell-with-shape`
+  overwrite work both client-side and server-side.
+- `PATCH /api/games/[code]/placements/[id]` accepts shape + color
+  in addition to q / r / rot. Used by `tap-occupied-cell` convert-
+  in-place when the builder wants to preserve piece identity.
+- `POST /api/games/[code]/rounds/start` accepts `complexity` and
+  `brief_source_override` in the body. Preflights every brief in
+  memory before any DB write so a Gemini failure no longer leaves
+  orphan rounds; returns 502 `gemini_failed` cleanly. Auto-deletes
+  any leftover pending round before creating a new one.
+- `/play` returns `goal_count` (always) so the builder progress
+  counter has a denominator without leaking goal layout.
+- `/lobby` returns `scoring: { correct_pts, wrong_pts }` for the
+  GM scoring tile.
+- `/summary` returns `total_score` per pair and a `rounds[]` array
+  with per-round score breakdowns; sorts by score desc.
+
+**Repository methods added:**
+- `clearPlacements(pair_round_id) → number`
+- `deleteRound(round_id)` (FK CASCADE handles dependents)
+- `listRounds(game_id) → RoundRecord[]` (every round, ascending)
+- `updateScoring(game_id, patch)`
+- `setPairDisplayName(pair_id, name | null)`
+- `updatePlacement` signature widened to accept `shape` + `color`.
+
+**Grid + pattern generation:**
+- `lib/grid/coords.ts` is now a square grid sized by complexity:
+  `gridSizeFor(complexity) → {w, h}` (3..9). `MAX_GRID = 9` is the
+  hard upper bound used by server input validators.
+- `lib/pattern/palette.ts` (new) exports `BUILDER_SHAPES` (4 shapes)
+  and `BUILDER_COLORS` (6 colors) plus `paletteColorsFor(complexity)`.
+  Server + client both import this module so the goal generator and
+  the builder palette never disagree.
+- `generatePattern` accepts an optional `grid` parameter so the
+  harder/easier super-powers can pin the round's grid envelope while
+  shifting piece-density complexity ±1.
+- Rotation is `0..3` rendered as `rot × 90°`.
+
+**Client architecture:**
+- BuilderView keeps `optimisticPatches: Map<id, Partial<PlacedPiece>>`
+  on top of `state.placements + optimistic - pendingDeletes`. Patches
+  are GC'd in an effect once `state.placements` echoes the value
+  back, so move/rotate/convert all feel instant. Reconciliation is
+  field-level: each user mutation registers a partial override that
+  layers on top of the server state, then drops itself when the
+  server agrees. New placements use temp `temp-<rand>` ids until the
+  POST returns; subsequent operations on a temp id are local-only
+  until the swap-in happens.
+- `BriefGate` overlays the canvas until the player opens their
+  envelope. Re-arms when the brief is re-rolled (super power).
+- `PairNameBadge` is shared between BuilderView + GuiderView.
+- `GeminiFallbackModal` surfaces Gemini failures with named recovery
+  options instead of silent fallback.
+
+**Sound:**
+- `playLastTwoMinutes()` — single F5→D5 chime when the live timer
+  first crosses below 120s.
+- `playTestSolution(correctCount)` — arpeggio sized to correct count
+  on the builder's "Test solution" tap.
+
+**Other:**
+- `@vercel/analytics` mounted in the root layout.
+- `@keyframes tessera-jiggle` + `tessera-attention` added to
+  `globals.css` for the timer pulse and brief-envelope emphasis.
 
 ---
 
