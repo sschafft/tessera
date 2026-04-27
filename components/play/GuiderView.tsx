@@ -130,7 +130,12 @@ export function GuiderView({ state }: GuiderViewProps) {
         style={{ width: 320 }}
       >
         {state.brief && state.brief.role === "guider" && (
+          // Remount on title change so super-power brief swaps reset
+          // the envelope's internal view to sealed; otherwise the gate
+          // re-arms but the envelope is stuck in `open` state and the
+          // player has no sealed button to tap to dismiss the gate.
           <BriefEnvelope
+            key={state.brief.title}
             role="guider"
             title={state.brief.title}
             rules={state.brief.rules}
