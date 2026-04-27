@@ -57,16 +57,22 @@ jobs:
           JETTY_API_TOKEN: ${{ secrets.JETTY_API_TOKEN }}
         run: |
           set -euo pipefail
+          # Jetty's `-F init_params=<json>` already nests the form value
+          # under an `init_params` key on the workflow. So the JSON body
+          # here is the inner shape (branch, focus_areas, etc.), NOT
+          # wrapped under another `init_params:`. Earlier we double-
+          # wrapped, which caused the agent's `{{branch}}` template to
+          # resolve against the outer level (= the schema's default
+          # "main") instead of the inner branch. The PR review then
+          # scanned main instead of the PR's actual head.
           INIT=$(jq -nc \
             --arg branch "${{ steps.target.outputs.branch }}" \
             --argjson max_findings "${{ steps.target.outputs.max_findings }}" \
             '{
-              init_params: {
-                branch: $branch,
-                focus_areas: [],
-                include_tests: true,
-                max_findings: $max_findings
-              }
+              branch: $branch,
+              focus_areas: [],
+              include_tests: true,
+              max_findings: $max_findings
             }')
           echo "init=$INIT"
           RESPONSE=$(curl --fail-with-body -sS -X POST \
@@ -138,50 +144,89 @@ jobs:
             > /tmp/agent.log || true
 
           python3 <<'PY' > /tmp/findings.json
-          import json, re, sys, pathlib
-          # Try the trajectory outputs first.
-          try:
-              traj = json.loads(pathlib.Path('/tmp/traj.json').read_text())
-              steps = traj.get('steps', {}) or {}
-              for step_name, step in steps.items():
-                  outputs = (step or {}).get('outputs', {}) or {}
-                  # Common shapes: 'result' string, 'json' object, raw passthrough.
-                  for key in ('json', 'result_json', 'output', 'result'):
-                      v = outputs.get(key)
-                      if isinstance(v, dict) and 'findings' in v:
-                          print(json.dumps(v))
-                          sys.exit(0)
-                      if isinstance(v, str):
-                          # Find last JSON object in the string.
-                          matches = re.findall(r'\{(?:[^{}]|(?:\{[^{}]*\}))*\}', v, re.DOTALL)
-                          for m in reversed(matches):
-                              try:
-                                  parsed = json.loads(m)
-                                  if isinstance(parsed, dict) and 'findings' in parsed:
-                                      print(json.dumps(parsed))
-                                      sys.exit(0)
-                              except Exception:
-                                  pass
-          except Exception as e:
-              print(f"trajectory parse failed: {e}", file=sys.stderr)
+          import json, sys, pathlib
 
-          # Fallback: scan the agent log for the last valid JSON object.
+          def find_last_json(text: str):
+              """Walk balanced braces from the end, return the last
+              parseable {...} that looks like a findings dict."""
+              depth = 0
+              end = -1
+              in_str = False
+              esc = False
+              for i in range(len(text) - 1, -1, -1):
+                  c = text[i]
+                  if esc:
+                      esc = False
+                      continue
+                  if c == "\\" and i + 1 < len(text):
+                      esc = True
+                      continue
+                  if c == '"' and not esc:
+                      in_str = not in_str
+                      continue
+                  if in_str:
+                      continue
+                  if c == "}":
+                      if depth == 0:
+                          end = i
+                      depth += 1
+                  elif c == "{":
+                      depth -= 1
+                      if depth == 0 and end != -1:
+                          candidate = text[i:end + 1]
+                          try:
+                              obj = json.loads(candidate)
+                              if isinstance(obj, dict) and "findings" in obj:
+                                  return obj
+                          except Exception:
+                              pass
+                          end = -1
+                          depth = 0
+              return None
+
+          # 1) Agent log: line-delimited claude-code stream events. The
+          #    LAST `result` event holds the agent's final markdown
+          #    output, and inside that string is the JSON object we want
+          #    (the agent prints scratch above + JSON below).
           try:
-              log = pathlib.Path('/tmp/agent.log').read_text()
-              matches = re.findall(r'\{[\s\S]*?\}', log)
-              for m in reversed(matches):
+              log = pathlib.Path("/tmp/agent.log").read_text()
+              for line in reversed(log.splitlines()):
+                  line = line.strip()
+                  if not line:
+                      continue
                   try:
-                      parsed = json.loads(m)
-                      if isinstance(parsed, dict) and 'findings' in parsed:
-                          print(json.dumps(parsed))
-                          sys.exit(0)
+                      ev = json.loads(line)
                   except Exception:
-                      pass
+                      continue
+                  if ev.get("type") == "result":
+                      result_text = ev.get("result") or ""
+                      obj = find_last_json(result_text)
+                      if obj:
+                          print(json.dumps(obj))
+                          sys.exit(0)
+                      break
           except Exception as e:
               print(f"agent log parse failed: {e}", file=sys.stderr)
 
-          # No structured output — emit a placeholder so the comment step
-          # still posts something useful.
+          # 2) Trajectory outputs: less reliable but worth a shot.
+          try:
+              traj = json.loads(pathlib.Path("/tmp/traj.json").read_text())
+              for step in (traj.get("steps") or {}).values():
+                  outputs = (step or {}).get("outputs") or {}
+                  for key in ("json", "result_json", "output", "result"):
+                      v = outputs.get(key)
+                      if isinstance(v, dict) and "findings" in v:
+                          print(json.dumps(v))
+                          sys.exit(0)
+                      if isinstance(v, str):
+                          obj = find_last_json(v)
+                          if obj:
+                              print(json.dumps(obj))
+                              sys.exit(0)
+          except Exception as e:
+              print(f"trajectory parse failed: {e}", file=sys.stderr)
+
+          # 3) Placeholder so the comment step still posts something.
           print(json.dumps({
               "summary": "tessera-tl produced no structured JSON output. See trajectory.",
               "findings": [],
