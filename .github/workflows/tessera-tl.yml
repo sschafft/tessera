@@ -91,10 +91,13 @@ jobs:
         timeout-minutes: 35
         run: |
           set -euo pipefail
+          # Poll the trajectory record itself; the /status sub-resource is
+          # PATCH/POST-only (it's for updating). Read .status from the
+          # main GET response.
           while true; do
             STATUS=$(curl --fail-with-body -sS \
               -H "Authorization: Bearer $JETTY_API_TOKEN" \
-              "https://flows-api.jetty.io/api/v1/db/trajectory/jettyio/tessera-tl/$TRAJ/status" \
+              "https://flows-api.jetty.io/api/v1/db/trajectory/jettyio/tessera-tl/$TRAJ" \
               | jq -r '.status // .state // "unknown"')
             echo "status=$STATUS"
             case "$STATUS" in
