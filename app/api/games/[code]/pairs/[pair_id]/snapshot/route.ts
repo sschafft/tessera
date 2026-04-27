@@ -40,6 +40,14 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "pair_not_found" }, { status: 404 });
   }
 
+  // Resolve player names from the pair regardless of round state, so
+  // the GM's focused-pair heading reads "Avery ↔ Bri" before Start
+  // is clicked, not "? ↔ ?".
+  const builder =
+    pair.builder_id ? await repo.findParticipantById(pair.builder_id) : null;
+  const guider =
+    pair.guider_id ? await repo.findParticipantById(pair.guider_id) : null;
+
   const round = await repo.findLatestRound(game.id);
   if (!round) {
     return NextResponse.json({
@@ -48,18 +56,16 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       goal: [],
       placements: [],
       accuracy: null,
-      builder_name: null,
-      guider_name: null,
+      builder_name: builder?.display_name ?? null,
+      builder_color: builder?.color ?? null,
+      guider_name: guider?.display_name ?? null,
+      guider_color: guider?.color ?? null,
       builder_brief: null,
       guider_brief: null,
     });
   }
 
   const pairRound = await repo.findPairRound(round.id, pair_id);
-  const builder =
-    pair.builder_id ? await repo.findParticipantById(pair.builder_id) : null;
-  const guider =
-    pair.guider_id ? await repo.findParticipantById(pair.guider_id) : null;
 
   const goal: GoalPattern = pairRound
     ? ((pairRound.goal_pattern as GoalPattern) ?? [])

@@ -34,13 +34,6 @@ const BUTTONS: RailButtonSpec[] = [
     sub: "Both players see each other's hidden brief.",
   },
   {
-    kind: "test_build",
-    icon: "✓",
-    color: "green",
-    title: "Test build",
-    sub: "Auto-check % accuracy against goal.",
-  },
-  {
     kind: "agile_share",
     icon: "↻",
     color: "orange",
@@ -186,7 +179,8 @@ export function AccelerantsRail({
         />
         {!roundRunning && (
           <p className="px-2 py-2 text-[12px] text-[var(--color-ink-3)]">
-            Start the round and these light up.
+            {/* Copy adapts to lifecycle: pre-round vs post-round. */}
+            Super powers light up while a round is in flight.
           </p>
         )}
         {BUTTONS.map((b) => (
@@ -239,11 +233,13 @@ function ScoringPanel({
   busy: boolean;
   onChange: (patch: { correct_pts?: number; wrong_pts?: number }) => void;
 }) {
-  const penaltyOn = wrongPts < 0;
-  const togglePenalty = () => onChange({ wrong_pts: penaltyOn ? 0 : -1 });
   const bumpCorrect = (delta: number) => {
     const next = Math.max(1, Math.min(100, correctPts + delta));
     if (next !== correctPts) onChange({ correct_pts: next });
+  };
+  const bumpWrong = (delta: number) => {
+    const next = Math.max(-10, Math.min(0, wrongPts + delta));
+    if (next !== wrongPts) onChange({ wrong_pts: next });
   };
   return (
     <div
@@ -307,25 +303,42 @@ function ScoringPanel({
           </button>
         </div>
       </div>
-      <button
-        type="button"
-        onClick={togglePenalty}
-        disabled={busy}
-        className="t-mono flex items-center justify-between rounded-[10px] px-3 py-2 text-[12px] font-bold disabled:opacity-50"
-        style={{
-          background: penaltyOn
-            ? "var(--color-tint-red)"
-            : "var(--color-paper-2)",
-          color: penaltyOn ? "var(--color-t-red)" : "var(--color-ink-2)",
-          border: `1.5px solid ${
-            penaltyOn ? "var(--color-t-red)" : "var(--color-line)"
-          }`,
-        }}
-        aria-pressed={penaltyOn}
+      <div
+        className="flex items-center justify-between gap-2"
+        title="Flat penalty applied if any placement is wrong on a Test."
       >
-        <span>Punish wrong attempts</span>
-        <span>{penaltyOn ? "ON · −1 flat" : "OFF"}</span>
-      </button>
+        <span className="text-[12px] font-semibold text-[var(--color-ink-2)]">
+          Wrong-attempt penalty
+        </span>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => bumpWrong(-1)}
+            disabled={busy || wrongPts <= -10}
+            className="t-mono grid h-6 w-6 place-items-center rounded-md border-[1.5px] border-[var(--color-line)] bg-white text-[12px] font-bold disabled:opacity-50"
+            aria-label="Increase penalty (more negative)"
+          >
+            −
+          </button>
+          <span
+            className="t-mono w-10 text-center text-[13px] font-bold"
+            style={{
+              color: wrongPts < 0 ? "var(--color-t-red)" : "var(--color-ink-3)",
+            }}
+          >
+            {wrongPts === 0 ? "off" : wrongPts}
+          </span>
+          <button
+            type="button"
+            onClick={() => bumpWrong(+1)}
+            disabled={busy || wrongPts >= 0}
+            className="t-mono grid h-6 w-6 place-items-center rounded-md border-[1.5px] border-[var(--color-line)] bg-white text-[12px] font-bold disabled:opacity-50"
+            aria-label="Decrease penalty (toward 0)"
+          >
+            +
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

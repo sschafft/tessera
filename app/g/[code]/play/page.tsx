@@ -133,6 +133,7 @@ export default async function PlayPage({ params }: PageProps) {
       rot: p.rot,
     })),
     accuracy: null,
+    live_score: null,
     test_enabled: pairRound?.test_enabled ?? false,
     briefs_revealed: pairRound?.briefs_revealed ?? false,
     brief: myBrief

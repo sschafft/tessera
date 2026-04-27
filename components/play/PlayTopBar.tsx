@@ -8,7 +8,8 @@ import type { TileColor } from "@/components/canvas/Tile";
 
 export interface PlayTopBarProps {
   code: string;
-  role: Role;
+  /** Null while the player is in the lobby with no role assigned. */
+  role: Role | null;
   partner: {
     name: string;
     color: TileColor;
@@ -42,7 +43,16 @@ export function PlayTopBar({
         <span className="t-mono text-[12px] text-[var(--color-ink-3)]">
           game · {code}
         </span>
-        <RoleChip role={role} />
+        {role ? (
+          <RoleChip role={role} />
+        ) : (
+          <span
+            className="t-mono rounded-full bg-[var(--color-paper-2)] px-2.5 py-1 text-[11px] font-bold text-[var(--color-ink-3)]"
+            aria-label="Awaiting role assignment"
+          >
+            in lobby
+          </span>
+        )}
       </div>
       <div className="flex items-center gap-3">
         <span

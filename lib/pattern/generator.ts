@@ -80,11 +80,13 @@ export function generatePattern({
   const rng = makeRng(seed);
   const grid = gridOverride ?? gridSizeFor(lvl);
 
-  // Pick subsets of shapes + colors for this pattern. Color count comes
-  // from the shared palette helper so the builder's tray and the goal
-  // pattern always agree on the active palette.
+  // Pick subsets of shapes + colors for this pattern. Colors are NOT
+  // shuffled — the goal pattern uses the FIRST N colours of
+  // BUILDER_COLORS so the builder's palette (also first N) and the
+  // goal stay in sync. Shapes can shuffle since the builder always
+  // has access to all four anyway.
   const shapes = shuffle(rng, BUILDER_SHAPES).slice(0, profile.shapes);
-  const colors = shuffle(rng, BUILDER_COLORS).slice(0, paletteColorCount(lvl));
+  const colors = BUILDER_COLORS.slice(0, paletteColorCount(lvl));
 
   const targetCount = pickInt(rng, profile.pieces[0], profile.pieces[1]);
 

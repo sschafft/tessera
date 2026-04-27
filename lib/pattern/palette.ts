@@ -9,7 +9,9 @@ import type { TileColor, TileShape } from "@/components/canvas/Tile";
  * complexity 1-3 only the first few colors are used in goal patterns
  * and shown to the builder.
  */
-export const BUILDER_SHAPES: TileShape[] = ["sq", "tri-up", "rhomb", "hex"];
+// Hexagons render ~identical at 0/90/180/270° — replaced with the
+// trapezoid which has a clearly different orientation at every step.
+export const BUILDER_SHAPES: TileShape[] = ["sq", "tri-up", "rhomb", "trap"];
 
 export const BUILDER_COLORS: TileColor[] = [
   "red",

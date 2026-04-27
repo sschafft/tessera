@@ -68,9 +68,18 @@ export function MasterLobby({
         </span>
       </div>
 
-      {(pollError || actionError) && (
+      {actionError && (
         <p className="px-5 pb-2 text-[11px] text-[var(--color-t-red)]">
-          {actionError ?? pollError}
+          {actionError}
+        </p>
+      )}
+      {pollError && !actionError && (
+        <p className="px-5 pb-2 text-[11px] text-[var(--color-ink-3)]">
+          {pollError.includes("400") ||
+          pollError.includes("401") ||
+          pollError.includes("403")
+            ? "Reconnecting to the game…"
+            : "Couldn't refresh the lobby — retrying."}
         </p>
       )}
 

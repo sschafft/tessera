@@ -75,6 +75,18 @@ export interface PlayState {
   placements: PlacedPiece[];
   /** Server-computed accuracy gauge when test_enabled is true. */
   accuracy: { correct: number; total: number } | null;
+  /**
+   * Live-recomputed score against the current placements + scoring
+   * config. Surfaced to builder + guider as the score tally chip
+   * once test_enabled is on.
+   */
+  live_score: {
+    score: number;
+    correct: number;
+    wrong: number;
+    total: number;
+    penalty_applied: boolean;
+  } | null;
   test_enabled: boolean;
   briefs_revealed: boolean;
   brief: BriefSummary | null;
@@ -234,8 +246,16 @@ export function PlayContent({ code, initial }: PlayContentProps) {
         {renderBody(state)}
       </main>
       {error && (
-        <p className="px-6 py-2 text-[11px] text-[var(--color-t-red)]">
-          poll error · {error}
+        <p className="px-6 py-2 text-[11px] text-[var(--color-ink-3)]">
+          {/* User-facing copy that doesn't leak the raw HTTP status —
+              auth-related codes (400/401/403) are usually a session
+              hiccup that resolves on next poll. Other codes might mean
+              the round is mid-rebuild. */}
+          {error.includes("400") ||
+          error.includes("401") ||
+          error.includes("403")
+            ? "Reconnecting…"
+            : "Couldn't reach the game right now — retrying."}
         </p>
       )}
     </div>
@@ -258,6 +278,7 @@ function renderBody(state: PlayState) {
         workshopName={state.workshop_name}
         videoCallUrl={state.video_call_url}
         whiteboardUrl={state.whiteboard_url}
+        roundInFlight={state.round?.status === "running"}
       />
     );
   }
@@ -276,6 +297,9 @@ function roleLabel(r: PlayRole) {
     case "observer":
       return "Observer" as const;
     default:
-      return "Builder" as const;
+      // Lobby — no role assigned yet. Surface a neutral pill instead
+      // of defaulting to "Builder" (which lied to players in
+      // gm_picks mode).
+      return null;
   }
 }

@@ -68,6 +68,29 @@ export function GuiderView({ state }: GuiderViewProps) {
         >
           ● THE GOAL · only you see this
         </span>
+        {state.live_score && (
+          <span
+            className="t-mono absolute -right-2 -top-4 z-10 rounded-full px-3 py-1 text-[11px] font-bold"
+            style={{
+              background:
+                state.live_score.score > 0
+                  ? "var(--color-tint-green)"
+                  : "var(--color-paper-2)",
+              color:
+                state.live_score.score > 0
+                  ? "var(--color-t-green)"
+                  : "var(--color-ink-2)",
+              boxShadow:
+                state.live_score.score > 0
+                  ? "inset 0 0 0 1.5px var(--color-t-green)"
+                  : "inset 0 0 0 1.5px var(--color-line)",
+            }}
+            aria-label={`Builder score ${state.live_score.score}, ${state.live_score.correct} of ${state.live_score.total} correct`}
+          >
+            ★ {state.live_score.score} pts · {state.live_score.correct} /{" "}
+            {state.live_score.total}
+          </span>
+        )}
         <PlayCanvas
           pieces={state.goal}
           complexity={state.round.complexity}

@@ -48,8 +48,11 @@ export function BriefEnvelope({
         onClick={handleOpen}
         className="t-envelope text-left"
         style={{
-          width: 280,
-          paddingTop: 36,
+          width: 320,
+          paddingTop: 60,
+          paddingLeft: 20,
+          paddingRight: 20,
+          paddingBottom: 18,
           cursor: "pointer",
           border: emphasize
             ? "2px solid var(--color-t-red)"
@@ -62,12 +65,25 @@ export function BriefEnvelope({
             : undefined,
         }}
       >
-        <div className="t-envelope__seal">{role[0]?.toUpperCase()}</div>
+        <div
+          className="t-envelope__seal"
+          style={{
+            // Bigger, more legible seal — was ~32px, now 56px to match
+            // the chunky brand mark and read across the canvas.
+            width: 56,
+            height: 56,
+            fontSize: 24,
+            top: -16,
+            left: -16,
+          }}
+        >
+          {role[0]?.toUpperCase()}
+        </div>
         <div style={{ marginTop: 6 }}>
           <div
             className="t-mono"
             style={{
-              fontSize: 10,
+              fontSize: 11,
               color: "var(--color-ink-3)",
               letterSpacing: ".12em",
             }}
@@ -76,15 +92,15 @@ export function BriefEnvelope({
           </div>
           <div
             className="t-display"
-            style={{ fontSize: 18, fontWeight: 700, marginTop: 2 }}
+            style={{ fontSize: 22, fontWeight: 700, marginTop: 4 }}
           >
             {roleLabel}&apos;s brief
           </div>
           <div
             style={{
-              fontSize: 12,
+              fontSize: 13,
               color: "var(--color-ink-2)",
-              marginTop: 4,
+              marginTop: 6,
             }}
           >
             Tap to open · keep secret

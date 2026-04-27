@@ -174,15 +174,6 @@ export function TopBarControls({
           >
             {busy ? "Ending…" : "End round"}
           </button>
-        ) : isRoundEnded && allRoundsDone ? (
-          <button
-            type="button"
-            className="t-btn t-btn--primary t-btn--sm disabled:opacity-50"
-            onClick={onEndGame}
-            disabled={busy}
-          >
-            {busy ? "Ending…" : "End game"}
-          </button>
         ) : (
           <div className="flex items-center gap-1.5">
             <div
@@ -221,12 +212,16 @@ export function TopBarControls({
               disabled={!canStart || busy}
               title={canStart ? undefined : "Allocate at least one pair first."}
             >
-              {busy ? "Starting…" : `Start round ${nextIdx}`}
+              {busy
+                ? "Starting…"
+                : isRoundEnded
+                  ? `Start round ${nextIdx}`
+                  : `Start round ${nextIdx}`}
             </button>
           </div>
         )}
 
-        {!gameEnded && !isRunning && !isRoundEnded && (
+        {!gameEnded && !isRunning && (
           <button
             type="button"
             onClick={onEndGame}

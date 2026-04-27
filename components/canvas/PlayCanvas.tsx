@@ -43,8 +43,10 @@ export function PlayCanvas({
         position: "relative",
         width,
         height,
-        background: "var(--color-paper)",
+        background: "#fff",
         borderRadius: "var(--radius-lg)",
+        boxShadow:
+          "0 1px 0 rgba(0,0,0,0.04), 0 6px 14px rgba(60,40,10,0.10), inset 0 0 0 1.5px rgba(60,40,10,0.06)",
         overflow: "hidden",
       }}
     >

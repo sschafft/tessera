@@ -48,7 +48,7 @@ export function JoinForm({ code, teamMode, defaultName }: JoinFormProps) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           display_name: displayName.trim(),
-          role: teamMode === "players_pick" ? roleLabelToApi[role] : undefined,
+          role: undefined,
         }),
       });
       if (!res.ok) {
@@ -127,11 +127,8 @@ export function JoinForm({ code, teamMode, defaultName }: JoinFormProps) {
         />
       </Field>
 
-      {teamMode === "players_pick" ? (
-        <Field label="Pick your role">
-          <Segmented options={ROLE_OPTIONS} value={role} onChange={setRole} />
-        </Field>
-      ) : (
+      {/* Role picker removed — game master always assigns roles. */}
+      {false ? null : (
         <div
           className="flex items-start gap-3 rounded-[14px] px-4 py-3.5"
           style={{ background: "var(--color-tint-yellow)" }}

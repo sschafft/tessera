@@ -91,7 +91,9 @@ function HostForm() {
   const [workshopName, setWorkshopName] = useState("");
   const [videoCallUrl, setVideoCallUrl] = useState("");
   const [whiteboardUrl, setWhiteboardUrl] = useState("");
-  const [team, setTeam] = useState<TeamLabel>("Players pick");
+  // Always gm_picks — kept as a constant so the create payload still
+  // has the field server-side.
+  const team: TeamLabel = "Game master picks";
   const [complexity, setComplexity] = useState(5);
   const [builderBrief, setBuilderBrief] = useState(true);
   const [guiderBrief, setGuiderBrief] = useState(true);
@@ -282,13 +284,8 @@ function HostForm() {
         </Field>
       </div>
 
-      <Field label="Team assignment">
-        <Segmented
-          options={TEAM_OPTIONS}
-          value={team}
-          onChange={setTeam}
-        />
-      </Field>
+      {/* Team assignment is always GM-picks now — players_pick added
+          UX complexity without value, removed in v1.2. */}
 
       <Field
         label={`Complexity · ${complexity}/8`}

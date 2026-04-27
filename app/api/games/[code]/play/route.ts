@@ -175,18 +175,40 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     rot: p.rot,
   }));
   let accuracy: { correct: number; total: number } | null = null;
+  let liveScore:
+    | {
+        score: number;
+        correct: number;
+        wrong: number;
+        total: number;
+        penalty_applied: boolean;
+      }
+    | null = null;
   if (testEnabled && pairRound) {
     const goalPieces = (pairRound.goal_pattern as GoalPattern) ?? [];
     const goalKey = (g: { shape: string; color: string; q: number; r: number; rot: number }) =>
       `${g.shape}|${g.color}|${g.q},${g.r}|${g.rot}`;
     const goalSet = new Set(goalPieces.map(goalKey));
     let correctCount = 0;
+    let wrongCount = 0;
     placementsWithCorrect = placementsWithCorrect.map((p) => {
       const ok = goalSet.has(goalKey(p));
       if (ok) correctCount += 1;
+      else wrongCount += 1;
       return { ...p, correct: ok };
     });
     accuracy = { correct: correctCount, total: goalPieces.length };
+    const correctPts = game.scoring_correct_pts;
+    const wrongPts = game.scoring_wrong_pts;
+    const penaltyApplied = wrongCount > 0 && wrongPts !== 0;
+    const scoreVal = correctPts * correctCount + (penaltyApplied ? wrongPts : 0);
+    liveScore = {
+      score: scoreVal,
+      correct: correctCount,
+      wrong: wrongCount,
+      total: goalPieces.length,
+      penalty_applied: penaltyApplied,
+    };
   }
 
   return NextResponse.json({
@@ -229,6 +251,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       : 0,
     placements: placementsWithCorrect,
     accuracy,
+    live_score: liveScore,
     test_enabled: testEnabled,
     briefs_revealed: pairRound?.briefs_revealed ?? false,
     // Prototype glimpse — when active, builder gets a degraded preview.

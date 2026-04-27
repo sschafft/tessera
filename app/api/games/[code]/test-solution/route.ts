@@ -75,6 +75,12 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
     score: breakdown.score,
   });
 
+  // Per-piece correctness map keyed by placement id, so the BuilderView
+  // can highlight green/red instantly without waiting for the next /play
+  // refetch (which has realtime broadcast latency).
+  const correctness: Record<string, boolean> = {};
+  for (const sp of breakdown.placements) correctness[sp.id] = sp.correct;
+
   return NextResponse.json({
     ok: true,
     correct: breakdown.correct,
@@ -84,5 +90,7 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
     penalty_applied: breakdown.penaltyApplied,
     correct_pts: game.scoring_correct_pts,
     wrong_pts: game.scoring_wrong_pts,
+    correctness,
+    tested_at: new Date().toISOString(),
   });
 }

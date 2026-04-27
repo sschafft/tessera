@@ -88,12 +88,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
   const nextIndex =
     (latest && latest.status === "ended" ? latest.index : 0) + 1;
-  if (nextIndex > game.round_count) {
-    return NextResponse.json(
-      { error: "all_rounds_complete" },
-      { status: 409 },
-    );
-  }
+  // round_count is a *planned* count — the GM can keep going past it
+  // if the room is still engaged. No hard cap server-side.
 
   const complexity = clamp(body.complexity ?? game.default_complexity, 1, 8);
   const duration =

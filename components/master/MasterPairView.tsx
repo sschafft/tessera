@@ -169,7 +169,7 @@ export function MasterPairView({
           </CanvasScale>
         </div>
         <div className="t-card flex flex-col items-center gap-1.5 p-2">
-          <PaneHeader title="Goal" subtitle="only the guider sees this" color="blue" />
+          <PaneHeader title="Goal" subtitle="GM + guider only" color="blue" />
           <CanvasScale>
             <PlayCanvas
               pieces={snap?.goal ?? []}

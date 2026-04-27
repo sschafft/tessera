@@ -74,6 +74,20 @@ function BuilderInteractive({ state }: { state: PlayState }) {
   const [sharingProgress, setSharingProgress] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<TestResult | null>(null);
+  /**
+   * Per-placement correctness map keyed by id. Populated from the
+   * /test-solution response so the green/red marks fire instantly
+   * (no realtime-broadcast latency). Cleared on any mutation so
+   * pieces placed AFTER the last test stay neutral until the builder
+   * tests again — fixes the "everything I add is shown as wrong"
+   * confusion.
+   */
+  const [localCorrect, setLocalCorrect] = useState<Map<string, boolean>>(
+    () => new Map(),
+  );
+  const clearLocalCorrect = useCallback(() => {
+    setLocalCorrect((prev) => (prev.size === 0 ? prev : new Map()));
+  }, []);
 
   // Snap selected color to a value in the active palette if complexity
   // shrinks the palette mid-round (super-power side-effect).
@@ -106,13 +120,25 @@ function BuilderInteractive({ state }: { state: PlayState }) {
   }, [state.placements, optimisticPatches]);
 
   // Server placements + local optimistic adds, minus locally-pending
-  // deletes, with optimistic patches merged on top.
-  const visiblePieces = [...state.placements, ...optimistic]
-    .filter((p) => !pendingDeletes.has(p.id))
-    .map((p) => {
-      const patch = optimisticPatches.get(p.id);
-      return patch ? { ...p, ...patch } : p;
-    });
+  // deletes, with optimistic patches merged on top. The server's
+  // `correct` flag is intentionally ignored — we use the local
+  // localCorrect map (populated only by the latest Test solution)
+  // so pieces added after testing stay neutral until re-tested.
+  // Memoised so re-renders triggered by unrelated state (cursor
+  // position inside InteractiveCanvas, etc.) don't churn the
+  // placements array and cascade through every Tile.
+  const visiblePieces = useMemo(
+    () =>
+      [...state.placements, ...optimistic]
+        .filter((p) => !pendingDeletes.has(p.id))
+        .map((p) => {
+          const patch = optimisticPatches.get(p.id);
+          const merged = patch ? { ...p, ...patch } : p;
+          const localFlag = localCorrect.get(merged.id);
+          return { ...merged, correct: localFlag };
+        }),
+    [state.placements, optimistic, pendingDeletes, optimisticPatches, localCorrect],
+  );
   const editingPiece =
     editingId === null
       ? null
@@ -161,6 +187,7 @@ function BuilderInteractive({ state }: { state: PlayState }) {
         rot: selectedRotation,
       };
       setOptimistic((prev) => [...prev, optimisticPiece]);
+      clearLocalCorrect();
       setError(null);
 
       try {
@@ -193,6 +220,7 @@ function BuilderInteractive({ state }: { state: PlayState }) {
       if (!editingPiece) return;
       const id = editingPiece.id;
       setError(null);
+      clearLocalCorrect();
       // Optimistic move via patch — piece appears in the new cell
       // immediately while the PATCH is still in flight.
       setOptimisticPatches((prev) => {
@@ -243,6 +271,7 @@ function BuilderInteractive({ state }: { state: PlayState }) {
     const newRot = (editingPiece.rot + 1) % 4;
     const id = editingPiece.id;
     setError(null);
+    clearLocalCorrect();
     // Optimistic: apply rotation locally first.
     setOptimisticPatches((prev) => {
       const next = new Map(prev);
@@ -284,6 +313,7 @@ function BuilderInteractive({ state }: { state: PlayState }) {
         rot: selectedRotation,
       };
       setError(null);
+      clearLocalCorrect();
       // Optimistic: apply locally.
       setOptimisticPatches((prev) => {
         const next = new Map(prev);
@@ -331,6 +361,7 @@ function BuilderInteractive({ state }: { state: PlayState }) {
   const deleteEditing = useCallback(async () => {
     if (!editingPiece) return;
     if (editingPiece.id.startsWith("temp-")) return;
+    clearLocalCorrect();
     setPendingDeletes((prev) => new Set(prev).add(editingPiece.id));
     setError(null);
     try {
@@ -388,6 +419,7 @@ function BuilderInteractive({ state }: { state: PlayState }) {
     setError(null);
     setEditingId(null);
     setSelectedShape(null);
+    clearLocalCorrect();
     try {
       const res = await fetch(`/api/games/${state.code}/placements`, {
         method: "DELETE",
@@ -426,6 +458,8 @@ function BuilderInteractive({ state }: { state: PlayState }) {
         penalty_applied: boolean;
         correct_pts: number;
         wrong_pts: number;
+        correctness?: Record<string, boolean>;
+        tested_at?: string;
       };
       setTestResult({
         correct: j.correct,
@@ -437,6 +471,12 @@ function BuilderInteractive({ state }: { state: PlayState }) {
         wrongPts: j.wrong_pts,
         at: Date.now(),
       });
+      // Apply per-piece highlights instantly from the response. The
+      // realtime broadcast also fires but this avoids the visible
+      // wait.
+      if (j.correctness) {
+        setLocalCorrect(new Map(Object.entries(j.correctness)));
+      }
       if (state.sound_on) playTestSolution(j.correct);
     } catch (err) {
       setError(err instanceof Error ? err.message : "test failed");
@@ -583,9 +623,27 @@ function BuilderInteractive({ state }: { state: PlayState }) {
                 ◉ {visiblePieces.length} / {state.goal_count} placed
               </span>
             )}
-            {state.test_enabled && state.accuracy && (
-              <span className="t-mono rounded-full bg-[var(--color-paper-2)] px-3 py-1 text-[11px] font-bold">
-                ✓ {state.accuracy.correct} / {state.accuracy.total} correct
+            {state.live_score && (
+              <span
+                className="t-mono rounded-full px-3 py-1 text-[11px] font-bold"
+                style={{
+                  background:
+                    state.live_score.score > 0
+                      ? "var(--color-tint-green)"
+                      : "var(--color-paper-2)",
+                  color:
+                    state.live_score.score > 0
+                      ? "var(--color-t-green)"
+                      : "var(--color-ink-2)",
+                  boxShadow:
+                    state.live_score.score > 0
+                      ? "inset 0 0 0 1.5px var(--color-t-green)"
+                      : "inset 0 0 0 1.5px var(--color-line)",
+                }}
+                aria-label={`Score ${state.live_score.score}, ${state.live_score.correct} of ${state.live_score.total} correct`}
+              >
+                ★ {state.live_score.score} pts · {state.live_score.correct} /{" "}
+                {state.live_score.total}
               </span>
             )}
             {state.shares_remaining > 0 && (
@@ -593,14 +651,18 @@ function BuilderInteractive({ state }: { state: PlayState }) {
                 type="button"
                 onClick={shareProgress}
                 disabled={sharingProgress}
-                className="t-mono rounded-full bg-[var(--color-tint-orange)] px-3 py-1 text-[11px] font-bold text-[var(--color-t-orange)] disabled:opacity-50"
+                className="rounded-full px-4 py-1.5 text-[12px] font-bold disabled:opacity-50"
                 style={{
-                  boxShadow: "inset 0 0 0 1.5px var(--color-t-orange)",
+                  background: "var(--color-t-orange)",
+                  color: "#fff",
+                  boxShadow:
+                    "0 2px 0 rgba(0,0,0,.10), inset 0 -1px 0 rgba(0,0,0,.10)",
                 }}
+                title="Snap your current canvas to the guider so they can spot mistakes."
               >
                 {sharingProgress
                   ? "Sharing…"
-                  : `↻ Share progress (${state.shares_remaining})`}
+                  : `↻ Share progress with guider · ${state.shares_remaining} left`}
               </button>
             )}
             {visiblePieces.length > 0 && (
