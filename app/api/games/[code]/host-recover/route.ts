@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isValidGameCode } from "@/lib/game/code";
 import { mintSession } from "@/lib/auth/jwt";
 import { setSessionCookie } from "@/lib/auth/cookie";
-import { verifyHostToken } from "@/lib/auth/hostToken";
+import { verifyRecoveryToken } from "@/lib/auth/recoveryToken";
 import { getRepository } from "@/lib/game/getRepository";
 
 export const runtime = "nodejs";
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "game_not_found" }, { status: 404 });
   }
 
-  const ok = await verifyHostToken(body.token, game.host_token_hash);
+  const ok = await verifyRecoveryToken(body.token, game.host_token_hash);
   if (!ok) {
     return NextResponse.json({ error: "invalid_token" }, { status: 401 });
   }

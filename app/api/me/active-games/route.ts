@@ -20,30 +20,41 @@ export async function GET() {
   }
 
   const repo = getRepository();
-  const games: Array<{
-    code: string;
-    workshop_name: string;
-    role: string;
-    status: string;
-  }> = [];
 
-  for (const c of sessionCookies) {
-    try {
-      const claims = await verifySession(c.value);
+  // Parallelise the per-cookie verify + game lookup. A user with three
+  // active workshop cookies plus a couple of stale ones used to chain
+  // 5+ sequential round-trips on every home-page hit. Promise.all
+  // collapses that to one round-trip per dependent step (verify, then
+  // game lookup, both fanned out).
+  const verifications = await Promise.all(
+    sessionCookies.map(async (c) => {
+      try {
+        const claims = await verifySession(c.value);
+        return { claims };
+      } catch {
+        return null;
+      }
+    }),
+  );
+  const validClaims = verifications.flatMap((v) => (v ? [v.claims] : []));
+  if (validClaims.length === 0) {
+    return NextResponse.json({ games: [] });
+  }
+  const lookedUp = await Promise.all(
+    validClaims.map(async (claims) => {
       const game = await repo.findGameByCode(claims.code);
-      if (!game) continue;
-      if (game.id !== claims.game_id) continue;
-      if (game.status === "ended" || game.status === "purged") continue;
-      games.push({
+      if (!game) return null;
+      if (game.id !== claims.game_id) return null;
+      if (game.status === "ended" || game.status === "purged") return null;
+      return {
         code: game.code,
         workshop_name: game.workshop_name,
         role: claims.role,
         status: game.status,
-      });
-    } catch {
-      // Invalid JWT (expired, tampered, etc.) — skip silently.
-    }
-  }
+      };
+    }),
+  );
+  const games = lookedUp.filter((g): g is NonNullable<typeof g> => g !== null);
 
   return NextResponse.json({ games });
 }

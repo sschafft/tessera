@@ -8,9 +8,9 @@ import { colorFor } from "@/lib/game/colors";
 import { DuplicateNameError } from "@/lib/game/repository.memory";
 import { publishGameEvent } from "@/lib/realtime/publish";
 import {
-  generatePlayerToken,
-  hashPlayerToken,
-} from "@/lib/auth/playerToken";
+  generateRecoveryToken,
+  hashRecoveryToken,
+} from "@/lib/auth/recoveryToken";
 import type { ParticipantRole } from "@/lib/game/repository";
 
 export const runtime = "nodejs";
@@ -106,8 +106,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   // Hashed on the row; plain form is the user's lifeline if their
   // browser session is wiped (multi-tab cookie collision, browser
   // restart, mobile foreground swap, etc.).
-  const recoveryToken = generatePlayerToken();
-  const recoveryTokenHash = await hashPlayerToken(recoveryToken);
+  const recoveryToken = generateRecoveryToken();
+  const recoveryTokenHash = await hashRecoveryToken(recoveryToken);
 
   let participant;
   try {
