@@ -1,0 +1,96 @@
+{
+  "name": "tessera-playtest-orchestrator",
+  "description": "Spins up a 10-agent concurrent Tessera workshop: 1 GM + 3 builders + 3 guiders + 3 observers, each in its own Daytona container with its own Playwright context. Aggregates per-player findings + latency samples + scaling observations into a unified report. See docs/playtest/orchestrator.md.",
+  "workflow": {
+    "init_params": {
+      "tessera_url": "https://tessera.schaffters.com",
+      "scenario": {
+        "workshop_name": "Orchestrator playtest",
+        "complexity": 5,
+        "round_count": 1,
+        "round_duration_sec": 600,
+        "team_mode": "gm_picks",
+        "builder_brief_source": "library",
+        "guider_brief_source": "library",
+        "scoring_correct_pts": 10,
+        "scoring_wrong_pts": -1,
+        "trigger_super_powers": []
+      },
+      "roster": [
+        { "role": "gm",       "name": "Facilitator", "pair_idx": null },
+        { "role": "builder",  "name": "Avery",       "pair_idx": 0 },
+        { "role": "guider",   "name": "Bri",         "pair_idx": 0 },
+        { "role": "builder",  "name": "Cameron",     "pair_idx": 1 },
+        { "role": "guider",   "name": "Drew",        "pair_idx": 1 },
+        { "role": "builder",  "name": "Ellis",       "pair_idx": 2 },
+        { "role": "guider",   "name": "Finley",      "pair_idx": 2 },
+        { "role": "observer", "name": "Gray",        "pair_idx": 0 },
+        { "role": "observer", "name": "Harper",      "pair_idx": 1 },
+        { "role": "observer", "name": "Indigo",      "pair_idx": 2 }
+      ]
+    },
+    "step_configs": {
+      "create_game": {
+        "activity": "runbook",
+        "agent": "claude-code",
+        "model": "claude-haiku-4-5-20251001",
+        "instruction": "You are the **GM init agent**. Your only job is to create a Tessera game with the supplied scenario and emit the resulting code + host-recover URL so the orchestrator can hand them to the 10 player agents. You will exit immediately after creating the game — you do NOT run the round; the long-running GM player handles that.\n\n## Setup\n1. `npx --yes playwright install chromium`\n2. Open one Playwright context.\n\n## Steps\n1. Navigate to `{{tessera_url}}` (landing page).\n2. Click \"Host a game\". Fill the form:\n   - Workshop name: `{{scenario.workshop_name}}`\n   - Video call URL: `https://meet.example.com/orchestrator-playtest`\n   - Whiteboard URL: leave empty\n   - Team mode: `{{scenario.team_mode}}`\n   - Default complexity: `{{scenario.complexity}}`\n   - Round count: `{{scenario.round_count}}`\n   - Builder brief source: `{{scenario.builder_brief_source}}`\n   - Guider brief source: `{{scenario.guider_brief_source}}`\n   - Sound on: yes\n3. Submit. The redirect URL will be `{{tessera_url}}/g/<CODE>/master`. Capture the `<CODE>` (6 alphanumeric chars).\n4. The page should display a host-recover URL (or you can construct it: `{{tessera_url}}/host-recover/<CODE>`). Capture it.\n5. **Do NOT click Start round.** That's the GM player's job, not yours.\n6. Adjust scoring tile to `correct_pts={{scenario.scoring_correct_pts}}, wrong_pts={{scenario.scoring_wrong_pts}}`.\n7. Verify scoring persisted (the values should stick after refresh).\n\n## Output\n\nThe LAST thing you print MUST be a single JSON object:\n\n```json\n{\n  \"code\": \"ABC-123\",\n  \"host_recover_url\": \"https://.../host-recover/ABC-123\",\n  \"created_at\": \"ISO8601\"\n}\n```\n\nNothing else after that line. The orchestrator extracts this and feeds the 10 player agents.",
+        "snapshot": "prism-playwright",
+        "timeout_sec": 600,
+        "memory": "4G",
+        "cpus": 2,
+        "network_enabled": true,
+        "mcp_servers": {
+          "playwright": {
+            "command": "npx",
+            "args": ["@playwright/mcp@latest", "--browser", "chromium"]
+          }
+        }
+      },
+      "extract_code": {
+        "activity": "extract_from_trajectories",
+        "depends_on": ["create_game"],
+        "extract_paths": [
+          "steps.create_game.outputs.json.code",
+          "steps.create_game.outputs.json.host_recover_url"
+        ],
+        "include_metadata": false,
+        "flatten_results": true
+      },
+      "simulate": {
+        "activity": "list_emit_await",
+        "depends_on": ["extract_code"],
+        "items_path": "init_params.roster",
+        "child_workflow_name": "tessera-playtest-player",
+        "child_init_params": {
+          "tessera_url": "{{init_params.tessera_url}}",
+          "code": "{{steps.extract_code.outputs.results[0]}}",
+          "host_recover_url": "{{steps.extract_code.outputs.results[1]}}",
+          "scenario": "{{init_params.scenario}}"
+        },
+        "item_param_name": "assignment",
+        "max_concurrency": 10,
+        "continue_on_error": true,
+        "timeout_seconds": 2100
+      },
+      "collect": {
+        "activity": "extract_from_trajectories",
+        "depends_on": ["simulate"],
+        "trajectory_ids_path": "steps.simulate.outputs.child_trajectory_ids",
+        "extract_paths": ["steps.play.outputs.json"],
+        "include_metadata": true,
+        "flatten_results": false
+      },
+      "synthesize": {
+        "activity": "simple_judge",
+        "depends_on": ["collect"],
+        "model": "claude-opus-4-7",
+        "temperature": 0.2,
+        "output_format": "json",
+        "explanation_required": true,
+        "criteria": "You are synthesising the per-player playtest reports from a 10-agent concurrent Tessera workshop into a single executive report.\n\nInput: an array of per-player JSON reports (see schema in tessera-playtest-player). Mix of roles: 1 GM, 3 builders, 3 guiders, 3 observers.\n\nDeliverable: a single JSON object matching this schema:\n\n```json\n{\n  \"scenario_id\": \"orchestrator-c5-1round\",\n  \"duration_sec\": <int from longest session>,\n  \"outcome\": \"passed | partial | failed\",\n  \"executive_summary\": \"<one paragraph — what happened, what's working, what's broken>\",\n  \"per_role_summary\": {\n    \"gm\": \"...\",\n    \"builder\": \"...\",\n    \"guider\": \"...\",\n    \"observer\": \"...\"\n  },\n  \"concurrency_findings\": [\"<latency or fan-out observation>\", ...],\n  \"scaling_findings\": [\"<server-side perf or load observation>\", ...],\n  \"blockers\": [\"<must-fix items, severity=blocker>\"],\n  \"majors\": [\"<should-fix items>\"],\n  \"minors\": [\"<nice-to-fix>\"],\n  \"quick_wins\": [\"<low-effort high-impact>\"],\n  \"design_calls\": [\"<items needing user judgment before implementing>\"],\n  \"tech_debt\": [\"<deeper structural issues to track>\"]\n}\n```\n\nRules:\n- **Dedupe across players.** If 3 builders all flag 'place-piece feels laggy', that's one finding with 3 corroborators, not three.\n- **Prefer specific over generic.** 'Builder Avery saw a 250ms gap between click and piece visible' beats 'feels slow'.\n- **Roll up latency samples.** Compute approximate p50/p95 across each role's `latency_samples_ms` arrays. Surface as `concurrency_findings`.\n- **Sort blockers/majors/minors by impact.** A finding that breaks the demo > a finding that breaks one observer's edge case.\n- **Outcome rules:** `passed` = no blockers, ≤2 majors. `partial` = no blockers, 3+ majors OR any console error. `failed` = ≥1 blocker OR ≥1 player did not finish their session.\n- **No padding.** If a role had nothing notable, the role's summary is one sentence, not three.\n\nThe LAST thing in your output MUST be the single JSON object on its own (no prose after it). Put any chain-of-thought ABOVE that JSON."
+      }
+    },
+    "steps": ["create_game", "extract_code", "simulate", "collect", "synthesize"]
+  }
+}

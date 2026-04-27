@@ -1,0 +1,26 @@
+{
+  "name": "tessera-tl",
+  "description": "Adversarial principal-tech-lead review of the Tessera codebase. Clones the repo, reads PRD/TDD/design_patterns.md, walks the source for architectural drift, performance hot spots, testing gaps, security smells, and code smells. Returns findings as structured JSON. No browser; pure code review.",
+  "workflow": {
+    "init_params": {
+      "branch": "main",
+      "focus_areas": [],
+      "include_tests": true,
+      "max_findings": 30
+    },
+    "step_configs": {
+      "review": {
+        "activity": "runbook",
+        "agent": "claude-code",
+        "model": "claude-opus-4-7",
+        "instruction": "You are an adversarial principal-level tech lead reviewing the Tessera codebase. Your goal is to surface real problems — architectural drift, performance hot spots, testing gaps, security smells, code-smell duplication — that the team won't catch through normal PR review. Do NOT pad the review with 'looks good' notes; if a section is clean, skip it.\n\nSetup (run these first, in order):\n1. `git clone https://github.com/sschafft/tessera.git /tmp/repo`\n2. `cd /tmp/repo && git checkout {{branch}}`\n3. `npm install --no-audit --no-fund`\n4. If `{{include_tests}}` is true, capture the output of:\n   - `npx tsc --noEmit > /tmp/tsc.log 2>&1 || true`\n   - `npm run lint > /tmp/lint.log 2>&1 || true`\n   - `npx next build > /tmp/build.log 2>&1 || true`\n   These logs are evidence, not gates — keep going regardless of pass/fail.\n5. Capture the head commit: `git rev-parse HEAD > /tmp/sha.txt`.\n\nRequired reading (do this before walking the source):\n1. `/tmp/repo/design/PRD.md` — product intent + non-goals.\n2. `/tmp/repo/design/TDD.md` — technical design + endpoint surface.\n3. `/tmp/repo/design/design_patterns.md` — the canonical / emerging / deprecated patterns. This is your 'source of truth' for what counts as drift. Cite section names when flagging violations.\n\nFocus areas (treat as priority hints, not exclusions): {{focus_areas}}. Empty array means whole codebase.\n\nWalk the codebase looking for:\n1. **Architecture drift** — code that violates a canonical pattern in design_patterns.md.\n2. **Performance** — N+1 queries, unmemoised hot loops, redundant re-renders, oversized payloads, missing DB indices, sync work in render path.\n3. **Realtime correctness** — race conditions, stale-state UI, broadcasts that won't reconcile, optimistic patches that leak.\n4. **Security** — input validation gaps, XSS via dangerouslySetInnerHTML, missing role checks on routes, SSRF in user-supplied URL fields, secrets in client bundles.\n5. **Testing gaps** — features without verification paths. The codebase currently has zero unit/integration tests; flag the highest-leverage places to add them first.\n6. **Code smell** — duplicated logic across files, dead code, inconsistent naming, leaky abstractions, premature abstractions.\n7. **Docs drift** — TDD/PRD claims that no longer match shipped code.\n\nFor each finding:\n- Be specific. `components/play/BuilderView.tsx:177-216` beats 'Builder logic could be cleaner'.\n- Cite the design_patterns.md section the code violates (the `violation_of` field). If the relevant pattern doesn't exist there yet, add it to `patterns_to_add[]` instead.\n- Mark severity honestly. Most findings should be minor / nit. Reserve critical for things that could cause data loss, security breach, or 'this will fall over at >4 concurrent pairs'.\n- If the fix is unambiguous, include a unified diff in `diff`. Otherwise leave `diff` null and write the change as plain text in `suggestion`.\n\nCap output at {{max_findings}} findings. If you have more, triage to highest impact and note 'additional findings omitted — re-run with higher max_findings' in `summary`.\n\nThe final action of your run MUST be a single JSON object printed to stdout matching this schema:\n\n```json\n{\n  \"branch\": \"<git ref reviewed>\",\n  \"commit_sha\": \"<head sha>\",\n  \"summary\": \"<one paragraph executive summary>\",\n  \"findings\": [\n    {\n      \"severity\": \"critical | major | minor | nit\",\n      \"category\": \"architecture | performance | testing | security | code-smell | docs-drift\",\n      \"title\": \"Short headline\",\n      \"files\": [\"path/to/file.ts:line-line\"],\n      \"detail\": \"What's wrong and why it matters.\",\n      \"violation_of\": \"design_patterns.md > Section name | null\",\n      \"suggestion\": \"Concrete change to make.\",\n      \"diff\": \"<unified diff or null>\"\n    }\n  ],\n  \"patterns_to_promote\": [\n    { \"name\": \"...\", \"from\": \"emerging\", \"to\": \"canonical\", \"rationale\": \"...\" }\n  ],\n  \"patterns_to_add\": [\n    { \"name\": \"...\", \"where_used\": [\"file:line\"], \"rationale\": \"...\" }\n  ],\n  \"tech_debt_register\": [\n    { \"title\": \"...\", \"owner\": \"open\", \"estimated_effort\": \"S | M | L | XL\" }\n  ]\n}\n```\n\nAnything else (notes, scratch work) goes ABOVE the final JSON. The parser reads only the LAST valid JSON object on stdout. Do not wrap the JSON in markdown code fences in the final block.",
+        "snapshot": "prism-base",
+        "timeout_sec": 1800,
+        "memory": "8G",
+        "cpus": 4,
+        "network_enabled": true
+      }
+    },
+    "steps": ["review"]
+  }
+}

@@ -1,0 +1,253 @@
+name: tessera-tl review
+
+# Runs the adversarial tech-lead review (jetty workflow `tessera-tl`) on
+# every PR open + push and posts findings as a PR comment. The review
+# clones the head ref, reads design/PRD.md + design/TDD.md +
+# design/design_patterns.md as the source of truth, then surfaces
+# architectural drift, perf hot spots, testing gaps, and code smells.
+#
+# Skip the run by including `[skip-tl]` in the PR title or by marking the
+# PR as draft.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to review"
+        default: "main"
+      max_findings:
+        description: "Cap on findings"
+        default: "25"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    if: ${{ github.event.pull_request.draft != true && !contains(github.event.pull_request.title, '[skip-tl]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Resolve target branch
+        id: target
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "branch=${{ inputs.branch }}" >> "$GITHUB_OUTPUT"
+            echo "max_findings=${{ inputs.max_findings }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "branch=${{ github.head_ref }}" >> "$GITHUB_OUTPUT"
+            echo "max_findings=25" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Trigger tessera-tl
+        id: trigger
+        env:
+          JETTY_API_TOKEN: ${{ secrets.JETTY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          INIT=$(jq -nc \
+            --arg branch "${{ steps.target.outputs.branch }}" \
+            --argjson max_findings "${{ steps.target.outputs.max_findings }}" \
+            '{
+              init_params: {
+                branch: $branch,
+                focus_areas: [],
+                include_tests: true,
+                max_findings: $max_findings
+              }
+            }')
+          echo "init=$INIT"
+          RESPONSE=$(curl --fail-with-body -sS -X POST \
+            -H "Authorization: Bearer $JETTY_API_TOKEN" \
+            -F "init_params=$INIT" \
+            "https://flows-api.jetty.io/api/v1/run/jettyio/tessera-tl")
+          echo "raw=$RESPONSE"
+          TRAJ=$(echo "$RESPONSE" | jq -r '.trajectory_id // .id // .trajectoryId // empty')
+          if [[ -z "$TRAJ" ]]; then
+            echo "::error::Could not extract trajectory_id from Jetty response."
+            echo "$RESPONSE"
+            exit 1
+          fi
+          echo "trajectory_id=$TRAJ" >> "$GITHUB_OUTPUT"
+          echo "Trajectory: $TRAJ"
+
+      - name: Wait for completion
+        id: wait
+        env:
+          JETTY_API_TOKEN: ${{ secrets.JETTY_API_TOKEN }}
+          TRAJ: ${{ steps.trigger.outputs.trajectory_id }}
+        timeout-minutes: 35
+        run: |
+          set -euo pipefail
+          while true; do
+            STATUS=$(curl --fail-with-body -sS \
+              -H "Authorization: Bearer $JETTY_API_TOKEN" \
+              "https://flows-api.jetty.io/api/v1/db/trajectory/jettyio/tessera-tl/$TRAJ/status" \
+              | jq -r '.status // .state // "unknown"')
+            echo "status=$STATUS"
+            case "$STATUS" in
+              completed|succeeded|success|done) break ;;
+              failed|error|cancelled|canceled) echo "::error::Jetty trajectory $TRAJ ended with status=$STATUS"; exit 1 ;;
+              *) sleep 20 ;;
+            esac
+          done
+
+      - name: Fetch result
+        id: result
+        env:
+          JETTY_API_TOKEN: ${{ secrets.JETTY_API_TOKEN }}
+          TRAJ: ${{ steps.trigger.outputs.trajectory_id }}
+        run: |
+          set -euo pipefail
+          # Fetch the trajectory record, then pull the agent's stdout log.
+          # The runbook agent prints a JSON object as the LAST block; we
+          # extract that with python (handles multi-line JSON safely).
+          curl --fail-with-body -sS \
+            -H "Authorization: Bearer $JETTY_API_TOKEN" \
+            "https://flows-api.jetty.io/api/v1/db/trajectory/jettyio/tessera-tl/$TRAJ" \
+            > /tmp/traj.json
+
+          # The agent's full claude-code log lives under /file/...
+          curl --fail-with-body -sS \
+            -H "Authorization: Bearer $JETTY_API_TOKEN" \
+            "https://flows-api.jetty.io/api/v1/file/jettyio/tessera-tl/0000/$TRAJ.runbook.0000.agent_claude-code.txt" \
+            > /tmp/agent.log || true
+
+          python3 <<'PY' > /tmp/findings.json
+          import json, re, sys, pathlib
+          # Try the trajectory outputs first.
+          try:
+              traj = json.loads(pathlib.Path('/tmp/traj.json').read_text())
+              steps = traj.get('steps', {}) or {}
+              for step_name, step in steps.items():
+                  outputs = (step or {}).get('outputs', {}) or {}
+                  # Common shapes: 'result' string, 'json' object, raw passthrough.
+                  for key in ('json', 'result_json', 'output', 'result'):
+                      v = outputs.get(key)
+                      if isinstance(v, dict) and 'findings' in v:
+                          print(json.dumps(v))
+                          sys.exit(0)
+                      if isinstance(v, str):
+                          # Find last JSON object in the string.
+                          matches = re.findall(r'\{(?:[^{}]|(?:\{[^{}]*\}))*\}', v, re.DOTALL)
+                          for m in reversed(matches):
+                              try:
+                                  parsed = json.loads(m)
+                                  if isinstance(parsed, dict) and 'findings' in parsed:
+                                      print(json.dumps(parsed))
+                                      sys.exit(0)
+                              except Exception:
+                                  pass
+          except Exception as e:
+              print(f"trajectory parse failed: {e}", file=sys.stderr)
+
+          # Fallback: scan the agent log for the last valid JSON object.
+          try:
+              log = pathlib.Path('/tmp/agent.log').read_text()
+              matches = re.findall(r'\{[\s\S]*?\}', log)
+              for m in reversed(matches):
+                  try:
+                      parsed = json.loads(m)
+                      if isinstance(parsed, dict) and 'findings' in parsed:
+                          print(json.dumps(parsed))
+                          sys.exit(0)
+                  except Exception:
+                      pass
+          except Exception as e:
+              print(f"agent log parse failed: {e}", file=sys.stderr)
+
+          # No structured output — emit a placeholder so the comment step
+          # still posts something useful.
+          print(json.dumps({
+              "summary": "tessera-tl produced no structured JSON output. See trajectory.",
+              "findings": [],
+              "patterns_to_promote": [],
+              "patterns_to_add": [],
+              "tech_debt_register": []
+          }))
+          PY
+
+          echo "Extracted:"
+          cat /tmp/findings.json | head -200
+
+      - name: Comment on PR
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          TRAJ: ${{ steps.trigger.outputs.trajectory_id }}
+        run: |
+          set -euo pipefail
+          python3 <<'PY' > /tmp/comment.md
+          import json, pathlib
+          d = json.loads(pathlib.Path('/tmp/findings.json').read_text())
+          findings = d.get('findings', []) or []
+          by_sev = {}
+          for f in findings:
+              by_sev.setdefault(f.get('severity', 'unknown'), []).append(f)
+          order = ['critical', 'major', 'minor', 'nit']
+          out = []
+          out.append(f"## 🔎 tessera-tl review")
+          if d.get('summary'):
+              out.append("")
+              out.append(d['summary'])
+          out.append("")
+          out.append(f"**Findings:** {len(findings)} total — " + ", ".join(
+              f"{len(by_sev.get(s, []))} {s}" for s in order if by_sev.get(s)
+          ) or "no issues flagged 🎉")
+          for sev in order:
+              items = by_sev.get(sev, [])
+              if not items: continue
+              out.append("")
+              out.append(f"### {sev.upper()} ({len(items)})")
+              for f in items:
+                  title = f.get('title', '(untitled)')
+                  files = ', '.join(f.get('files', []) or [])
+                  cat = f.get('category', '?')
+                  detail = f.get('detail', '')
+                  suggestion = f.get('suggestion', '')
+                  violation = f.get('violation_of', '')
+                  out.append("")
+                  out.append(f"<details><summary><b>{title}</b> — <code>{cat}</code>{f' · `{files}`' if files else ''}</summary>")
+                  out.append("")
+                  if violation:
+                      out.append(f"_Violates:_ {violation}")
+                      out.append("")
+                  out.append(detail)
+                  if suggestion:
+                      out.append("")
+                      out.append(f"**Suggestion:** {suggestion}")
+                  if f.get('diff'):
+                      out.append("")
+                      out.append("```diff")
+                      out.append(f['diff'])
+                      out.append("```")
+                  out.append("</details>")
+          if d.get('patterns_to_promote'):
+              out.append("")
+              out.append("### Patterns to promote (emerging → canonical)")
+              for p in d['patterns_to_promote']:
+                  out.append(f"- **{p.get('name')}** — {p.get('rationale','')}")
+          if d.get('patterns_to_add'):
+              out.append("")
+              out.append("### New patterns proposed")
+              for p in d['patterns_to_add']:
+                  out.append(f"- **{p.get('name')}** — used in `{', '.join(p.get('where_used', []))}`. {p.get('rationale','')}")
+          if d.get('tech_debt_register'):
+              out.append("")
+              out.append("### Tech-debt register")
+              for t in d['tech_debt_register']:
+                  out.append(f"- [{t.get('estimated_effort','?')}] {t.get('title','')}")
+          out.append("")
+          out.append(f"<sub>Trajectory: <code>$TRAJ</code> · <a href=\"https://flows-api.jetty.io/api/v1/db/trajectory/jettyio/tessera-tl/$TRAJ\">raw</a> · skip with <code>[skip-tl]</code> in PR title</sub>")
+          print("\n".join(out))
+          PY
+
+          # Substitute the trajectory id placeholder.
+          sed -i "s|\$TRAJ|$TRAJ|g" /tmp/comment.md
+
+          gh pr comment "$PR_NUMBER" --body-file /tmp/comment.md
