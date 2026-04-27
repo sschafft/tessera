@@ -3,6 +3,7 @@ import { isValidGameCode } from "@/lib/game/code";
 import { readSessionAndParticipant } from "@/lib/auth/session";
 import { publishGameEvent } from "@/lib/realtime/publish";
 import { getRepository } from "@/lib/game/getRepository";
+import { SnapshotShareCapError } from "@/lib/game/repository.memory";
 
 export const runtime = "nodejs";
 
@@ -46,6 +47,11 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   if (!pairRound) {
     return NextResponse.json({ error: "no_pair_round" }, { status: 400 });
   }
+  // The pre-check below is racy on its own (two parallel POSTs both
+  // observe shares_remaining=1), but the captureBuilderSnapshot RPC
+  // is the authoritative gate — see SnapshotShareCapError handling
+  // below. We keep the pre-check so a clean "no shares left" hit
+  // returns 409 without an extra round-trip.
   if (pairRound.shares_remaining <= 0) {
     return NextResponse.json(
       { error: "no_shares_remaining" },
@@ -62,7 +68,18 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     rot: p.rot,
   }));
 
-  const remaining = await repo.captureBuilderSnapshot(pairRound.id, snapshot);
+  let remaining: number;
+  try {
+    remaining = await repo.captureBuilderSnapshot(pairRound.id, snapshot);
+  } catch (err) {
+    if (err instanceof SnapshotShareCapError) {
+      return NextResponse.json(
+        { error: err.reason },
+        { status: err.reason === "pair_round_not_found" ? 404 : 409 },
+      );
+    }
+    throw err;
+  }
   await publishGameEvent(session.claims.game_id, "snapshot_shared");
   return NextResponse.json({
     ok: true,
