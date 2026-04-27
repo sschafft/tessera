@@ -27,8 +27,9 @@
 - **Rotation increments are 90° in 4 steps** (was 60° / 6 steps).
 - **Test solution + scoring.** Builder-triggered "Test solution" CTA
   computes the score against the goal at any time. Default 10 pts
-  per correct, 0 penalty; GM-tunable up to −1 flat penalty for any
-  wrong placements. Per-round scores sum into a game-end leaderboard.
+  per correct, 0 penalty; GM-tunable per-wrong penalty −10..0 (each
+  wrong placement subtracts `wrong_pts` from the total — scores can
+  go negative). Per-round scores sum into a game-end leaderboard.
   (§6.11)
 - **Super-power deck reshaped.** Vocab swap → "Change guider brief";
   new "Change builder brief" mirror; both unlimited. New "Make it
@@ -320,15 +321,19 @@ on the Start button each round.
   canvas. Tapping it computes the score against the goal pattern at
   any time during a running round. No cap on uses.
 - Score formula:
-  - `score = correct_pts × correct_count + (any_wrong > 0 ? wrong_pts : 0)`
+  - `score = correct_pts × correct_count + wrong_pts × wrong_count`
   - `correct_pts` defaults to 10 (GM-tunable 1..100 in the Scoring
     tile).
-  - `wrong_pts` defaults to 0 — i.e. wrong placements just don't earn
-    points. The GM can flip the "Punish wrong attempts" toggle to set
-    `wrong_pts = -1`, applying a single flat −1 if there's at least
-    one wrong placement (regardless of how many). Examples:
-    - 1 right, 3 wrong with penalty on → `+10 − 1 = 9`
-    - 0 right, 2 wrong with penalty on → `0 − 1 = −1`
+  - `wrong_pts` defaults to 0 — wrong placements just don't earn
+    points. The GM steps `wrong_pts` down (range −10..0) to apply a
+    per-wrong penalty. The penalty is **per wrong placement**, not a
+    flat one-shot, so blanketing the canvas costs more than placing
+    carefully. Scores are intentionally not clamped at 0 — aggressive
+    guessing can drop a pair into negative territory; the live-score
+    chip turns red. Examples (correct_pts=10, wrong_pts=−1):
+    - 1 right, 3 wrong → `10 − 3 = 7`
+    - 0 right, 5 wrong → `0 − 5 = −5`
+    - 4 right, 6 wrong with `wrong_pts=−2` → `40 − 12 = 28`
 - Test solution flips `pair_round.test_enabled = true` so green/red
   per-piece highlights persist for the rest of the round, and a
   celebratory tone (Tone.js arpeggio sized to the correct count)

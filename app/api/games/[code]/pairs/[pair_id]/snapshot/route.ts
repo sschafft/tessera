@@ -3,6 +3,7 @@ import { isValidGameCode } from "@/lib/game/code";
 import { readSessionForGame } from "@/lib/auth/session";
 import { getRepository } from "@/lib/game/getRepository";
 import type { GoalPattern } from "@/lib/pattern/types";
+import { scorePlacements } from "@/lib/scoring/score";
 
 export const runtime = "nodejs";
 
@@ -74,24 +75,29 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     ? await repo.listPlacements(pairRound.id)
     : [];
 
-  // Per-piece correctness — always computed for the GM.
-  const goalKey = (g: { shape: string; color: string; q: number; r: number; rot: number }) =>
-    `${g.shape}|${g.color}|${g.q},${g.r}|${g.rot}`;
-  const goalSet = new Set(goal.map(goalKey));
-  let correct = 0;
-  const placements = placementsRaw.map((p) => {
-    const ok = goalSet.has(goalKey(p));
-    if (ok) correct += 1;
-    return {
-      id: p.id,
-      shape: p.shape,
-      color: p.color,
-      q: p.q,
-      r: p.r,
-      rot: p.rot,
-      correct: ok,
-    };
+  // Per-piece correctness — always computed for the GM. Route through
+  // the canonical scorer so rotation symmetry (squares look identical
+  // at every rot, rhombi at rot mod 2) is normalised the same way as
+  // /test-solution and /play. Inlining a goalKey here was the same
+  // anti-pattern design_patterns.md > "Single source of truth for
+  // scoring" calls out.
+  const breakdown = scorePlacements(placementsRaw, goal, {
+    correctPts: game.scoring_correct_pts,
+    wrongPts: game.scoring_wrong_pts,
   });
+  const correctById = new Map(
+    breakdown.placements.map((p) => [p.id, p.correct]),
+  );
+  const correct = breakdown.correct;
+  const placements = placementsRaw.map((p) => ({
+    id: p.id,
+    shape: p.shape,
+    color: p.color,
+    q: p.q,
+    r: p.r,
+    rot: p.rot,
+    correct: correctById.get(p.id) ?? false,
+  }));
 
   const briefs = pairRound
     ? await repo.listBriefsForPairRound(pairRound.id)
