@@ -53,15 +53,9 @@ interface PatchPayload {
   color?: string;
 }
 
-const VALID_SHAPES = new Set([
-  "tri-up",
-  "tri-dn",
-  "sq",
-  "rhomb",
-  "trap",
-  "hex",
-  "pent",
-]);
+// Same tightened palette as the POST sibling — only the four shipped
+// builder shapes. Retired tri-dn / hex / pent get a 400 here too.
+const VALID_SHAPES = new Set(["sq", "tri-up", "rhomb", "trap"]);
 const VALID_COLORS = new Set([
   "red",
   "orange",

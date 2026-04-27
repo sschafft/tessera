@@ -47,7 +47,11 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     : [];
 
   // Build a map of (pair_id → { builder_brief, guider_brief }) for the
-  // current round. Only populated when a round is in flight.
+  // current round. The previous sequential `for await pairs` loop did
+  // 2×N round-trips per dashboard tick (findPairRound + listBriefs)
+  // with no parallelism — a 4-pair workshop spent ~120-160ms per
+  // /lobby fetch. Same shape, batched via Promise.all so the per-pair
+  // work runs concurrently.
   const briefsByPair = new Map<
     string,
     {
@@ -56,20 +60,28 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     }
   >();
   if (round) {
-    for (const pair of pairs) {
-      const pr = await repo.findPairRound(round.id, pair.id);
-      if (!pr) continue;
-      const list = await repo.listBriefsForPairRound(pr.id);
-      const builder = list.find((b) => b.role === "builder");
-      const guider = list.find((b) => b.role === "guider");
-      briefsByPair.set(pair.id, {
-        builder: builder
-          ? { title: builder.title, rules: builder.rules }
-          : null,
-        guider: guider
-          ? { title: guider.title, rules: guider.rules }
-          : null,
-      });
+    const entries = await Promise.all(
+      pairs.map(async (pair) => {
+        const pr = await repo.findPairRound(round.id, pair.id);
+        if (!pr) return null;
+        const list = await repo.listBriefsForPairRound(pr.id);
+        const builder = list.find((b) => b.role === "builder");
+        const guider = list.find((b) => b.role === "guider");
+        return [
+          pair.id,
+          {
+            builder: builder
+              ? { title: builder.title, rules: builder.rules }
+              : null,
+            guider: guider
+              ? { title: guider.title, rules: guider.rules }
+              : null,
+          },
+        ] as const;
+      }),
+    );
+    for (const e of entries) {
+      if (e) briefsByPair.set(e[0], e[1]);
     }
   }
 

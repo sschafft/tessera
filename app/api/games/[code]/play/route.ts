@@ -41,7 +41,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
   }
 
   const me = await repo.findParticipantById(claims.sub);
-  if (!me || me.released_at !== null && false) {
+  if (!me || me.released_at !== null) {
     return NextResponse.json({ error: "participant_gone" }, { status: 404 });
   }
   if (!me) {
