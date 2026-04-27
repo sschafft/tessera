@@ -1,17 +1,25 @@
 name: tessera-tl review
 
-# Runs the adversarial tech-lead review (jetty workflow `tessera-tl`) on
-# every PR open + push and posts findings as a PR comment. The review
-# clones the head ref, reads design/PRD.md + design/TDD.md +
-# design/design_patterns.md as the source of truth, then surfaces
-# architectural drift, perf hot spots, testing gaps, and code smells.
+# Runs the adversarial tech-lead review (jetty workflow `tessera-tl`)
+# ONCE per PR — only on the initial open. We deliberately don't fire on
+# `synchronize`, `reopened`, or `ready_for_review` so the review is a
+# single snapshot, not a running commentary on each push.
 #
-# Skip the run by including `[skip-tl]` in the PR title or by marking the
-# PR as draft.
+# Workflow expectation (see CLAUDE.md):
+#   1. While the branch is in development, trigger the review on demand
+#      via `workflow_dispatch` (Actions → tessera-tl review → Run
+#      workflow → enter the branch name). Address findings locally.
+#   2. Once the branch is ready, open the PR. The auto-fire on PR open
+#      serves as the final review-of-record on the state being merged.
+#   3. Subsequent commits on the PR branch do NOT re-trigger the review.
+#
+# Skip a PR's auto-review by including `[skip-tl]` in the PR title or
+# by opening the PR as draft (you can rerun manually via
+# workflow_dispatch later if you change your mind).
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened]
     branches: [main]
   workflow_dispatch:
     inputs:

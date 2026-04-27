@@ -51,23 +51,25 @@ docs/
 
 All non-trivial work lands via pull request. Reasons:
 
-- The `tessera-tl` GitHub Action (`.github/workflows/tessera-tl.yml`) auto-runs the adversarial review on every PR `opened` / `synchronize` and posts findings as a PR comment. Pushing straight to main bypasses it.
-- A PR concentrates the diff so the review has a focused surface area; review-on-main would re-scan the whole codebase every commit.
-- It also concentrates *your* attention: bundle related changes (e.g. "scoring + brief envelope + GM polish") rather than landing them as 8 separate commits on main.
+- A PR concentrates related changes (e.g. "scoring + brief envelope + GM polish") so the tech-lead review has a single, focused diff to grade.
+- It also concentrates *your* attention: one PR per coherent bundle, not 8 drive-by commits on main.
+- The tessera-tl review runs once per PR; pushing straight to main bypasses it.
 
-When you start a substantial change: `git checkout -b <slug>`, make commits, open a PR. Skip the review on a specific PR by including `[skip-tl]` in the PR title or marking the PR as draft (good for WIP / spike PRs).
+When you start a substantial change: `git checkout -b <slug>`, make commits.
 
-### After a major refactor or system-level change
+### Tech-lead review gate (run BEFORE opening the PR)
 
-1. **Refresh `design/PRD.md` + `design/TDD.md`.** If a behaviour changed, the PRD must reflect it. If the implementation diverged from TDD, update the TDD and note the why. Stale design docs are how drift starts.
-2. **Open a PR.** The tessera-tl action runs automatically and comments on the PR. Address blockers + majors before merging; minors / nits land as follow-up issues.
-3. **Update `design/design_patterns.md`** with any new pattern this change introduces, or any pattern that just hit its third use (promote `emerging` → `canonical`). Patterns the action proposes (`patterns_to_add`) need a human decision before they're added.
+The PR is the *final* state of the review, not a running commentary. Order of operations:
 
-Skip the action for: copy edits, single-component CSS tweaks, bug fixes with a clear root cause and a test plan, routine dep bumps. Use `[skip-tl]` in the PR title for these.
+1. **Develop on a branch.** When the branch reaches a state you'd want reviewed, kick off `tessera-tl` against it.
+   - Manual: GitHub → Actions → "tessera-tl review" → Run workflow → enter your branch name. The action fires `workflow_dispatch` against the branch and produces the review (no PR needed).
+   - The trajectory ID + raw output URL appear in the action log; the JSON findings are also extracted into `/tmp/findings.json` if you `gh run view --log` the run.
+2. **Address findings.** Walk the blockers + majors; fix or explicitly accept each. Minors land as follow-up issues unless trivial. Patterns the review proposes in `patterns_to_add` need a human call before being added to `design/design_patterns.md`.
+3. **Refresh `design/PRD.md` + `design/TDD.md`** if behaviour changed. Stale design docs are how drift starts.
+4. **Update `design/design_patterns.md`** with any new pattern this change introduces, or promote `emerging → canonical` once you hit a third use.
+5. **Open the PR.** The action auto-fires once on PR open as the review-of-record on the state being merged. Subsequent commits on the PR branch do NOT re-trigger the review — that's intentional. If you push fixes after the review and want a fresh check, kick off another `workflow_dispatch` run against the head ref.
 
-### Manual tessera-tl runs
-
-You can trigger a one-off review against any branch via the workflow's `workflow_dispatch` trigger (Actions → tessera-tl review → Run workflow). Useful for ad-hoc audits without opening a PR.
+Skip the auto-review on a specific PR with `[skip-tl]` in the PR title or by opening the PR as draft. Use this for: copy edits, single-component CSS tweaks, bug fixes with a clear root cause + test plan, routine dep bumps.
 
 ### After a playtest reveals UX issues
 
