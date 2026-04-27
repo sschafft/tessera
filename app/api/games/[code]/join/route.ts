@@ -133,7 +133,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     throw err;
   }
 
-  void publishGameEvent(game.id, "lobby_changed");
+  await publishGameEvent(game.id, "lobby_changed");
   return successResponse({
     code,
     game,

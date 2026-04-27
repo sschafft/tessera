@@ -43,6 +43,6 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     await repo.endRound(round.id);
   }
   await repo.setGameStatus(game.id, "ended");
-  void publishGameEvent(game.id, "game_ended");
+  await publishGameEvent(game.id, "game_ended");
   return NextResponse.json({ ok: true });
 }

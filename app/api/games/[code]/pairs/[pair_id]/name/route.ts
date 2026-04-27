@@ -64,7 +64,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   }
 
   await repo.setPairDisplayName(pair_id, trimmed);
-  void publishGameEvent(session.claims.game_id, "pair_renamed");
+  await publishGameEvent(session.claims.game_id, "pair_renamed");
 
   return NextResponse.json({ ok: true, display_name: trimmed });
 }

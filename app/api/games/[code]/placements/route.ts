@@ -125,7 +125,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       rot: body.rot,
       placed_by: me.id,
     });
-    void publishGameEvent(session.claims.game_id, "placement_added");
+    await publishGameEvent(session.claims.game_id, "placement_added");
     return NextResponse.json({
       ok: true,
       placement,
@@ -179,6 +179,6 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
   }
 
   const cleared = await repo.clearPlacements(pairRound.id);
-  void publishGameEvent(session.claims.game_id, "placements_cleared");
+  await publishGameEvent(session.claims.game_id, "placements_cleared");
   return NextResponse.json({ ok: true, cleared });
 }

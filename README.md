@@ -40,7 +40,7 @@ Minimum viable game: 1 GM + 1 Builder + 1 Guider.
 
 - **No accounts.** A six-character game code (`HEX-934`) and a display name; that's it.
 - **Resume any in-flight game** from the home page — every browser tab with a live session cookie shows up as a "resume" pill.
-- **Player recovery URLs.** Every join returns a one-shot URL stored in localStorage and shown as a "save this" affordance after success. If your cookie gets clobbered (multi-tab, browser crash, mobile foreground swap), paste the URL on `/recover/<code>` to reclaim your seat with the same name + role.
+- **Player recovery URLs.** Every join returns a recovery URL stored in localStorage and shown as a "save this" affordance after success. If your cookie gets clobbered (multi-tab, browser crash, mobile foreground swap), paste the URL on `/recover/<code>` to reclaim your seat with the same name + role. Stays valid for the life of the game.
 - **Square cell grid that scales with complexity** (3×3 at c=1 up to 9×9 at c=8). Optional letter+number coordinate labels (A1, B2, …) on low complexities so guider+builder can speak in coordinates on the call.
 - **Tap-to-place builder canvas with edit mode.** Tap an empty cell to drop the selected shape; tap an existing piece to enter Edit mode (move with another click, rotate, delete). Optimistic UI keeps every action snappy — placements echo back to all connected clients within ~200ms via Supabase Realtime.
 - **Test solution + scoring.** Builder hits a "Test solution" CTA at any time; the round computes correct/wrong against the goal pattern and lights green/red highlights per piece. Per-wrong penalty is GM-tunable; scores can go negative.
@@ -53,7 +53,7 @@ Minimum viable game: 1 GM + 1 Builder + 1 Guider.
 - **Multi-round + replay.** GM-configurable round count (1–5); after a game ends, the GM can launch a fresh round with the same players from the summary screen.
 - **GM debrief prompts + leaderboard.** Game-end view ships with three retro questions to seed the post-game conversation, plus a pair leaderboard ranked by total score.
 - **Tone.js sound effects.** Synthesised round-end ding, last-two-minutes warning, time-pressure sting, game-end fanfare. Respects the GM's per-game `sound_on` toggle.
-- **Host recovery.** Bookmark URL with a one-shot token in the fragment so the GM never gets locked out of their own dashboard if their tab dies.
+- **Host recovery.** Bookmark URL with a recovery token in the fragment so the GM never gets locked out of their own dashboard if their tab dies. Stays valid for the life of the game.
 - **Auto-purge.** Games are soft-deleted 24h after the last interaction, hard-deleted after 7 days.
 
 ---
@@ -156,7 +156,7 @@ tessera/
 │   ├── realtime/              # Server publish + client subscribe hook
 │   └── sound/                 # Tone.js wrappers
 ├── styles/                    # globals.css + tessera.css design tokens
-├── supabase/migrations/       # 8 SQL migrations applied to tessera-dev
+├── supabase/migrations/       # 12 SQL migrations applied to tessera-dev
 ├── public/                    # Static assets
 └── design/                    # PRD, TDD, Claude Design handoff bundle
 ```

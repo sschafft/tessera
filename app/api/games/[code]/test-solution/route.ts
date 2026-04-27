@@ -68,7 +68,7 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
     await repo.setTestEnabled(pairRound.id, true);
   }
 
-  void publishGameEvent(game.id, "solution_tested", {
+  await publishGameEvent(game.id, "solution_tested", {
     pair_id: me.pair_id,
     correct: breakdown.correct,
     wrong: breakdown.wrong,

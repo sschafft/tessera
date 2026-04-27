@@ -52,6 +52,6 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   // Reuse the existing assignObserver helper. Our observer was
   // already role='observer'; this only updates pair_id.
   await repo.assignObserver(me.id, pair.id);
-  void publishGameEvent(session.claims.game_id, "observer_switched");
+  await publishGameEvent(session.claims.game_id, "observer_switched");
   return NextResponse.json({ ok: true });
 }
