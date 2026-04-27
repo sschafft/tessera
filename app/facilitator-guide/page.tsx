@@ -122,7 +122,7 @@ export default function FacilitatorGuidePage() {
         <li>
           <b>Big group, multiple rounds.</b> Run round 1 at complexity 3 with
           briefs off; let everyone get the rules. Round 2 with briefs on. Round
-          3 with one accelerant per pair.
+          3 with one super power per pair.
         </li>
       </ul>
     </ContentLayout>

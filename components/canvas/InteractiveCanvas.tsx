@@ -186,7 +186,7 @@ export function InteractiveCanvas({
               x={x - offset}
               y={y - offset}
               size={size}
-              rotate={p.rot * 60}
+              rotate={p.rot * 90}
               correct={p.correct ?? null}
             />
             {isEditing && <EditingHandles q={p.q} r={p.r} />}
@@ -206,7 +206,7 @@ export function InteractiveCanvas({
             x={x - offset}
             y={y - offset}
             size={size}
-            rotate={selectedRotation * 60}
+            rotate={selectedRotation * 90}
             ghost
           />
         );
@@ -224,7 +224,7 @@ export function InteractiveCanvas({
             x={x - offset}
             y={y - offset}
             size={size}
-            rotate={editing.rot * 60}
+            rotate={editing.rot * 90}
             ghost
           />
         );

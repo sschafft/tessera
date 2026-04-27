@@ -465,6 +465,16 @@ export class SupabaseGameRepository implements GameRepository {
     return (count ?? 0) > 0;
   }
 
+  async clearPlacements(pair_round_id: string): Promise<number> {
+    const supabase = getServiceClient();
+    const { error, count } = await supabase
+      .from("placements")
+      .delete({ count: "exact" })
+      .eq("pair_round_id", pair_round_id);
+    if (error) throw new Error(`clearPlacements: ${error.message}`);
+    return count ?? 0;
+  }
+
   async updatePlacement(
     id: string,
     patch: { q?: number; r?: number; rot?: number },

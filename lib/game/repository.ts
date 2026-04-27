@@ -299,6 +299,12 @@ export interface GameRepository {
   deletePlacement(id: string): Promise<boolean>;
 
   /**
+   * Delete every placement in a pair_round. Returns count deleted.
+   * Used by the builder's "Clear all" action.
+   */
+  clearPlacements(pair_round_id: string): Promise<number>;
+
+  /**
    * Update a placement's cell (q, r) and/or rotation. Throws
    * PlacementCellTakenError when the new cell collides with another
    * placement in the same pair_round.

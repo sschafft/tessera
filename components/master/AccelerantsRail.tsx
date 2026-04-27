@@ -115,7 +115,7 @@ export function AccelerantsRail({
           >
             ⚡
           </span>
-          <span className="t-display text-[14px] font-bold">Accelerants</span>
+          <span className="t-display text-[14px] font-bold">Super powers</span>
         </div>
         <p className="text-[12px] leading-tight text-[var(--color-ink-3)]">
           Trigger mechanics on a pair (or all pairs) to nudge them past stuck

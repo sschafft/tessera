@@ -357,6 +357,17 @@ export class MemoryGameRepository implements GameRepository {
     return this.placements.delete(id);
   }
 
+  async clearPlacements(pair_round_id: string): Promise<number> {
+    let count = 0;
+    for (const [id, p] of this.placements.entries()) {
+      if (p.pair_round_id === pair_round_id) {
+        this.placements.delete(id);
+        count += 1;
+      }
+    }
+    return count;
+  }
+
   async updatePlacement(
     id: string,
     patch: { q?: number; r?: number; rot?: number },

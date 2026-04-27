@@ -80,7 +80,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   if (!isInt(body.r) || body.r < 0 || body.r >= GRID_HEIGHT) {
     return NextResponse.json({ error: "invalid_r" }, { status: 400 });
   }
-  if (!isInt(body.rot) || body.rot < 0 || body.rot > 5) {
+  if (!isInt(body.rot) || body.rot < 0 || body.rot > 3) {
     return NextResponse.json({ error: "invalid_rot" }, { status: 400 });
   }
 
@@ -117,4 +117,45 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
     throw err;
   }
+}
+
+/**
+ * Clear every placement on the builder's canvas. Builder-only — observer
+ * and guider should never wipe state. The pair_round itself is left
+ * intact (round, briefs, snapshot all preserved).
+ */
+export async function DELETE(_req: NextRequest, { params }: RouteParams) {
+  const { code } = await params;
+  if (!isValidGameCode(code)) {
+    return NextResponse.json({ error: "invalid_code" }, { status: 400 });
+  }
+
+  const session = await readSessionAndParticipant(code);
+  if (!session) {
+    return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  }
+  if (session.me.role !== "builder") {
+    return NextResponse.json(
+      { error: "only_builder_can_clear" },
+      { status: 403 },
+    );
+  }
+  const me = session.me;
+  if (!me.pair_id) {
+    return NextResponse.json({ error: "not_in_pair" }, { status: 400 });
+  }
+
+  const repo = getRepository();
+  const round = await repo.findLatestRound(session.claims.game_id);
+  if (!round || round.status !== "running") {
+    return NextResponse.json({ error: "round_not_running" }, { status: 400 });
+  }
+  const pairRound = await repo.findPairRound(round.id, me.pair_id);
+  if (!pairRound) {
+    return NextResponse.json({ error: "no_pair_round" }, { status: 400 });
+  }
+
+  const cleared = await repo.clearPlacements(pairRound.id);
+  void publishGameEvent(session.claims.game_id, "placements_cleared");
+  return NextResponse.json({ ok: true, cleared });
 }

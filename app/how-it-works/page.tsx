@@ -57,7 +57,7 @@ export default function HowItWorksPage() {
       </p>
 
       <h2 className="t-display mt-6 text-[28px] font-bold tracking-tight">
-        Facilitator accelerants
+        Facilitator super powers
       </h2>
       <p>
         The game master has a deck of eight in-game mechanics they can trigger
@@ -93,7 +93,7 @@ export default function HowItWorksPage() {
         </li>
       </ul>
       <p>
-        Each accelerant has a per-round cap. The point isn&apos;t to use them
+        Each super power has a per-round cap. The point isn&apos;t to use them
         all — it&apos;s to reach for the right one when the room gets stuck.
       </p>
 

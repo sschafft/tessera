@@ -61,7 +61,7 @@ export function PlayCanvas({
             x={x - offset}
             y={y - offset}
             size={size}
-            rotate={p.rot * 60}
+            rotate={p.rot * 90}
             ghost={ghost}
           />
         );

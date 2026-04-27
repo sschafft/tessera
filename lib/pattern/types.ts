@@ -2,7 +2,7 @@ import type { TileColor, TileShape } from "@/components/canvas/Tile";
 
 /**
  * A single piece in a goal pattern. Stored at integer grid coords (q, r),
- * with rotation in 60° steps (0..5). Rotation is rendered as `rot * 60deg`.
+ * with rotation in 90° steps (0..3). Rotation is rendered as `rot * 90deg`.
  */
 export interface GoalPiece {
   shape: TileShape;

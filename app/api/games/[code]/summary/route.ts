@@ -93,6 +93,8 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
   return NextResponse.json({
     code,
     workshop_name: game.workshop_name,
+    video_call_url: game.video_call_url,
+    whiteboard_url: game.whiteboard_url ?? null,
     round_index: round?.index ?? null,
     pairs: summary,
   });

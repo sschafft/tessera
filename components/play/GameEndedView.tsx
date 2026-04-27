@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Tile } from "@/components/canvas/Tile";
+import { JoinCallCta } from "./JoinCallCta";
 
 export interface GameEndedViewProps {
   code: string;
@@ -22,6 +23,8 @@ interface PairSummary {
 
 export function GameEndedView({ code, workshopName }: GameEndedViewProps) {
   const [summary, setSummary] = useState<PairSummary[] | null>(null);
+  const [callUrl, setCallUrl] = useState<string | null>(null);
+  const [whiteboardUrl, setWhiteboardUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -30,6 +33,9 @@ export function GameEndedView({ code, workshopName }: GameEndedViewProps) {
       .then((d) => {
         if (Array.isArray(d.pairs)) setSummary(d.pairs);
         else setError(d.error ?? "Could not load summary.");
+        if (typeof d.video_call_url === "string") setCallUrl(d.video_call_url);
+        if (typeof d.whiteboard_url === "string")
+          setWhiteboardUrl(d.whiteboard_url);
       })
       .catch(() => setError("Could not load summary."));
   }, [code]);
@@ -53,6 +59,14 @@ export function GameEndedView({ code, workshopName }: GameEndedViewProps) {
         what did the briefs reveal? Where did the picture diverge? What
         surprised you?
       </p>
+
+      {callUrl && (
+        <JoinCallCta
+          videoCallUrl={callUrl}
+          whiteboardUrl={whiteboardUrl}
+          size="md"
+        />
+      )}
 
       {summary && summary.length > 0 && (
         <div className="t-card flex w-full flex-col gap-3 p-5 text-left">

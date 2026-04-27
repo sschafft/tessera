@@ -145,8 +145,8 @@ export function generatePattern({
       color: pickFrom(rng, colors),
       q,
       r,
-      // Rotation: tri/rhomb/trap orient meaningfully; sq/hex look ~same.
-      rot: pickInt(rng, 0, 5),
+      // Rotation: 0..3 in 90° steps. tri/rhomb/trap orient meaningfully.
+      rot: pickInt(rng, 0, 3),
     };
     return piece;
   });

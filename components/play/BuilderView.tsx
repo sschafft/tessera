@@ -96,7 +96,7 @@ function BuilderInteractive({ state }: { state: PlayState }) {
           // Rotate the editing piece via API
           void rotateEditing();
         } else if (selectedShape !== null) {
-          setSelectedRotation((p) => (p + 1) % 6);
+          setSelectedRotation((p) => (p + 1) % 4);
         }
       }
     };
@@ -203,7 +203,7 @@ function BuilderInteractive({ state }: { state: PlayState }) {
 
   const rotateEditing = useCallback(async () => {
     if (!editingPiece) return;
-    const newRot = (editingPiece.rot + 1) % 6;
+    const newRot = (editingPiece.rot + 1) % 4;
     setError(null);
     try {
       const res = await fetch(
@@ -265,6 +265,41 @@ function BuilderInteractive({ state }: { state: PlayState }) {
       setSharingProgress(false);
     }
   }, [state.code]);
+
+  const [clearArmed, setClearArmed] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  useEffect(() => {
+    if (!clearArmed) return;
+    const t = setTimeout(() => setClearArmed(false), 3000);
+    return () => clearTimeout(t);
+  }, [clearArmed]);
+
+  const clearAll = useCallback(async () => {
+    if (!clearArmed) {
+      setClearArmed(true);
+      return;
+    }
+    setClearing(true);
+    setError(null);
+    setEditingId(null);
+    setSelectedShape(null);
+    try {
+      const res = await fetch(`/api/games/${state.code}/placements`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || `status ${res.status}`);
+      }
+      setOptimistic([]);
+      setPendingDeletes(new Set());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "clear failed");
+    } finally {
+      setClearing(false);
+      setClearArmed(false);
+    }
+  }, [clearArmed, state.code]);
 
   const showCoords = (state.round?.complexity ?? 5) <= 4;
 
@@ -372,6 +407,32 @@ function BuilderInteractive({ state }: { state: PlayState }) {
                   : `↻ Share progress (${state.shares_remaining})`}
               </button>
             )}
+            {visiblePieces.length > 0 && (
+              <button
+                type="button"
+                onClick={clearAll}
+                disabled={clearing}
+                className="t-mono rounded-full px-3 py-1 text-[11px] font-bold disabled:opacity-50"
+                style={{
+                  background: clearArmed
+                    ? "var(--color-t-red)"
+                    : "var(--color-paper-2)",
+                  color: clearArmed
+                    ? "#fff"
+                    : "var(--color-ink-2)",
+                  boxShadow: clearArmed
+                    ? "inset 0 0 0 1.5px var(--color-t-red)"
+                    : "inset 0 0 0 1.5px var(--color-line)",
+                }}
+                aria-label="Clear all placements"
+              >
+                {clearing
+                  ? "Clearing…"
+                  : clearArmed
+                    ? "✕ Tap again to clear"
+                    : "✕ Clear all"}
+              </button>
+            )}
           </div>
         </div>
       </section>
@@ -439,7 +500,7 @@ function ModeBanner({
           Add mode
         </span>
         <span className="text-[12px] font-semibold text-[var(--color-ink)]">
-          {color} {SHAPE_LABEL[shape]}{rotation > 0 ? ` · ${rotation * 60}°` : ""}
+          {color} {SHAPE_LABEL[shape]}{rotation > 0 ? ` · ${rotation * 90}°` : ""}
         </span>
         <button
           type="button"
@@ -571,7 +632,7 @@ function Tray({
                 x={10}
                 y={10}
                 size={48}
-                rotate={rotation * 60}
+                rotate={rotation * 90}
               />
             </button>
           );
@@ -641,9 +702,9 @@ function Tools({
   }[] = [
     {
       icon: "↺",
-      label: `Rotate · ${rotation * 60}°`,
+      label: `Rotate · ${rotation * 90}°`,
       k: "R",
-      onClick: () => setRotation((rotation + 1) % 6),
+      onClick: () => setRotation((rotation + 1) % 4),
       enabled: hasSelection,
     },
     {

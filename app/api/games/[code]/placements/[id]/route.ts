@@ -80,7 +80,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   if (body.r !== undefined && (!isInt(body.r) || body.r < 0 || body.r >= GRID_HEIGHT)) {
     return NextResponse.json({ error: "invalid_r" }, { status: 400 });
   }
-  if (body.rot !== undefined && (!isInt(body.rot) || body.rot < 0 || body.rot > 5)) {
+  if (body.rot !== undefined && (!isInt(body.rot) || body.rot < 0 || body.rot > 3)) {
     return NextResponse.json({ error: "invalid_rot" }, { status: 400 });
   }
 
