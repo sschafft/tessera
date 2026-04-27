@@ -165,7 +165,7 @@
 | Canvas | Inline SVG (no Canvas, no Konva) | Pieces are tens of polygons; SVG is plenty. |
 | DB / Realtime | Supabase (hosted free-tier project) | Postgres 15, Realtime. **No local Supabase stack** — dev points at a hosted project. Drops the Docker requirement and matches what runs in production exactly. |
 | Auth | Anonymous JWT minted by our route handler; **Supabase Auth not used** | We carry only `{ game_id, participant_id, role, exp }` in the JWT. |
-| Gemini | `@google/generative-ai` SDK, server-side only | `gemini-1.5-flash` (free tier). |
+| Gemini | `@google/generative-ai` SDK, server-side only | `gemini-2.0-flash` (free tier). 1.5-flash was deprecated in late 2025; the SDK call surface is unchanged. |
 | Lint / format | ESLint (Next preset) + Prettier | |
 | Testing | Vitest (unit) + Playwright (e2e, smoke only in v1) | |
 | CI | GitHub Actions: typecheck, lint, vitest on PR | Playwright run on `main` only. |
@@ -248,7 +248,7 @@ We do not use Supabase Auth. Tessera has no accounts; we mint our own short-live
 
 ### 5.2 Flows
 
-- **Host:** `POST /api/games` → sets the GM cookie, then redirects to `/g/<code>/master`. A **host recovery token** (32-byte random, stored as `bcrypt` hash in `games.host_token_hash`) is shown **once** in a modal at create time. The modal copy says "save this URL". The recovery URL is `https://<host>/host-recover/<code>` — which is a page that prompts for the token; the token is submitted via `POST /api/games/<code>/host` in the **request body**, never in a URL query string. This prevents it leaking via browser history, Vercel logs, or the `Referer` header sent to Meet/Miro when the GM clicks an external link while screen-sharing.
+- **Host:** `POST /api/games` → sets the GM cookie, then redirects to `/g/<code>/master`. A **host recovery token** (24-byte / 192-bit random — overkill for unguessability, lives in `lib/auth/hostToken.ts`; same shape powers the player-recovery flow in `lib/auth/playerToken.ts`, both stored as `bcrypt` hashes) is shown **once** in a modal at create time. The modal copy says "save this URL". The recovery URL is `https://<host>/host-recover/<code>` — which is a page that prompts for the token; the token is submitted via `POST /api/games/<code>/host-recover` in the **request body**, never in a URL query string. This prevents it leaking via browser history, Vercel logs, or the `Referer` header sent to Meet/Miro when the GM clicks an external link while screen-sharing.
 - **Join:** `POST /api/games/<code>/join { display_name, role? }` → mints a participant JWT, sets the `ts_<code>` cookie. Existing participant with matching cookie = reclaim seat.
 - **Reconnect:** A participant returning within 5 min with the same `(code, display_name)` reclaims their seat and pair (PRD §6.1). After 5 min the slot is freed.
 - **Role changes:** Any time the GM changes a participant's role in the lobby, the server re-issues that participant's JWT with the new role claim and sets an updated `ts_<code>` cookie. Stale JWTs with the wrong role therefore expire naturally within 4 hours, and RLS enforces the DB-level role at all times regardless.
@@ -389,8 +389,8 @@ create table placements (
   pair_round_id uuid not null references pair_rounds(id) on delete cascade,
   shape text not null,
   color text not null,
-  q int not null, r int not null,               -- axial coords on triangular grid
-  rot smallint not null check (rot in (0,1,2,3,4,5)),  -- 60° steps
+  q int not null, r int not null,               -- square-grid cell coords, 0 ≤ q < grid.w
+  rot smallint not null check (rot in (0,1,2,3)),  -- 90° steps (v1.1 swap from triangular grid)
   placed_by uuid not null references participants(id),
   placed_at timestamptz not null default now()
 );
@@ -445,23 +445,18 @@ Every write path bumps `games.last_interaction_at` via a trigger.
 
 ## 7. Grid & coordinate system
 
-We use a **triangular grid** as the default (PRD §6.4); a square grid is an alternate render. Either way pieces are stored in **integer cell coordinates**, never pixels — keeps correctness checks trivial.
+v1.1 ships a **square grid** that scales with complexity (3×3 at c=1 up to 9×9 at c=8). The original v1.0 triangular grid with 60° rotation steps was retired during alpha — square + 90° proved easier for guiders to describe over voice and gave the rotation tool a clearer purpose. Pieces are stored in **integer cell coordinates** (`q`, `r`) with `rot ∈ {0,1,2,3}` rendered as `rot × 90°`. The migration that tightened the DB check from `rot in (0..5)` to `rot in (0..3)` is `supabase/migrations/20260427000001_tighten_placements_rot_check.sql`.
 
-### 7.1 Triangular grid
+### 7.1 Square grid
 
-- Cells are indexed by axial coords `(q, r)` where each integer pair is one upward or downward triangle determined by `(q + r) mod 2`.
-- Pieces occupy 1+ cells:
-  - `tri-up` / `tri-dn` — 1 cell, rotation has no effect (rot=0).
-  - `rhomb` — 2 cells (one up + one down).
-  - `sq` — 2 cells, rotated.
-  - `trap` — 3 cells.
-  - `hex` — 6 cells (canonical hex of 6 triangles).
-- Rotation `rot ∈ {0..5}` × 60°. For 1-cell pieces it's a no-op.
+- Cells are indexed by `(q, r)` where `q` is the column (0-indexed from the left) and `r` is the row (0-indexed from the top). The active grid envelope per round is `gridSizeFor(round.complexity)` in `lib/grid/coords.ts` (3×3 at c=1 up to 9×9 at c=8).
+- Each placement occupies one cell. The four shipped builder shapes are `sq`, `tri-up`, `rhomb`, `trap` (see `lib/pattern/palette.ts`). Hex was retired during v1.1 alpha because it rendered identically at every 90° rotation step, which made the rotation tool pointless for hex pieces.
+- Rotation `rot ∈ {0,1,2,3}` × 90°. Pieces with 4-fold symmetry (`sq`) effectively look the same at every rotation; `rhomb` looks the same at 0°/180° and 90°/270°. `lib/scoring/score.ts`'s `normalizeRot` handles the symmetry classes when checking equality against the goal.
 
 ### 7.2 Snap
 
-- DnD library reports a pixel position; a `closestTriangleCell(point) → (q, r)` helper snaps.
-- Drop is invalid if any of the piece's occupied cells is already taken. We highlight conflict in red and reject the placement.
+- The interactive canvas reports `(q, r)` directly (cells are buttons, not a pixel grid). No DnD library is needed because v1.1 ships **tap-to-place**, not drag — see design_patterns.md > "No drag-and-drop for placements".
+- The unique constraint `(pair_round_id, q, r)` enforces one piece per cell at the DB level; the POST handler does an explicit overwrite (delete-then-insert) so a tap on an occupied cell with a fresh selection converts the piece in place instead of throwing 409.
 
 ### 7.3 Correctness check
 
@@ -756,7 +751,7 @@ Edge middleware for the two unauthenticated endpoints uses an in-memory sliding 
 
 | # | Decision |
 | --- | --- |
-| 1 | **Grid:** triangular, axial coords `(q, r)`, 60° rotation steps throughout v1. |
+| 1 | **Grid:** ~~triangular, axial coords `(q, r)`, 60° rotation steps throughout v1.~~ Superseded by v1.1: **square grid scaling 3×3..9×9 with complexity, integer cell coords `(q, r)`, 90° rotation steps**. |
 | 2 | **Piece tray:** shape-only grid + separate colour palette; selected colour tints the next drop. |
 | 3 | **Builder piece count:** unlimited; Test build marks extras wrong. |
 | 4 | **Host recovery:** modal at create time + persistent banner on GM dashboard; token submitted in request body (never in URL). |
@@ -850,14 +845,38 @@ In dependency order:
 - `GET  /api/me/active-games` — cookie-driven resume-games list.
 - `GET  /api/keepalive` — Vercel cron + Supabase pause prevention.
 
-### 15.6 Realtime is still polling-based
+### 15.6 Realtime topology — broadcast on a single per-game topic
 
-§8 sketched a postgres_changes + broadcast topology. v1 ships with a
-2-second polling loop on the lobby + play endpoints instead. Two
-reasons: (a) workshop-pace play tolerates 2-second freshness — the
-real conversation is on the off-platform call, (b) the JWT/RLS work
-to safely subscribe from the browser was deferred. Realtime will land
-in v1.x.
+§8 sketched a postgres_changes + broadcast topology with per-pair
+channels and Realtime RLS. The shipped v1.1 implementation is leaner:
+
+- One broadcast topic per game (`tessera:<game_id>`, see
+  `lib/realtime/topic.ts`). All mutations on that game publish to it.
+- Server-side publisher: `lib/realtime/publish.ts`'s
+  `publishGameEvent(game_id, kind, payload)` posts to Supabase's
+  `/realtime/v1/api/broadcast` REST endpoint with the service-role
+  key and a 2s timeout. Failure is logged + swallowed (the polling
+  fallback below covers it).
+- Client subscriber: `lib/realtime/useGameEvents` joins the topic via
+  the public anon key, listens for any event (`event: "*"`), and
+  debounces a caller-provided refetch by 200ms. Consumers (PlayContent,
+  MasterPairView, etc.) re-fetch the relevant API endpoint when the
+  hook fires — see design_patterns.md > "Realtime broadcast triggers
+  refetch".
+- **Polling fallback** lives at `POLL_MS = 10_000` in
+  `components/play/PlayContent.tsx`. It catches the ~1% of cases where
+  realtime drops (NEXT_PUBLIC_SUPABASE_ANON_KEY missing in a deploy,
+  WS pause when a tab is backgrounded, edge networks blocking WS).
+
+Deliberately **not** done from the original §8 sketch: per-pair
+channels, Realtime RLS, postgres_changes triggers. The single-topic
+shape is cheap to reason about and the JWT/anon-key story is "the
+topic name is keyed by an unguessable game_id" rather than RLS-on-
+realtime. If we ever need to scope updates more tightly (e.g. so
+MasterPairView's focused-pair refetch isn't triggered by every
+unrelated pair's placements), the next move is per-pair topics or a
+filter on the broadcast payload's `pair_id` rather than introducing
+postgres_changes.
 
 ### 15.7 Marketing surface
 

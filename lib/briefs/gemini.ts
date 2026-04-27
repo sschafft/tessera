@@ -98,8 +98,23 @@ Constraints:
 
 Return only valid JSON matching the schema.`;
 
-  const result = await model.generateContent(prompt);
-  const text = result.response.text();
+  // Cap the per-call wall-clock at 6s. The /rounds/start handler has
+  // maxDuration=30 and processes pairs sequentially (with builder +
+  // guider parallelised within each pair); a single hung Gemini call
+  // could otherwise gobble the whole budget. A timeout throws
+  // GeminiResponseError which the orchestrator catches and falls back
+  // to library when allow_library_fallback is set.
+  const TIMEOUT_MS = 6_000;
+  const generated = await Promise.race([
+    model.generateContent(prompt),
+    new Promise<never>((_, reject) =>
+      setTimeout(
+        () => reject(new GeminiResponseError("timeout")),
+        TIMEOUT_MS,
+      ),
+    ),
+  ]);
+  const text = generated.response.text();
   let parsed: { title?: unknown; rules?: unknown };
   try {
     parsed = JSON.parse(text);

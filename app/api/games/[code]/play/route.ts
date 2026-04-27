@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { isValidGameCode } from "@/lib/game/code";
-import { readSessionForGame } from "@/lib/auth/session";
+import { readSessionAndParticipant } from "@/lib/auth/session";
 import { getRepository } from "@/lib/game/getRepository";
 import type { GoalPattern } from "@/lib/pattern/types";
 import { scorePlacements } from "@/lib/scoring/score";
@@ -26,11 +26,20 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "invalid_code" }, { status: 400 });
   }
 
-  const claims = await readSessionForGame(code);
-  if (!claims) {
+  // Use the live participants row (not the JWT claim) for role checks.
+  // A participant who was promoted/demoted by the GM keeps their stale
+  // role on the cookie until they re-join — trusting claims.role here
+  // re-introduced the gm_should_use_master kick the recovery flow was
+  // originally trying to fix (TDD §15.1).
+  const session = await readSessionAndParticipant(code);
+  if (!session) {
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
   }
-  if (claims.role === "gm") {
+  const { claims, me } = session;
+  if (me.released_at !== null) {
+    return NextResponse.json({ error: "participant_gone" }, { status: 404 });
+  }
+  if (me.role === "gm") {
     return NextResponse.json({ error: "gm_should_use_master" }, { status: 400 });
   }
 
@@ -38,14 +47,6 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
   const game = await repo.findGameByCode(code);
   if (!game || game.id !== claims.game_id) {
     return NextResponse.json({ error: "game_not_found" }, { status: 404 });
-  }
-
-  const me = await repo.findParticipantById(claims.sub);
-  if (!me || me.released_at !== null) {
-    return NextResponse.json({ error: "participant_gone" }, { status: 404 });
-  }
-  if (!me) {
-    return NextResponse.json({ error: "participant_gone" }, { status: 404 });
   }
 
   const round = await repo.findLatestRound(game.id);

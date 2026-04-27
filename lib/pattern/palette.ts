@@ -22,6 +22,15 @@ export const BUILDER_COLORS: TileColor[] = [
   "purple",
 ];
 
+/**
+ * Set forms — exported so route validators import the palette directly
+ * instead of re-listing shapes/colours and silently drifting (the
+ * placement routes used to allow `pink`/`teal`, which the goal
+ * generator never emits — silently un-scorable).
+ */
+export const BUILDER_SHAPE_SET = new Set<TileShape>(BUILDER_SHAPES);
+export const BUILDER_COLOR_SET = new Set<TileColor>(BUILDER_COLORS);
+
 const COLOR_COUNT_BY_COMPLEXITY: Record<number, number> = {
   1: 2,
   2: 3,

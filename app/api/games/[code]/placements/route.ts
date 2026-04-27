@@ -5,6 +5,10 @@ import { getRepository } from "@/lib/game/getRepository";
 import { MAX_GRID, gridSizeFor } from "@/lib/grid/coords";
 import { PlacementCellTakenError } from "@/lib/game/repository.memory";
 import { publishGameEvent } from "@/lib/realtime/publish";
+import {
+  BUILDER_COLOR_SET,
+  BUILDER_SHAPE_SET,
+} from "@/lib/pattern/palette";
 
 export const runtime = "nodejs";
 
@@ -20,24 +24,11 @@ interface PlacePayload {
   rot?: number;
 }
 
-// Shapes the builder palette currently exposes (lib/pattern/palette.ts
-// BUILDER_SHAPES). The validator was previously a kitchen-sink set
-// that accepted retired kinds (tri-dn, hex, pent) — those would slip
-// past the UI but the server scored them as wrong (no goal piece can
-// match a tri-dn since the generator only produces BUILDER_SHAPES).
-// Tightened to match the palette so a misbehaving client gets a clear
-// 400 instead of a silently-unscoreable placement.
-const VALID_SHAPES = new Set(["sq", "tri-up", "rhomb", "trap"]);
-const VALID_COLORS = new Set([
-  "red",
-  "orange",
-  "yellow",
-  "green",
-  "blue",
-  "purple",
-  "pink",
-  "teal",
-]);
+// Validators import the palette directly. The previous hand-maintained
+// VALID_COLORS list had drifted (allowed pink/teal — colours the goal
+// generator never emits — silently un-scorable). design_patterns.md
+// > "Validation at boundaries, trust internal code" — the validator
+// must match the palette exactly.
 
 function isInt(n: unknown): n is number {
   return typeof n === "number" && Number.isInteger(n);
@@ -67,10 +58,16 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
 
-  if (!body.shape || !VALID_SHAPES.has(body.shape)) {
+  if (
+    typeof body.shape !== "string" ||
+    !BUILDER_SHAPE_SET.has(body.shape as never)
+  ) {
     return NextResponse.json({ error: "invalid_shape" }, { status: 400 });
   }
-  if (!body.color || !VALID_COLORS.has(body.color)) {
+  if (
+    typeof body.color !== "string" ||
+    !BUILDER_COLOR_SET.has(body.color as never)
+  ) {
     return NextResponse.json({ error: "invalid_color" }, { status: 400 });
   }
   if (!isInt(body.q) || body.q < 0 || body.q >= MAX_GRID) {
