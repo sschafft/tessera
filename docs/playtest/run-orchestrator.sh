@@ -32,7 +32,8 @@ REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 JETTY_API_KEY=$(grep '^JETTY_API_KEY=' "$REPO/.env.local" | cut -d= -f2)
 TESSERA_URL="${TESSERA_URL:-https://tessera.schaffters.com}"
 COMPLEXITY="${COMPLEXITY:-5}"
-DURATION_MIN="${DURATION_MIN:-10}"
+DURATION_MIN="${DURATION_MIN:-8}"
+ROUND_COUNT="${ROUND_COUNT:-2}"
 
 if [[ -z "$JETTY_API_KEY" ]]; then
   echo "JETTY_API_KEY not found in .env.local" >&2
@@ -49,7 +50,7 @@ curl -sS -X POST -H 'Content-Type: application/json' \
     "video_call_url": "https://meet.example.com/orchestrator-playtest",
     "team_mode": "gm_picks",
     "default_complexity": '"$COMPLEXITY"',
-    "round_count": 1,
+    "round_count": '"$ROUND_COUNT"',
     "round_duration_seconds": '"$((DURATION_MIN * 60))"',
     "participant_cap": 16,
     "builder_brief_on": true,
@@ -67,6 +68,7 @@ echo
 echo "=== 2. Render 10 role instructions ==="
 CODE="$CODE" HOST_TOKEN="$HOST_TOKEN" TESSERA_URL="$TESSERA_URL" \
   COMPLEXITY="$COMPLEXITY" DURATION_MIN="$DURATION_MIN" \
+  ROUND_COUNT="$ROUND_COUNT" \
   python3 "$REPO/docs/playtest/render-roster.py"
 
 echo
