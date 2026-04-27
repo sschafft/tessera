@@ -150,7 +150,7 @@ OBSERVER_PLAYBOOK = (
     "**Phase B — observe round 1**\n"
     "4. Confirm side-by-side builder + goal canvas layout renders within ~3s of round start. Time it.\n"
     "5. Watch the builder canvas update in (near-)realtime as pieces are placed. Capture latency from 'piece placed' (you can't see exactly when, but estimate from rate of change).\n"
-    "6. **Switch pairs**: if `available_pairs` shows other pairs, click a different pair from the bottom strip. Verify the layout updates to the new pair. Switch back.\n"
+    "6. **Switch pairs**: if `available_pairs` shows other pairs, click a different pair from the bottom strip. Verify the layout updates to the new pair. **CRITICAL**: switch back to your originally-assigned pair (pair {pair_idx}) before phase C. Observer self-switching mutates `participants.pair_id` — the GM dashboard will read whatever pair you last selected as your 'home', which surfaces as cross-pair drift in the lobby sidebar if you forget to switch back.\n"
     "7. When a super-power fires (e.g. Reveal briefs, Prototype unlock), observe whether the observer view reflects it.\n"
     "8. Read both pair-side briefs if revealed.\n"
     "9. **Test view scaling**: try resizing the browser to a narrower width (1024px) — does the layout adapt or break?\n\n"
