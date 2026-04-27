@@ -545,6 +545,7 @@ export type Database = {
         | "agile_share"
         | "time_pressure"
         | "vocab_swap"
+        | "change_builder_brief"
         | "randomizer"
         | "requirement_change"
       brief_source_t: "gm" | "library" | "gemini"
@@ -687,6 +688,7 @@ export const Constants = {
         "agile_share",
         "time_pressure",
         "vocab_swap",
+        "change_builder_brief",
         "randomizer",
         "requirement_change",
       ],

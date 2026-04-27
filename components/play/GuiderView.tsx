@@ -1,5 +1,9 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { PlayCanvas } from "@/components/canvas/PlayCanvas";
 import { BriefEnvelope } from "./BriefEnvelope";
+import { BriefGate } from "./BriefGate";
 import { JoinCallCta } from "./JoinCallCta";
 import type { PlayState } from "./PlayContent";
 
@@ -8,18 +12,27 @@ export interface GuiderViewProps {
 }
 
 export function GuiderView({ state }: GuiderViewProps) {
+  const briefSignature =
+    state.brief?.title ?? (state.brief ? "(present)" : null);
+  const [briefOpened, setBriefOpened] = useState(briefSignature === null);
+  useEffect(() => {
+    setBriefOpened(briefSignature === null);
+  }, [briefSignature]);
+
   if (!state.round || state.round.status !== "running" || !state.goal) {
     return <WaitingForRound state={state} />;
   }
   const showCoords = (state.round.complexity ?? 5) <= 4;
   return (
     <section className="relative mx-auto flex w-full max-w-[1100px] flex-1 flex-col items-center justify-center gap-6 p-6">
-      <div className="absolute right-6 top-6 z-10 flex flex-col gap-3">
+      <div className="absolute right-6 top-6 z-30 flex flex-col gap-3">
         {state.brief && state.brief.role === "guider" && (
           <BriefEnvelope
             role="guider"
             title={state.brief.title}
             rules={state.brief.rules}
+            onOpen={() => setBriefOpened(true)}
+            emphasize={!briefOpened}
           />
         )}
         {state.partner_brief && (
@@ -80,6 +93,8 @@ export function GuiderView({ state }: GuiderViewProps) {
           </div>
         </div>
       )}
+
+      {!briefOpened && <BriefGate role="guider" />}
     </section>
   );
 }

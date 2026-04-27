@@ -8,6 +8,7 @@ import { BriefEnvelope } from "./BriefEnvelope";
 import { JoinCallCta } from "./JoinCallCta";
 import { BUILDER_SHAPES, paletteColorsFor } from "@/lib/pattern/palette";
 import { playTestSolution } from "@/lib/sound";
+import { BriefGate } from "./BriefGate";
 import type { PlacedPiece, PlayState } from "./PlayContent";
 
 interface TestResult {
@@ -445,8 +446,18 @@ function BuilderInteractive({ state }: { state: PlayState }) {
 
   const showCoords = (state.round?.complexity ?? 5) <= 4;
 
+  // Brief-open gate: if the builder has a brief, dim the canvas + tray
+  // until they open it. Resets when the brief changes (super-power
+  // re-roll, new round, etc).
+  const briefSignature =
+    state.brief?.title ?? (state.brief ? "(present)" : null);
+  const [briefOpened, setBriefOpened] = useState(briefSignature === null);
+  useEffect(() => {
+    setBriefOpened(briefSignature === null);
+  }, [briefSignature]);
+
   return (
-    <div className="grid w-full" style={{ gridTemplateColumns: "280px 1fr" }}>
+    <div className="grid w-full relative" style={{ gridTemplateColumns: "280px 1fr" }}>
       <aside className="flex flex-col gap-5 border-r border-[var(--color-line)] bg-[var(--color-paper-2)] p-5">
         <ModeBanner
           shape={selectedShape}
@@ -480,12 +491,14 @@ function BuilderInteractive({ state }: { state: PlayState }) {
         )}
       </aside>
       <section className="relative flex items-start justify-center overflow-auto p-6">
-        <div className="absolute right-6 top-6 z-10 flex flex-col gap-3">
+        <div className="absolute right-6 top-6 z-30 flex flex-col gap-3">
           {state.brief && state.brief.role === "builder" && (
             <BriefEnvelope
               role="builder"
               title={state.brief.title}
               rules={state.brief.rules}
+              onOpen={() => setBriefOpened(true)}
+              emphasize={!briefOpened}
             />
           )}
           {state.partner_brief && (
@@ -497,6 +510,8 @@ function BuilderInteractive({ state }: { state: PlayState }) {
             />
           )}
         </div>
+
+        {!briefOpened && <BriefGate role="builder" />}
         <div className="flex flex-col items-center gap-3">
           <PrototypeOverlay
             prototype={state.prototype}

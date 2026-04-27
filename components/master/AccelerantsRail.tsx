@@ -55,11 +55,18 @@ const BUTTONS: RailButtonSpec[] = [
     sub: "−3:00 from the round timer.",
   },
   {
+    kind: "change_builder_brief",
+    icon: "✦",
+    color: "orange",
+    title: "Change builder brief",
+    sub: "Re-roll the builder's hidden constraint.",
+  },
+  {
     kind: "vocab_swap",
     icon: "✦",
     color: "teal",
-    title: "Vocab swap",
-    sub: "Force the guider's brief to a new constraint.",
+    title: "Change guider brief",
+    sub: "Re-roll the guider's hidden constraint.",
   },
   {
     kind: "randomizer",

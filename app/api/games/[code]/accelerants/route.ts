@@ -129,28 +129,36 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
 
     case "vocab_swap":
+    case "change_builder_brief": {
+      const role: "builder" | "guider" =
+        body.kind === "change_builder_brief" ? "builder" : "guider";
+      const source =
+        role === "builder" ? game.builder_brief_source : game.guider_brief_source;
+      const custom =
+        role === "builder" ? game.builder_brief_custom : game.guider_brief_custom;
       for (const pair of targetedPairs) {
         const pr = await repo.findPairRound(round.id, pair.id);
         if (!pr) continue;
-        const current = await repo.findBrief(pr.id, "guider");
+        const current = await repo.findBrief(pr.id, role);
         const exclude = current ? [current.title] : [];
         const fresh = await pickBrief({
-          role: "guider",
+          role,
           complexity: round.complexity,
-          source: game.guider_brief_source,
+          source,
           game_id: game.id,
-          custom: game.guider_brief_custom,
+          custom,
           exclude_titles: exclude,
         });
         await repo.upsertBrief({
           pair_round_id: pr.id,
-          role: "guider",
+          role,
           source: fresh.source,
           title: fresh.title,
           rules: fresh.rules,
         });
       }
       break;
+    }
 
     case "randomizer":
       for (const pair of targetedPairs) {

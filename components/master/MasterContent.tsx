@@ -326,6 +326,30 @@ export function MasterContent({
     }
   }, [code, fetchSnapshot]);
 
+  const extendRound = useCallback(
+    async (deltaSeconds: number) => {
+      setBusy(true);
+      setActionError(null);
+      try {
+        const res = await fetch(`/api/games/${code}/rounds/extend`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ delta_seconds: deltaSeconds }),
+        });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          throw new Error(j.error || `status ${res.status}`);
+        }
+        await fetchSnapshot();
+      } catch (err) {
+        setActionError(err instanceof Error ? err.message : "extend failed");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [code, fetchSnapshot],
+  );
+
   const updateScoring = useCallback(
     async (patch: { correct_pts?: number; wrong_pts?: number }) => {
       setBusy(true);
@@ -483,6 +507,7 @@ export function MasterContent({
         onStart={startRoundDefault}
         onEnd={endRound}
         onEndGame={requestEndGame}
+        onExtend={extendRound}
       />
       <div
         className="grid min-h-0 flex-1"

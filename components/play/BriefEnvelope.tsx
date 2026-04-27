@@ -8,6 +8,10 @@ export interface BriefEnvelopeProps {
   rules: string[];
   /** Default open / closed state; defaults to closed (sealed). */
   defaultOpen?: boolean;
+  /** Called the first time the envelope is opened. */
+  onOpen?: () => void;
+  /** When true, the envelope pulses to draw attention (used by the gate). */
+  emphasize?: boolean;
 }
 
 /**
@@ -24,23 +28,38 @@ export function BriefEnvelope({
   title,
   rules,
   defaultOpen = false,
+  onOpen,
+  emphasize = false,
 }: BriefEnvelopeProps) {
   const [open, setOpen] = useState(defaultOpen);
   const roleLabel = role === "builder" ? "Builder" : "Guider";
   const colorVar =
     role === "builder" ? "var(--color-t-red)" : "var(--color-t-blue)";
 
+  const handleOpen = () => {
+    setOpen(true);
+    onOpen?.();
+  };
+
   if (!open) {
     return (
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={handleOpen}
         className="t-envelope text-left"
         style={{
           width: 280,
           paddingTop: 36,
           cursor: "pointer",
-          border: "1.5px solid var(--color-ink)",
+          border: emphasize
+            ? "2px solid var(--color-t-red)"
+            : "1.5px solid var(--color-ink)",
+          animation: emphasize
+            ? "tessera-attention 1100ms ease-in-out infinite"
+            : "none",
+          boxShadow: emphasize
+            ? "0 0 0 6px rgba(238, 58, 58, 0.12), 0 4px 0 rgba(0,0,0,.10)"
+            : undefined,
         }}
       >
         <div className="t-envelope__seal">{role[0]?.toUpperCase()}</div>
@@ -119,8 +138,9 @@ export function BriefEnvelope({
           color: "#7a5b00",
         }}
       >
-        Your partner has a <b>different brief</b>. Don&apos;t share yours —
-        ask probing questions instead.
+        Your partner has a <b>different brief</b>. <b>Don&apos;t read this
+        aloud or paraphrase it.</b> They can ask you yes / no questions about
+        it — answer honestly, like 20 questions.
       </div>
     </div>
   );

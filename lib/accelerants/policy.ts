@@ -10,7 +10,11 @@ export type AccelerantKind =
   | "test_build"
   | "agile_share"
   | "time_pressure"
+  // vocab_swap is the historic name for "Change guider brief"; kept
+  // for backward compatibility with already-logged events. The UI
+  // surfaces it alongside change_builder_brief as paired buttons.
   | "vocab_swap"
+  | "change_builder_brief"
   | "randomizer"
   | "requirement_change";
 
@@ -32,7 +36,12 @@ export const POLICIES: Record<AccelerantKind, AccelerantPolicy> = {
   test_build: { maxPerRound: null, cooldownSeconds: 0, implemented: true },
   agile_share: { maxPerRound: 3, cooldownSeconds: 0, implemented: true },
   time_pressure: { maxPerRound: 2, cooldownSeconds: 0, implemented: true },
-  vocab_swap: { maxPerRound: 1, cooldownSeconds: 0, implemented: true },
+  vocab_swap: { maxPerRound: null, cooldownSeconds: 0, implemented: true },
+  change_builder_brief: {
+    maxPerRound: null,
+    cooldownSeconds: 0,
+    implemented: true,
+  },
   randomizer: { maxPerRound: null, cooldownSeconds: 0, implemented: true },
   requirement_change: {
     maxPerRound: null,

@@ -71,3 +71,15 @@ body {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
+
+@keyframes tessera-jiggle {
+  0%, 100% { transform: rotate(0deg) translateY(0); }
+  20% { transform: rotate(-2deg) translateY(-1px); }
+  50% { transform: rotate(2deg) translateY(0); }
+  80% { transform: rotate(-1deg) translateY(-0.5px); }
+}
+
+@keyframes tessera-attention {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}

@@ -6,6 +6,7 @@ import type { GoalPattern } from "@/lib/pattern/types";
 import {
   enableAudio,
   playGameEnd,
+  playLastTwoMinutes,
   playRoundEnd,
   playTimePressure,
 } from "@/lib/sound";
@@ -190,6 +191,26 @@ export function PlayContent({ code, initial }: PlayContentProps) {
     }
     prevGameStatus.current = state.game_status;
   }, [state.game_status, state.sound_on]);
+
+  // Last-two-minutes chime: ticks every second checking the live
+  // remaining timer. Fires once per round when remaining first dips
+  // below 120s. Re-arms whenever a new round starts.
+  const lastTwoArmedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!state.sound_on) return;
+    const round = state.round;
+    if (!round || round.status !== "running" || !round.started_at) return;
+    const startedMs = new Date(round.started_at).getTime();
+    const id = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - startedMs) / 1000);
+      const remaining = Math.max(0, round.duration_seconds - elapsed);
+      if (remaining <= 120 && remaining > 60 && lastTwoArmedFor.current !== round.id) {
+        lastTwoArmedFor.current = round.id;
+        playLastTwoMinutes();
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [state.round, state.sound_on]);
 
   const partnerForBar = state.partner
     ? {

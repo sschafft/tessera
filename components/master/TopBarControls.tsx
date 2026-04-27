@@ -25,6 +25,8 @@ export interface TopBarControlsProps {
   onStart: () => void;
   onEnd: () => void;
   onEndGame: () => void;
+  /** Add seconds to the running round timer. */
+  onExtend: (deltaSeconds: number) => void;
 }
 
 const ERROR_COPY: Record<string, string> = {
@@ -51,10 +53,12 @@ export function TopBarControls({
   onStart,
   onEnd,
   onEndGame,
+  onExtend,
 }: TopBarControlsProps) {
   const remaining = useTimer(round, durationSeconds);
   const isRunning = round?.status === "running";
   const isRoundEnded = round?.status === "ended";
+  const isLastTwoMinutes = isRunning && remaining > 0 && remaining <= 120;
   const idx = round?.index ?? 1;
   const nextIdx = isRoundEnded ? idx + 1 : idx;
 
@@ -97,11 +101,50 @@ export function TopBarControls({
       </div>
       <div className="flex items-center gap-3">
         <span
-          className="t-mono rounded-full bg-[var(--color-paper-2)] px-3.5 py-2 text-[14px] font-bold"
+          className="t-mono rounded-full px-3.5 py-2 text-[14px] font-bold"
           aria-label="Round timer"
+          style={{
+            background: isLastTwoMinutes
+              ? "var(--color-tint-red)"
+              : "var(--color-paper-2)",
+            color: isLastTwoMinutes ? "var(--color-t-red)" : "inherit",
+            boxShadow: isLastTwoMinutes
+              ? "inset 0 0 0 1.5px var(--color-t-red)"
+              : "none",
+            animation: isLastTwoMinutes
+              ? "tessera-jiggle 700ms ease-in-out infinite"
+              : "none",
+            transition: "background 200ms, color 200ms",
+          }}
         >
           ⏱ {formatDuration(remaining)}
         </span>
+
+        {isRunning && (
+          <div className="flex items-center gap-1">
+            {[
+              { label: "+30s", delta: 30 },
+              { label: "+1m", delta: 60 },
+              { label: "+2m", delta: 120 },
+            ].map((b) => (
+              <button
+                key={b.label}
+                type="button"
+                onClick={() => onExtend(b.delta)}
+                disabled={busy}
+                className="t-mono rounded-full px-2.5 py-1 text-[11px] font-bold disabled:opacity-50"
+                style={{
+                  background: "var(--color-tint-blue)",
+                  color: "var(--color-t-blue)",
+                  border: "1.5px solid var(--color-t-blue)",
+                }}
+                aria-label={`Add ${b.delta} seconds to the timer`}
+              >
+                {b.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {gameEnded ? (
           <span

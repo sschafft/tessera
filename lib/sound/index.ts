@@ -64,6 +64,18 @@ export function playGameEnd(): void {
 }
 
 /**
+ * Crossing into the last two minutes of the round — single warm
+ * chime with a touch of sting. Loud enough to be noticed mid-call but
+ * not jarring.
+ */
+export function playLastTwoMinutes(): void {
+  if (!enabled || !synth) return;
+  const now = Tone.now();
+  synth.triggerAttackRelease("F5", "8n", now);
+  synth.triggerAttackRelease("D5", "4n", now + 0.18);
+}
+
+/**
  * Builder's "Test solution" celebration — a quick rising arpeggio
  * scaled to how many pieces they got right. More right → louder,
  * higher final note. Zero correct → a single soft bloop, no fanfare.
