@@ -20,15 +20,14 @@ interface PlacePayload {
   rot?: number;
 }
 
-const VALID_SHAPES = new Set([
-  "tri-up",
-  "tri-dn",
-  "sq",
-  "rhomb",
-  "trap",
-  "hex",
-  "pent",
-]);
+// Shapes the builder palette currently exposes (lib/pattern/palette.ts
+// BUILDER_SHAPES). The validator was previously a kitchen-sink set
+// that accepted retired kinds (tri-dn, hex, pent) — those would slip
+// past the UI but the server scored them as wrong (no goal piece can
+// match a tri-dn since the generator only produces BUILDER_SHAPES).
+// Tightened to match the palette so a misbehaving client gets a clear
+// 400 instead of a silently-unscoreable placement.
+const VALID_SHAPES = new Set(["sq", "tri-up", "rhomb", "trap"]);
 const VALID_COLORS = new Set([
   "red",
   "orange",
