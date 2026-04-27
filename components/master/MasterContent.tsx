@@ -98,6 +98,7 @@ export function MasterContent({
 }: MasterContentProps) {
   const [data, setData] = useState<LobbyResponse | null>(null);
   const [pollError, setPollError] = useState<string | null>(null);
+  const [hostSessionLost, setHostSessionLost] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -108,10 +109,20 @@ export function MasterContent({
       const res = await fetch(`/api/games/${code}/lobby`, {
         cache: "no-store",
       });
+      if (res.status === 401 || res.status === 403) {
+        // GM session is gone — could be a torn cookie (player tab on
+        // the same browser overwrote it), an expired session, or the
+        // GM landing here with no session at all. Surface the host-
+        // recover CTA instead of looping silently with an empty lobby.
+        setHostSessionLost(true);
+        setPollError(null);
+        return;
+      }
       if (!res.ok) throw new Error(`status ${res.status}`);
       const json: LobbyResponse = await res.json();
       setData(json);
       setPollError(null);
+      setHostSessionLost(false);
     } catch (err) {
       setPollError(err instanceof Error ? err.message : "fetch failed");
     }
@@ -531,6 +542,30 @@ export function MasterContent({
         onEndGame={requestEndGame}
         onExtend={extendRound}
       />
+      {hostSessionLost && (
+        <div
+          className="flex items-center gap-3 border-b border-[var(--color-line)] px-7 py-2.5 text-[13px]"
+          style={{
+            background: "var(--color-tint-red)",
+            color: "var(--color-t-red)",
+          }}
+          role="alert"
+        >
+          <span aria-hidden="true">⚠</span>
+          <span className="flex-1">
+            <b>Your facilitator session was lost.</b> The lobby below may look
+            empty even though players are still in the game. Recover via the
+            host token you saved when you created this game.
+          </span>
+          <a
+            href={`/host-recover/${code}`}
+            className="t-mono rounded-full bg-white px-3 py-1 text-[11px] font-bold text-[var(--color-t-red)]"
+            style={{ border: "1.5px solid var(--color-t-red)" }}
+          >
+            Recover host →
+          </a>
+        </div>
+      )}
       <div
         className="grid min-h-0 flex-1"
         style={{

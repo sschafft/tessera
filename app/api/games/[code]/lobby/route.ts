@@ -113,11 +113,18 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
           ended_at: round.ended_at,
         }
       : null,
-    accelerant_events: accelerantEvents.map((e) => ({
-      kind: e.kind,
-      scope: e.scope,
-      pair_id: e.pair_id,
-      triggered_at: e.triggered_at,
-    })),
+    // Defensive: drop any events the storage layer can't fully
+    // hydrate. Saw a playtest where one event landed with kind=null /
+    // triggered_at=null (DB enum drift, possibly mid-deploy). The UI
+    // can't render those usefully and surfacing nulls confuses
+    // downstream consumers, so we filter rather than echo broken rows.
+    accelerant_events: accelerantEvents
+      .filter((e) => e.kind != null && e.triggered_at != null)
+      .map((e) => ({
+        kind: e.kind,
+        scope: e.scope,
+        pair_id: e.pair_id,
+        triggered_at: e.triggered_at,
+      })),
   });
 }

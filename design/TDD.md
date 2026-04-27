@@ -8,7 +8,7 @@
 
 ## v1.1 changelog (key technical changes from v1.0)
 
-**New migrations (8–11):**
+**New migrations (8–13):**
 - `add_scoring_fields_to_games` — `games.scoring_correct_pts` (int
   default 10) + `games.scoring_wrong_pts` (int default 0).
 - `add_change_builder_brief_accelerant` — adds the per-side brief
@@ -18,8 +18,17 @@
   `accelerant_t`.
 - `add_pair_display_name` — `pairs.display_name` (text null) for
   pair self-naming.
+- `add_player_recovery_token` — `participants.recovery_token_hash`
+  text null. Hash of the player's one-shot recovery token; plain form
+  is shown once in the join response. Mirrors `games.host_token_hash`
+  for the GM. Verified by `POST /api/games/[code]/recover`.
 
 **New endpoints:**
+- `POST /api/games/[code]/recover` — exchanges
+  `{participant_id, token}` for a fresh session cookie. Plain token
+  in the request body (never the URL path/query) so it stays out of
+  access logs and Referer headers; the `/recover/<code>` page reads
+  it from the URL fragment + `?p=<participant_id>` query.
 - `POST /api/games/[code]/test-solution` — builder-only, computes
   the score breakdown against the goal and flips test_enabled so
   per-piece highlights persist.

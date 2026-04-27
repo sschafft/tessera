@@ -73,6 +73,14 @@ export interface ParticipantRecord {
   joined_at: string;
   last_seen_at: string;
   released_at: string | null;
+  /**
+   * Bcrypt hash of the player's one-shot recovery token. Plain token
+   * is returned once in the join response and never persisted; the
+   * /recover route bcrypt-compares against this hash. Nullable so
+   * GM-created participants (whose recovery is via games.host_token_hash)
+   * keep working.
+   */
+  recovery_token_hash: string | null;
 }
 
 export interface CreateParticipantInput {
@@ -81,6 +89,8 @@ export interface CreateParticipantInput {
   display_name: string;
   role: ParticipantRole;
   color: string;
+  /** Optional — pre-hashed when set. */
+  recovery_token_hash?: string | null;
 }
 
 export interface PairRecord {

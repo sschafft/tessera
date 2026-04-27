@@ -53,6 +53,24 @@
 - **Surface failures with explicit recovery.** Gemini brief failures
   now show a modal with "Use preset briefs" / "Cancel" instead of
   500'ing. Orphan pending rounds auto-clean on retry. (§6.2)
+- **Player recovery URLs.** Every join mints a one-shot recovery
+  token (mirrors GM `host_token`). Plain token shown once in a "save
+  this URL" modal post-join + saved to localStorage as a fallback.
+  Players whose session cookie gets clobbered (multi-tab on shared
+  devices, browser restart, mobile foreground swap) can paste the URL
+  on `/recover/<code>` to reclaim their seat with the same display
+  name + role. The `name_taken` join error also surfaces a CTA to the
+  recovery page. (§6.1)
+- **GM session-lost recovery banner.** `/api/games/[code]/lobby` now
+  surfaces 401/403 to the GM dashboard as an explicit "your facilitator
+  session was lost" banner with a one-click link to `/host-recover/<code>`,
+  instead of silently rendering an empty lobby. The same pattern lights
+  up on player views when /play 401/403s. (§6.13)
+- **GM-on-/play graceful redirect.** When a GM session cookie hits
+  the player URL (e.g. shared-cookie tooling, GM bookmarks the player
+  link by mistake), the polling loop now follows the typed
+  `gm_should_use_master` error to push the GM into `/master` instead
+  of looping silently on 400s. (§6.13)
 - **Vercel Analytics** mounted in the root layout.
 
 ---

@@ -101,6 +101,7 @@ export class MemoryGameRepository implements GameRepository {
       joined_at: now,
       last_seen_at: now,
       released_at: null,
+      recovery_token_hash: input.recovery_token_hash ?? null,
     };
     this.participants.set(record.id, record);
     return record;
