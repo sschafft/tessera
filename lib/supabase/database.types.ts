@@ -356,6 +356,7 @@ export type Database = {
           joined_at: string
           last_seen_at: string
           pair_id: string | null
+          recovery_token_hash: string | null
           released_at: string | null
           role: Database["public"]["Enums"]["role_t"]
         }
@@ -367,6 +368,7 @@ export type Database = {
           joined_at?: string
           last_seen_at?: string
           pair_id?: string | null
+          recovery_token_hash?: string | null
           released_at?: string | null
           role?: Database["public"]["Enums"]["role_t"]
         }
@@ -378,6 +380,7 @@ export type Database = {
           joined_at?: string
           last_seen_at?: string
           pair_id?: string | null
+          recovery_token_hash?: string | null
           released_at?: string | null
           role?: Database["public"]["Enums"]["role_t"]
         }

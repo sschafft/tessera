@@ -7,6 +7,10 @@ import { getRepository } from "@/lib/game/getRepository";
 import { colorFor } from "@/lib/game/colors";
 import { DuplicateNameError } from "@/lib/game/repository.memory";
 import { publishGameEvent } from "@/lib/realtime/publish";
+import {
+  generatePlayerToken,
+  hashPlayerToken,
+} from "@/lib/auth/playerToken";
 import type { ParticipantRole } from "@/lib/game/repository";
 
 export const runtime = "nodejs";
@@ -98,6 +102,13 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "game_full" }, { status: 409 });
   }
 
+  // Mint a one-shot recovery token now so we can return it once below.
+  // Hashed on the row; plain form is the user's lifeline if their
+  // browser session is wiped (multi-tab cookie collision, browser
+  // restart, mobile foreground swap, etc.).
+  const recoveryToken = generatePlayerToken();
+  const recoveryTokenHash = await hashPlayerToken(recoveryToken);
+
   let participant;
   try {
     participant = await repo.createParticipant({
@@ -105,11 +116,17 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       display_name: displayName,
       role: effectiveRole,
       color: colorFor(displayName, game.id),
+      recovery_token_hash: recoveryTokenHash,
     });
   } catch (err) {
     if (err instanceof DuplicateNameError) {
       return NextResponse.json(
-        { error: "name_taken", message: "That display name is already in this game." },
+        {
+          error: "name_taken",
+          message:
+            "That display name is already in this game. If it's yours from earlier, paste your recovery URL on /recover.",
+          recover_path: `/recover/${code}`,
+        },
         { status: 409 },
       );
     }
@@ -122,6 +139,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     game,
     participantId: participant.id,
     role: participant.role,
+    recoveryToken,
   });
 }
 
@@ -130,11 +148,14 @@ async function successResponse({
   game,
   participantId,
   role,
+  recoveryToken,
 }: {
   code: string;
   game: { id: string };
   participantId: string;
   role: ParticipantRole;
+  /** Plain recovery token. Only set on a fresh join (not on cookie reconnect). */
+  recoveryToken?: string;
 }) {
   const token = await mintSession({
     sub: participantId,
@@ -147,11 +168,19 @@ async function successResponse({
   // lobby-role participants until the GM allocates them.
   const redirect = `/g/${code}/play`;
 
+  // Recovery URL pattern mirrors host-recover: participant_id in the
+  // path, plain token in the URL fragment so it stays out of server
+  // logs and Referer headers.
+  const recovery_url = recoveryToken
+    ? `/recover/${code}?p=${participantId}#${recoveryToken}`
+    : null;
+
   const res = NextResponse.json({
     code,
     participant_id: participantId,
     role,
     redirect,
+    recovery_url,
   });
   setSessionCookie(res.cookies, code, token);
   return res;

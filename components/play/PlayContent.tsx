@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { TileColor, TileShape } from "@/components/canvas/Tile";
 import type { GoalPattern } from "@/lib/pattern/types";
 import {
@@ -124,20 +125,44 @@ export interface PlayContentProps {
 const POLL_MS = 30_000;
 
 export function PlayContent({ code, initial }: PlayContentProps) {
+  const router = useRouter();
   const [state, setState] = useState<PlayState>(initial);
   const [error, setError] = useState<string | null>(null);
+  const [sessionLost, setSessionLost] = useState(false);
 
   const fetchState = useCallback(async () => {
     try {
       const res = await fetch(`/api/games/${code}/play`, { cache: "no-store" });
-      if (!res.ok) throw new Error(`status ${res.status}`);
+      if (!res.ok) {
+        // Stale-cookie cases the polling loop would otherwise spin on
+        // forever. Read the body once so we can branch on the typed
+        // error code.
+        const body = await res.json().catch(() => ({}));
+        if (body?.error === "gm_should_use_master") {
+          // GM session ended up on /play (e.g. shared-cookie tooling
+          // race, or the GM bookmarked the player URL). Push to the
+          // master view where their cookie actually means something.
+          router.replace(`/g/${code}/master`);
+          return;
+        }
+        if (res.status === 401 || res.status === 403) {
+          // Session is gone (cookie cleared, expired, or overwritten by
+          // a different role's join). Surface a recovery banner instead
+          // of looping silently on 401/403.
+          setSessionLost(true);
+          setError(null);
+          return;
+        }
+        throw new Error(`status ${res.status}`);
+      }
       const json: PlayState = await res.json();
       setState(json);
       setError(null);
+      setSessionLost(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "fetch failed");
     }
-  }, [code]);
+  }, [code, router]);
 
   useEffect(() => {
     let cancelled = false;
@@ -245,17 +270,30 @@ export function PlayContent({ code, initial }: PlayContentProps) {
       <main className="relative flex flex-1 overflow-hidden">
         {renderBody(state)}
       </main>
-      {error && (
+      {sessionLost && (
+        <div
+          className="flex flex-col gap-1 border-t border-[var(--color-line)] px-6 py-3 text-[13px]"
+          style={{ background: "var(--color-tint-red)", color: "var(--color-t-red)" }}
+          role="alert"
+        >
+          <span className="font-bold">Your session for this game was lost.</span>
+          <span style={{ color: "#7a1818" }}>
+            If you saved your recovery URL when you joined, open it now to
+            reclaim your seat. Otherwise{" "}
+            <a
+              href={`/g/${code}/join`}
+              className="underline font-bold"
+            >
+              rejoin with the same display name
+            </a>
+            .
+          </span>
+        </div>
+      )}
+      {error && !sessionLost && (
         <p className="px-6 py-2 text-[11px] text-[var(--color-ink-3)]">
-          {/* User-facing copy that doesn't leak the raw HTTP status —
-              auth-related codes (400/401/403) are usually a session
-              hiccup that resolves on next poll. Other codes might mean
-              the round is mid-rebuild. */}
-          {error.includes("400") ||
-          error.includes("401") ||
-          error.includes("403")
-            ? "Reconnecting…"
-            : "Couldn't reach the game right now — retrying."}
+          {/* User-facing copy that doesn't leak the raw HTTP status. */}
+          Couldn&apos;t reach the game right now — retrying.
         </p>
       )}
     </div>

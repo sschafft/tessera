@@ -89,6 +89,7 @@ function toParticipantRecord(row: DbParticipant): ParticipantRecord {
     joined_at: row.joined_at,
     last_seen_at: row.last_seen_at,
     released_at: row.released_at,
+    recovery_token_hash: row.recovery_token_hash,
   };
 }
 
@@ -155,6 +156,7 @@ export class SupabaseGameRepository implements GameRepository {
         display_name: input.display_name,
         role: input.role,
         color: input.color,
+        recovery_token_hash: input.recovery_token_hash ?? null,
       })
       .select()
       .single();

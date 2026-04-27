@@ -202,6 +202,24 @@ export function TopBarControls({
           >
             {busy ? "Ending…" : "End round"}
           </button>
+        ) : allRoundsDone ? (
+          <div className="flex items-center gap-2">
+            <span
+              className="t-mono rounded-full bg-[var(--color-tint-yellow)] px-3 py-1.5 text-[11px] font-bold"
+              style={{ color: "#7a5b00" }}
+              title={`All ${roundCount} planned round${roundCount === 1 ? "" : "s"} have finished.`}
+            >
+              all rounds done
+            </span>
+            <button
+              type="button"
+              className="t-btn t-btn--primary t-btn--sm disabled:opacity-50"
+              onClick={onEndGame}
+              disabled={busy}
+            >
+              {busy ? "Ending…" : "End game →"}
+            </button>
+          </div>
         ) : (
           <div className="flex items-center gap-1.5">
             <div

@@ -34,6 +34,12 @@ export function JoinForm({ code, teamMode, defaultName }: JoinFormProps) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<FormError | null>(null);
 
+  const [recoveryModal, setRecoveryModal] = useState<{
+    url: string;
+    redirect: string;
+  } | null>(null);
+  const [nameTakenHint, setNameTakenHint] = useState<string | null>(null);
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!displayName.trim()) {
@@ -42,6 +48,7 @@ export function JoinForm({ code, teamMode, defaultName }: JoinFormProps) {
     }
     setSubmitting(true);
     setError(null);
+    setNameTakenHint(null);
     try {
       const res = await fetch(`/api/games/${code}/join`, {
         method: "POST",
@@ -58,6 +65,7 @@ export function JoinForm({ code, teamMode, defaultName }: JoinFormProps) {
             field: "name",
             message: "That name is already taken in this game. Try another.",
           });
+          if (data.recover_path) setNameTakenHint(data.recover_path);
           setSubmitting(false);
           return;
         }
@@ -81,8 +89,25 @@ export function JoinForm({ code, teamMode, defaultName }: JoinFormProps) {
         }
         throw new Error(data.message || data.error || `Server error ${res.status}`);
       }
-      const data: { redirect: string } = await res.json();
-      router.push(data.redirect);
+      const data: { redirect: string; recovery_url: string | null } =
+        await res.json();
+      if (data.recovery_url) {
+        // Stash a fully-qualified URL so the player can paste it
+        // anywhere (including a different browser).
+        const fullUrl = `${window.location.origin}${data.recovery_url}`;
+        try {
+          window.localStorage.setItem(
+            `tessera_recovery_${code}`,
+            fullUrl,
+          );
+        } catch {
+          // localStorage can be disabled (incognito on some browsers);
+          // the modal below is the main affordance, this is a backup.
+        }
+        setRecoveryModal({ url: fullUrl, redirect: data.redirect });
+      } else {
+        router.push(data.redirect);
+      }
     } catch (err) {
       setError({
         field: null,
@@ -95,6 +120,10 @@ export function JoinForm({ code, teamMode, defaultName }: JoinFormProps) {
   const nameError = error?.field === "name" ? error.message : null;
   const generalError = error?.field === null ? error.message : null;
 
+  if (recoveryModal) {
+    return <RecoverySaveModal {...recoveryModal} router={router} />;
+  }
+
   return (
     <form
       onSubmit={onSubmit}
@@ -102,7 +131,11 @@ export function JoinForm({ code, teamMode, defaultName }: JoinFormProps) {
     >
       <Field
         label="Display name"
-        hint={nameError ?? "must be unique in this game"}
+        hint={
+          nameTakenHint
+            ? undefined
+            : (nameError ?? "must be unique in this game")
+        }
       >
         <input
           className="t-input"
@@ -155,6 +188,21 @@ export function JoinForm({ code, teamMode, defaultName }: JoinFormProps) {
         </div>
       )}
 
+      {nameTakenHint && (
+        <p
+          className="text-[13px]"
+          style={{ color: "#7a5b00" }}
+          role="status"
+        >
+          If that name was yours from earlier and your browser session was
+          lost, paste your{" "}
+          <a href={nameTakenHint} className="font-bold underline">
+            recovery URL on /recover
+          </a>{" "}
+          to reclaim the seat.
+        </p>
+      )}
+
       {generalError && (
         <p className="text-[13px] text-[var(--color-t-red)]" role="alert">
           {generalError}
@@ -169,5 +217,74 @@ export function JoinForm({ code, teamMode, defaultName }: JoinFormProps) {
         {submitting ? "Joining…" : "Join game →"}
       </button>
     </form>
+  );
+}
+
+function RecoverySaveModal({
+  url,
+  redirect,
+  router,
+}: {
+  url: string;
+  redirect: string;
+  router: ReturnType<typeof useRouter>;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  return (
+    <div className="t-card flex flex-col gap-4 p-6">
+      <div className="flex flex-col gap-1">
+        <span className="t-mono text-[11px] uppercase tracking-widest text-[var(--color-ink-3)]">
+          Save your recovery URL
+        </span>
+        <h2 className="t-display text-[20px] leading-tight">
+          One-shot — keep this safe.
+        </h2>
+        <p className="text-[13px] text-[var(--color-ink-2)]">
+          If your browser closes, your tab swaps out, or your session cookie
+          gets clobbered (multi-tab on shared devices), this URL is the only
+          way back to your seat with the same name + role. It&apos;s also
+          saved in this browser&apos;s localStorage as a fallback.
+        </p>
+      </div>
+
+      <div
+        className="flex items-center gap-2 rounded-[10px] px-3 py-2.5 text-[12px]"
+        style={{
+          background: "var(--color-tint-yellow)",
+          border: "1.5px solid var(--color-t-yellow)",
+        }}
+      >
+        <span className="t-mono flex-1 break-all" style={{ color: "#7a5b00" }}>
+          {url}
+        </span>
+        <button
+          type="button"
+          onClick={copy}
+          className="t-mono rounded-md bg-white px-2.5 py-1 text-[11px] font-bold uppercase tracking-widest text-[var(--color-ink)]"
+          style={{ border: "1.5px solid var(--color-line)" }}
+        >
+          {copied ? "✓ copied" : "copy"}
+        </button>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => router.push(redirect)}
+        className="t-btn t-btn--primary self-start"
+      >
+        Got it · take me to the game →
+      </button>
+    </div>
   );
 }
