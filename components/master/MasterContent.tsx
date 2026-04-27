@@ -58,6 +58,10 @@ interface LobbyResponse {
   participant_cap: number;
   status: "lobby" | "running" | "ended" | "purged";
   round_count: number;
+  scoring: {
+    correct_pts: number;
+    wrong_pts: number;
+  };
   participants: LobbyParticipant[];
   pairs: LobbyPair[];
   round: LobbyRound | null;
@@ -322,6 +326,30 @@ export function MasterContent({
     }
   }, [code, fetchSnapshot]);
 
+  const updateScoring = useCallback(
+    async (patch: { correct_pts?: number; wrong_pts?: number }) => {
+      setBusy(true);
+      setActionError(null);
+      try {
+        const res = await fetch(`/api/games/${code}/scoring`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(patch),
+        });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          throw new Error(j.error || `status ${res.status}`);
+        }
+        await fetchSnapshot();
+      } catch (err) {
+        setActionError(err instanceof Error ? err.message : "scoring failed");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [code, fetchSnapshot],
+  );
+
   const replay = useCallback(async () => {
     setBusy(true);
     setActionError(null);
@@ -523,7 +551,9 @@ export function MasterContent({
             roundRunning={round?.status === "running"}
             focusedPair={focusedPair}
             busy={busy}
+            scoring={data?.scoring ?? { correct_pts: 10, wrong_pts: 0 }}
             onTrigger={triggerAccelerant}
+            onScoring={updateScoring}
           />
         </aside>
       </div>

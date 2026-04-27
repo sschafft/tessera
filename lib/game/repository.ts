@@ -38,7 +38,18 @@ export interface CreateGameInput {
   sound_on: boolean;
 }
 
-export interface GameRecord extends CreateGameInput {
+export interface ScoringConfig {
+  /** Points awarded per correct placement at test/round-end. Default 10. */
+  scoring_correct_pts: number;
+  /**
+   * Flat penalty applied if there is at least one wrong placement.
+   * Default 0 (no penalty); GM can flip to -1 via the scoring super
+   * power.
+   */
+  scoring_wrong_pts: number;
+}
+
+export interface GameRecord extends CreateGameInput, ScoringConfig {
   id: string;
   code: string;
   status: "lobby" | "running" | "ended" | "purged";
@@ -244,6 +255,13 @@ export interface GameRepository {
   findLatestRound(game_id: string): Promise<RoundRecord | null>;
 
   /**
+   * List all rounds for a game in ascending index order. Used for the
+   * game-end leaderboard, which sums per-round scores across all
+   * ended rounds.
+   */
+  listRounds(game_id: string): Promise<RoundRecord[]>;
+
+  /**
    * Insert a pair_round row with a pre-generated goal pattern.
    */
   createPairRound(input: {
@@ -362,6 +380,15 @@ export interface GameRepository {
   setGameStatus(
     game_id: string,
     status: "lobby" | "running" | "ended" | "purged",
+  ): Promise<void>;
+
+  /**
+   * Patch the scoring config for a game. Either field is optional.
+   * Used by the scoring super-power.
+   */
+  updateScoring(
+    game_id: string,
+    patch: { scoring_correct_pts?: number; scoring_wrong_pts?: number },
   ): Promise<void>;
 
   // ─── Accelerants ───────────────────────────────────────────────────

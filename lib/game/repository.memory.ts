@@ -70,6 +70,8 @@ export class MemoryGameRepository implements GameRepository {
       gemini_calls_used: 0,
       builder_brief_custom: input.builder_brief_custom ?? null,
       guider_brief_custom: input.guider_brief_custom ?? null,
+      scoring_correct_pts: 10,
+      scoring_wrong_pts: 0,
     };
     this.games.set(record.code, record);
     return record;
@@ -259,6 +261,12 @@ export class MemoryGameRepository implements GameRepository {
     return rs[0] ?? null;
   }
 
+  async listRounds(game_id: string): Promise<RoundRecord[]> {
+    return [...this.rounds.values()]
+      .filter((r) => r.game_id === game_id)
+      .sort((a, b) => a.index - b.index);
+  }
+
   async createPairRound(input: {
     round_id: string;
     pair_id: string;
@@ -307,6 +315,22 @@ export class MemoryGameRepository implements GameRepository {
   ): Promise<void> {
     for (const g of this.games.values()) {
       if (g.id === game_id) g.status = status;
+    }
+  }
+
+  async updateScoring(
+    game_id: string,
+    patch: { scoring_correct_pts?: number; scoring_wrong_pts?: number },
+  ): Promise<void> {
+    for (const g of this.games.values()) {
+      if (g.id === game_id) {
+        if (patch.scoring_correct_pts !== undefined) {
+          g.scoring_correct_pts = patch.scoring_correct_pts;
+        }
+        if (patch.scoring_wrong_pts !== undefined) {
+          g.scoring_wrong_pts = patch.scoring_wrong_pts;
+        }
+      }
     }
   }
 

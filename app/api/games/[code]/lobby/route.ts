@@ -90,6 +90,10 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     participant_cap: game.participant_cap,
     status: game.status,
     round_count: game.round_count,
+    scoring: {
+      correct_pts: game.scoring_correct_pts,
+      wrong_pts: game.scoring_wrong_pts,
+    },
     participants,
     pairs: pairs.map((p) => ({
       id: p.id,

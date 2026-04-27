@@ -19,6 +19,13 @@ interface PairSummary {
   placed: number;
   extras: number;
   complete: boolean;
+  total_score: number;
+  rounds: Array<{
+    index: number;
+    correct: number;
+    total: number;
+    score: number;
+  }>;
 }
 
 export function GameEndedView({ code, workshopName }: GameEndedViewProps) {
@@ -77,45 +84,60 @@ export function GameEndedView({ code, workshopName }: GameEndedViewProps) {
             Pair leaderboard
           </span>
           <ul className="flex flex-col gap-2.5">
-            {summary.map((p, i) => (
-              <li
-                key={p.pair_id}
-                className="flex items-center gap-3 rounded-[12px] px-3 py-2.5"
-                style={{
-                  background: p.complete
-                    ? "var(--color-tint-green)"
-                    : "var(--color-paper-2)",
-                  border: `1.5px solid ${
-                    p.complete
-                      ? "var(--color-t-green)"
-                      : "var(--color-line)"
-                  }`,
-                }}
-              >
-                <span
-                  className="t-mono w-6 text-[14px] font-bold"
-                  style={{ color: "var(--color-ink-3)" }}
-                >
-                  {i + 1}
-                </span>
-                <span className="flex-1 text-[14px] font-bold">
-                  {p.builder ?? "?"} ↔ {p.guider ?? "?"}
-                </span>
-                <span className="t-mono text-[13px] font-bold">
-                  {p.total > 0 ? `${p.correct} / ${p.total}` : "—"}
-                </span>
-                <span
-                  className="t-mono text-[10px] uppercase tracking-widest"
+            {summary.map((p, i) => {
+              const isWinner = i === 0 && p.total_score > 0;
+              return (
+                <li
+                  key={p.pair_id}
+                  className="flex flex-col gap-1.5 rounded-[12px] px-3 py-2.5"
                   style={{
-                    color: p.complete
-                      ? "var(--color-t-green)"
-                      : "var(--color-ink-3)",
+                    background: isWinner
+                      ? "var(--color-tint-green)"
+                      : "var(--color-paper-2)",
+                    border: `1.5px solid ${
+                      isWinner
+                        ? "var(--color-t-green)"
+                        : "var(--color-line)"
+                    }`,
                   }}
                 >
-                  {p.complete ? "✓ complete" : p.extras > 0 ? `${p.extras} extra` : "incomplete"}
-                </span>
-              </li>
-            ))}
+                  <div className="flex items-center gap-3">
+                    <span
+                      className="t-mono w-6 text-[14px] font-bold"
+                      style={{ color: "var(--color-ink-3)" }}
+                    >
+                      {i + 1}
+                    </span>
+                    <span className="flex-1 text-[14px] font-bold">
+                      {p.builder ?? "?"} ↔ {p.guider ?? "?"}
+                    </span>
+                    <span
+                      className="t-display text-[20px] font-bold"
+                      style={{
+                        color: isWinner
+                          ? "var(--color-t-green)"
+                          : "var(--color-ink)",
+                      }}
+                    >
+                      {p.total_score} pt{Math.abs(p.total_score) === 1 ? "" : "s"}
+                    </span>
+                  </div>
+                  {p.rounds.length > 0 && (
+                    <div className="flex flex-wrap gap-2 pl-9 text-[11px] text-[var(--color-ink-3)]">
+                      {p.rounds.map((r) => (
+                        <span
+                          key={r.index}
+                          className="t-mono rounded-full bg-white px-2 py-0.5"
+                          style={{ border: "1px solid var(--color-line)" }}
+                        >
+                          R{r.index} · {r.correct}/{r.total} · {r.score}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}

@@ -73,6 +73,8 @@ function toGameRecord(row: DbGame): GameRecord {
     host_token_hash: row.host_token_hash,
     gemini_calls_used: row.gemini_calls_used,
     gm_participant_id: row.gm_participant_id,
+    scoring_correct_pts: row.scoring_correct_pts,
+    scoring_wrong_pts: row.scoring_wrong_pts,
   };
 }
 
@@ -331,6 +333,17 @@ export class SupabaseGameRepository implements GameRepository {
     return data ? toRoundRecord(data) : null;
   }
 
+  async listRounds(game_id: string): Promise<RoundRecord[]> {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase
+      .from("rounds")
+      .select("*")
+      .eq("game_id", game_id)
+      .order("index", { ascending: true });
+    if (error) throw new Error(`listRounds: ${error.message}`);
+    return (data ?? []).map(toRoundRecord);
+  }
+
   async createPairRound(input: {
     round_id: string;
     pair_id: string;
@@ -400,6 +413,26 @@ export class SupabaseGameRepository implements GameRepository {
       .update({ status })
       .eq("id", game_id);
     if (error) throw new Error(`setGameStatus: ${error.message}`);
+  }
+
+  async updateScoring(
+    game_id: string,
+    patch: { scoring_correct_pts?: number; scoring_wrong_pts?: number },
+  ): Promise<void> {
+    const update: Database["public"]["Tables"]["games"]["Update"] = {};
+    if (patch.scoring_correct_pts !== undefined) {
+      update.scoring_correct_pts = patch.scoring_correct_pts;
+    }
+    if (patch.scoring_wrong_pts !== undefined) {
+      update.scoring_wrong_pts = patch.scoring_wrong_pts;
+    }
+    if (Object.keys(update).length === 0) return;
+    const supabase = getServiceClient();
+    const { error } = await supabase
+      .from("games")
+      .update(update)
+      .eq("id", game_id);
+    if (error) throw new Error(`updateScoring: ${error.message}`);
   }
 
   async createPlacement(input: {

@@ -12,6 +12,8 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
@@ -160,6 +162,8 @@ export type Database = {
           participant_cap: number
           round_count: number
           round_duration_seconds: number
+          scoring_correct_pts: number
+          scoring_wrong_pts: number
           sound_on: boolean
           status: Database["public"]["Enums"]["game_status_t"]
           team_mode: Database["public"]["Enums"]["team_mode_t"]
@@ -186,6 +190,8 @@ export type Database = {
           participant_cap: number
           round_count: number
           round_duration_seconds?: number
+          scoring_correct_pts?: number
+          scoring_wrong_pts?: number
           sound_on?: boolean
           status?: Database["public"]["Enums"]["game_status_t"]
           team_mode: Database["public"]["Enums"]["team_mode_t"]
@@ -212,6 +218,8 @@ export type Database = {
           participant_cap?: number
           round_count?: number
           round_duration_seconds?: number
+          scoring_correct_pts?: number
+          scoring_wrong_pts?: number
           sound_on?: boolean
           status?: Database["public"]["Enums"]["game_status_t"]
           team_mode?: Database["public"]["Enums"]["team_mode_t"]
@@ -222,9 +230,18 @@ export type Database = {
         Relationships: []
       }
       gemini_budget: {
-        Row: { calls_used: number; day: string }
-        Insert: { calls_used?: number; day: string }
-        Update: { calls_used?: number; day?: string }
+        Row: {
+          calls_used: number
+          day: string
+        }
+        Insert: {
+          calls_used?: number
+          day: string
+        }
+        Update: {
+          calls_used?: number
+          day?: string
+        }
         Relationships: []
       }
       pair_rounds: {
@@ -430,9 +447,21 @@ export type Database = {
         ]
       }
       rate_limits: {
-        Row: { count: number; key: string; window_start: string }
-        Insert: { count?: number; key: string; window_start?: string }
-        Update: { count?: number; key?: string; window_start?: string }
+        Row: {
+          count: number
+          key: string
+          window_start: string
+        }
+        Insert: {
+          count?: number
+          key: string
+          window_start?: string
+        }
+        Update: {
+          count?: number
+          key?: string
+          window_start?: string
+        }
         Relationships: []
       }
       rounds: {
@@ -477,18 +506,13 @@ export type Database = {
         ]
       }
     }
-    Views: { [_ in never]: never }
+    Views: {
+      [_ in never]: never
+    }
     Functions: {
-      clear_allocations: {
-        Args: { p_game_id: string }
-        Returns: undefined
-      }
+      clear_allocations: { Args: { p_game_id: string }; Returns: undefined }
       create_pair_with_roles: {
-        Args: {
-          p_builder_id: string
-          p_game_id: string
-          p_guider_id: string
-        }
+        Args: { p_builder_id: string; p_game_id: string; p_guider_id: string }
         Returns: {
           builder_id: string | null
           created_at: string
@@ -496,12 +520,18 @@ export type Database = {
           guider_id: string | null
           id: string
         }
+        SetofOptions: {
+          from: "*"
+          to: "pairs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       reserve_gemini_call: {
         Args: {
           p_game_id: string
-          p_per_game_max: number
           p_per_day_max: number
+          p_per_game_max: number
         }
         Returns: Json
       }
@@ -523,6 +553,148 @@ export type Database = {
       round_status_t: "pending" | "running" | "ended"
       team_mode_t: "gm_picks" | "players_pick"
     }
-    CompositeTypes: { [_ in never]: never }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
 }
+
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
+
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
+
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  public: {
+    Enums: {
+      accelerant_scope_t: ["pair", "all"],
+      accelerant_t: [
+        "prototype",
+        "reveal_briefs",
+        "test_build",
+        "agile_share",
+        "time_pressure",
+        "vocab_swap",
+        "randomizer",
+        "requirement_change",
+      ],
+      brief_source_t: ["gm", "library", "gemini"],
+      game_status_t: ["lobby", "running", "ended", "purged"],
+      role_t: ["gm", "builder", "guider", "observer", "lobby"],
+      round_status_t: ["pending", "running", "ended"],
+      team_mode_t: ["gm_picks", "players_pick"],
+    },
+  },
+} as const

@@ -82,12 +82,14 @@ export interface AccelerantsRailProps {
   roundRunning: boolean;
   focusedPair: LobbyPair | null;
   busy: boolean;
+  scoring: { correct_pts: number; wrong_pts: number };
   onTrigger: (
     kind: string,
     scope: "pair" | "all",
     pairId: string | null,
     payload?: Record<string, unknown>,
   ) => void;
+  onScoring: (patch: { correct_pts?: number; wrong_pts?: number }) => void;
 }
 
 export function AccelerantsRail({
@@ -95,7 +97,9 @@ export function AccelerantsRail({
   roundRunning,
   focusedPair,
   busy,
+  scoring,
   onTrigger,
+  onScoring,
 }: AccelerantsRailProps) {
   const [scope, setScope] = useState<"pair" | "all">("pair");
 
@@ -152,6 +156,12 @@ export function AccelerantsRail({
       </div>
 
       <div className="flex flex-1 flex-col gap-2.5 overflow-y-auto p-3.5">
+        <ScoringPanel
+          correctPts={scoring.correct_pts}
+          wrongPts={scoring.wrong_pts}
+          busy={busy}
+          onChange={onScoring}
+        />
         {!roundRunning && (
           <p className="px-2 py-2 text-[12px] text-[var(--color-ink-3)]">
             Start the round and these light up.
@@ -174,6 +184,113 @@ export function AccelerantsRail({
           />
         ))}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Game-wide scoring config tile. Lets the GM bump the +/per-correct
+ * value and toggle the flat wrong-attempts penalty (0 = off, -1 = on).
+ * Sits at the top of the super-powers panel so it's always visible.
+ */
+function ScoringPanel({
+  correctPts,
+  wrongPts,
+  busy,
+  onChange,
+}: {
+  correctPts: number;
+  wrongPts: number;
+  busy: boolean;
+  onChange: (patch: { correct_pts?: number; wrong_pts?: number }) => void;
+}) {
+  const penaltyOn = wrongPts < 0;
+  const togglePenalty = () => onChange({ wrong_pts: penaltyOn ? 0 : -1 });
+  const bumpCorrect = (delta: number) => {
+    const next = Math.max(1, Math.min(100, correctPts + delta));
+    if (next !== correctPts) onChange({ correct_pts: next });
+  };
+  return (
+    <div
+      className="flex flex-col gap-2 rounded-[14px] bg-white p-3.5"
+      style={{
+        border: "1.5px solid var(--color-line)",
+        boxShadow: "0 3px 0 rgba(0,0,0,.06)",
+      }}
+    >
+      <div className="flex items-start gap-3">
+        <span
+          aria-hidden="true"
+          className="grid h-[38px] w-[38px] flex-shrink-0 place-items-center rounded-[10px] text-[18px]"
+          style={{
+            background: "var(--color-tint-yellow)",
+            color: "var(--color-t-yellow)",
+            boxShadow: "inset 0 0 0 1.5px var(--color-t-yellow)",
+          }}
+        >
+          ★
+        </span>
+        <div className="flex flex-1 flex-col gap-0.5">
+          <span className="text-[14px] font-bold">Scoring</span>
+          <span
+            className="block text-[12px] leading-tight"
+            style={{ color: "var(--color-ink-3)" }}
+          >
+            Tune the points awarded per correct piece, or punish wrong
+            attempts with a flat penalty.
+          </span>
+        </div>
+      </div>
+      <div className="flex items-center justify-between gap-2 pt-1">
+        <span className="text-[12px] font-semibold text-[var(--color-ink-2)]">
+          Per correct
+        </span>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => bumpCorrect(-1)}
+            disabled={busy || correctPts <= 1}
+            className="t-mono grid h-6 w-6 place-items-center rounded-md border-[1.5px] border-[var(--color-line)] bg-white text-[12px] font-bold disabled:opacity-50"
+            aria-label="Decrease points per correct"
+          >
+            −
+          </button>
+          <span
+            className="t-mono w-8 text-center text-[13px] font-bold"
+            style={{ color: "var(--color-ink)" }}
+          >
+            {correctPts}
+          </span>
+          <button
+            type="button"
+            onClick={() => bumpCorrect(+1)}
+            disabled={busy || correctPts >= 100}
+            className="t-mono grid h-6 w-6 place-items-center rounded-md border-[1.5px] border-[var(--color-line)] bg-white text-[12px] font-bold disabled:opacity-50"
+            aria-label="Increase points per correct"
+          >
+            +
+          </button>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={togglePenalty}
+        disabled={busy}
+        className="t-mono flex items-center justify-between rounded-[10px] px-3 py-2 text-[12px] font-bold disabled:opacity-50"
+        style={{
+          background: penaltyOn
+            ? "var(--color-tint-red)"
+            : "var(--color-paper-2)",
+          color: penaltyOn ? "var(--color-t-red)" : "var(--color-ink-2)",
+          border: `1.5px solid ${
+            penaltyOn ? "var(--color-t-red)" : "var(--color-line)"
+          }`,
+        }}
+        aria-pressed={penaltyOn}
+      >
+        <span>Punish wrong attempts</span>
+        <span>{penaltyOn ? "ON · −1 flat" : "OFF"}</span>
+      </button>
     </div>
   );
 }

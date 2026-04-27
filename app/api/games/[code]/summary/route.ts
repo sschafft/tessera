@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isValidGameCode } from "@/lib/game/code";
 import { readSessionForGame } from "@/lib/auth/session";
 import { getRepository } from "@/lib/game/getRepository";
+import { scorePlacements } from "@/lib/scoring/score";
 import type { GoalPattern } from "@/lib/pattern/types";
 
 export const runtime = "nodejs";
@@ -11,8 +12,9 @@ interface RouteParams {
 }
 
 /**
- * Per-pair leaderboard for the game's debrief. Computes final accuracy
- * for each pair on the most recent ended (or running) round.
+ * Per-pair leaderboard for the game's debrief. Computes total score
+ * across every round the game played, plus a "latest round" snapshot
+ * (correct/total/placed) for the legacy mid-round status display.
  *
  * Anyone in the game can read this — once the game ends, there's
  * nothing to hide. The session is required only so we know they're a
@@ -34,39 +36,68 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
   }
 
   const pairs = await repo.listPairs(game.id);
-  const round = await repo.findLatestRound(game.id);
+  const allRounds = await repo.listRounds(game.id);
+  const latestRound = allRounds[allRounds.length - 1] ?? null;
   const allParticipants = await repo.listActiveParticipants(game.id);
   const byId = new Map(allParticipants.map((p) => [p.id, p]));
 
+  // Pre-fetch all pair_rounds + placements grouped by round, so the
+  // leaderboard summation is O(rounds × pairs) without N+1 round trips
+  // mid-loop.
   const summary: Array<{
     pair_id: string;
     builder: string | null;
     guider: string | null;
+    /** Latest-round snapshot (mid-round display). */
     correct: number;
     total: number;
     placed: number;
     extras: number;
     complete: boolean;
+    /** Cumulative score across every round in this game. */
+    total_score: number;
+    /** Per-round score breakdown for the leaderboard tooltip / detail row. */
+    rounds: Array<{
+      index: number;
+      correct: number;
+      total: number;
+      score: number;
+    }>;
   }> = [];
+
   for (const pair of pairs) {
     const builder = pair.builder_id ? byId.get(pair.builder_id) : undefined;
     const guider = pair.guider_id ? byId.get(pair.guider_id) : undefined;
     let correct = 0;
     let placed = 0;
     let total = 0;
-    if (round) {
+    let totalScore = 0;
+    const perRound: Array<{
+      index: number;
+      correct: number;
+      total: number;
+      score: number;
+    }> = [];
+    for (const round of allRounds) {
       const pr = await repo.findPairRound(round.id, pair.id);
-      if (pr) {
-        const goal = (pr.goal_pattern as GoalPattern) ?? [];
-        total = goal.length;
-        const placements = await repo.listPlacements(pr.id);
+      if (!pr) continue;
+      const goal = (pr.goal_pattern as GoalPattern) ?? [];
+      const placements = await repo.listPlacements(pr.id);
+      const breakdown = scorePlacements(placements, goal, {
+        correctPts: game.scoring_correct_pts,
+        wrongPts: game.scoring_wrong_pts,
+      });
+      perRound.push({
+        index: round.index,
+        correct: breakdown.correct,
+        total: breakdown.total,
+        score: breakdown.score,
+      });
+      totalScore += breakdown.score;
+      if (latestRound && round.id === latestRound.id) {
+        correct = breakdown.correct;
         placed = placements.length;
-        const goalKey = (g: { shape: string; color: string; q: number; r: number; rot: number }) =>
-          `${g.shape}|${g.color}|${g.q},${g.r}|${g.rot}`;
-        const goalSet = new Set(goal.map(goalKey));
-        for (const p of placements) {
-          if (goalSet.has(goalKey(p))) correct += 1;
-        }
+        total = breakdown.total;
       }
     }
     const extras = Math.max(0, placed - correct);
@@ -79,11 +110,14 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       placed,
       extras,
       complete: total > 0 && correct === total && placed === total,
+      total_score: totalScore,
+      rounds: perRound,
     });
   }
 
-  // Sort by accuracy desc (complete first, then by correct/total ratio).
+  // Sort by total_score desc, then completeness, then accuracy ratio.
   summary.sort((a, b) => {
+    if (a.total_score !== b.total_score) return b.total_score - a.total_score;
     if (a.complete !== b.complete) return a.complete ? -1 : 1;
     const ra = a.total > 0 ? a.correct / a.total : 0;
     const rb = b.total > 0 ? b.correct / b.total : 0;
@@ -95,7 +129,11 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     workshop_name: game.workshop_name,
     video_call_url: game.video_call_url,
     whiteboard_url: game.whiteboard_url ?? null,
-    round_index: round?.index ?? null,
+    round_index: latestRound?.index ?? null,
+    scoring: {
+      correct_pts: game.scoring_correct_pts,
+      wrong_pts: game.scoring_wrong_pts,
+    },
     pairs: summary,
   });
 }

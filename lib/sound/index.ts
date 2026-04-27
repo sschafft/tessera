@@ -62,3 +62,29 @@ export function playGameEnd(): void {
     synth.triggerAttackRelease(note, "8n", now + t);
   }
 }
+
+/**
+ * Builder's "Test solution" celebration — a quick rising arpeggio
+ * scaled to how many pieces they got right. More right → louder,
+ * higher final note. Zero correct → a single soft bloop, no fanfare.
+ */
+export function playTestSolution(correctCount: number): void {
+  if (!enabled || !synth) return;
+  const now = Tone.now();
+  if (correctCount === 0) {
+    synth.triggerAttackRelease("C4", "16n", now);
+    return;
+  }
+  // Cap the celebration around 4 notes so a 12-correct round doesn't
+  // feel obnoxious.
+  const steps = Math.min(4, correctCount);
+  const ladders: Record<number, [string, number][]> = {
+    1: [["E5", 0]],
+    2: [["E5", 0], ["A5", 0.12]],
+    3: [["C5", 0], ["E5", 0.1], ["G5", 0.2]],
+    4: [["C5", 0], ["E5", 0.1], ["G5", 0.2], ["C6", 0.32]],
+  };
+  for (const [note, t] of ladders[steps]!) {
+    synth.triggerAttackRelease(note, "8n", now + t);
+  }
+}
