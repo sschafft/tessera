@@ -74,9 +74,18 @@ jobs:
             -F "init_params=$INIT" \
             "https://flows-api.jetty.io/api/v1/run/jettyio/tessera-tl")
           echo "raw=$RESPONSE"
-          TRAJ=$(echo "$RESPONSE" | jq -r '.trajectory_id // .id // .trajectoryId // empty')
+          # Jetty's run response embeds the trajectory id in either
+          # workflow_id (`<collection>-<task>--<traj>`) or metadata
+          # (`.../<traj>.json`). It's not exposed as a top-level field.
+          TRAJ=$(echo "$RESPONSE" | jq -r '
+            if .trajectory_id then .trajectory_id
+            elif .workflow_id then (.workflow_id | split("--") | .[-1])
+            elif .metadata then (.metadata | capture("(?<id>[a-f0-9]+)\\.json$") | .id)
+            else empty
+            end
+          ')
           if [[ -z "$TRAJ" ]]; then
-            echo "::error::Could not extract trajectory_id from Jetty response."
+            echo "::error::Could not extract trajectory id from Jetty response."
             echo "$RESPONSE"
             exit 1
           fi
