@@ -968,9 +968,18 @@ function ModeButton({
       aria-pressed={active}
       className="flex items-center gap-2 rounded-[10px] px-2.5 py-2 text-left transition-colors"
       style={{
-        background: active ? "#fff" : "transparent",
+        // Active = tinted background (not white) so the selected mode
+        // pops against the paper-2 sidebar. Pre-orchestrator-#5 the
+        // active state was background:#fff which on top of paper-2
+        // (#f5efe2) was almost invisible; agents reported "clicking
+        // Add does nothing" because the visual feedback was too soft.
+        background: active
+          ? `var(--color-tint-${colorVar})`
+          : "transparent",
         color: active ? `var(--color-t-${colorVar})` : "var(--color-ink-2)",
-        boxShadow: active ? "0 1px 3px rgba(0,0,0,.10)" : "none",
+        boxShadow: active
+          ? `0 1px 3px rgba(0,0,0,.10), inset 0 0 0 1.5px var(--color-t-${colorVar})`
+          : "none",
         border: active
           ? `1.5px solid var(--color-t-${colorVar})`
           : "1.5px solid transparent",

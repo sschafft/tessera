@@ -39,53 +39,55 @@ export function ObserverView({ state }: ObserverViewProps) {
           ))}
         </div>
       )}
-      <div
-        className="grid flex-1"
-        style={{
-          gridTemplateColumns: "1fr 1fr",
-          gridTemplateRows: "1fr auto",
-        }}
-      >
-        <div className="flex flex-col items-center justify-center border-r border-[var(--color-line)] p-6">
-          <PaneHeader
-            title="Builder"
-            subtitle={`${state.placements.length} piece${state.placements.length === 1 ? "" : "s"} placed`}
-            colorVar="orange"
-          />
-          <div className="mt-3">
-            <PlayCanvas
-              pieces={state.placements}
-              complexity={state.round.complexity}
-              showCoords={showCoords}
+      <div className="flex flex-1 flex-col">
+        {/* Builder + goal panes stack vertically below ~960px so the
+            full goal canvas stays readable on a 768px / 1024px laptop
+            sidebar. Above 960px we go side-by-side. The previous
+            grid-template-columns: 1fr 1fr clipped ~33% of the goal
+            canvas at 768px because each pane couldn't shrink below
+            its canvas's intrinsic width (≈432px at c=5 + paddings). */}
+        <div className="flex flex-1 flex-wrap">
+          <div className="flex min-w-[320px] flex-1 flex-col items-center justify-center overflow-x-auto border-r border-[var(--color-line)] p-6">
+            <PaneHeader
+              title="Builder"
+              subtitle={`${state.placements.length} piece${state.placements.length === 1 ? "" : "s"} placed`}
+              colorVar="orange"
             />
+            <div className="mt-3">
+              <PlayCanvas
+                pieces={state.placements}
+                complexity={state.round.complexity}
+                showCoords={showCoords}
+              />
+            </div>
+            <p className="t-mono mt-3 text-[11px] text-[var(--color-ink-3)]">
+              live · updates every 2 seconds
+            </p>
           </div>
-          <p className="t-mono mt-3 text-[11px] text-[var(--color-ink-3)]">
-            live · updates every 2 seconds
-          </p>
-        </div>
-        <div className="flex flex-col items-center justify-center p-6">
-          <PaneHeader title="Goal" subtitle="what they're aiming for" colorVar="blue" />
-          <div className="relative mt-3">
-            <span
-              className="t-stamp absolute -left-2 -top-4 z-10"
-              style={{
-                color: "var(--color-t-red)",
-                background: "#fffaf0",
-                padding: "5px 12px",
-              }}
-            >
-              ● THE GOAL
-            </span>
-            <PlayCanvas
-              pieces={state.goal}
-              complexity={state.round.complexity}
-              showCoords={showCoords}
-            />
+          <div className="flex min-w-[320px] flex-1 flex-col items-center justify-center overflow-x-auto p-6">
+            <PaneHeader title="Goal" subtitle="what they're aiming for" colorVar="blue" />
+            <div className="relative mt-3">
+              <span
+                className="t-stamp absolute -left-2 -top-4 z-10"
+                style={{
+                  color: "var(--color-t-red)",
+                  background: "#fffaf0",
+                  padding: "5px 12px",
+                }}
+              >
+                ● THE GOAL
+              </span>
+              <PlayCanvas
+                pieces={state.goal}
+                complexity={state.round.complexity}
+                showCoords={showCoords}
+              />
+            </div>
           </div>
         </div>
 
         {state.available_pairs && state.available_pairs.length > 1 && (
-          <div className="col-span-2 flex items-center gap-3 border-t border-[var(--color-line)] bg-white px-6 py-3">
+          <div className="flex items-center gap-3 border-t border-[var(--color-line)] bg-white px-6 py-3">
             <PairSwitcher state={state} />
           </div>
         )}
