@@ -55,10 +55,13 @@ export function BriefEnvelope({
     setView("open");
     onOpen?.();
   };
+  // Minimise: collapses to seal circle. Does NOT trigger onClose —
+  // playtests showed the pair-name nudge popping when players just
+  // wanted to get the brief out of the way, which felt unrelated.
+  // onClose only fires on the explicit × re-seal action.
   const handleMinimize = () => {
     setView("minimized");
     onMinimize?.();
-    onClose?.();
   };
   const handleSeal = () => {
     setView("sealed");

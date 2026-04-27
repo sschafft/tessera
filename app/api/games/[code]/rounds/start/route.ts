@@ -117,6 +117,12 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     builder?: PickedBrief;
     guider?: PickedBrief;
   };
+  // Track which titles have already been handed out in this round so
+  // the picker dedups across pairs. Playtest with 3 pairs surfaced two
+  // pairs receiving the same library brief — boring for the workshop.
+  const usedBuilderTitles: string[] = [];
+  const usedGuiderTitles: string[] = [];
+
   const prepared: PreparedPair[] = [];
   try {
     for (const pair of pairs) {
@@ -130,8 +136,10 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           source: builderSource,
           game_id: game.id,
           custom: game.builder_brief_custom,
+          exclude_titles: usedBuilderTitles,
           allow_library_fallback: allowFallback,
         });
+        usedBuilderTitles.push(entry.builder.title);
       }
       if (game.guider_brief_on) {
         entry.guider = await pickBrief({
@@ -140,8 +148,10 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           source: guiderSource,
           game_id: game.id,
           custom: game.guider_brief_custom,
+          exclude_titles: usedGuiderTitles,
           allow_library_fallback: allowFallback,
         });
+        usedGuiderTitles.push(entry.guider.title);
       }
       prepared.push(entry);
     }

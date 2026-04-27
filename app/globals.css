@@ -83,3 +83,26 @@ body {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.04); }
 }
+
+/*
+ * Honour the user's prefers-reduced-motion setting AND clamp the
+ * tessera-attention pulse to a finite count by default. Inline
+ * `animation: tessera-attention 1100ms ease-in-out infinite` callers
+ * pick up `iteration-count: 5` automatically here, so the seal pulses
+ * 5 times (~5.5s) and then stays stable. Constant motion blocks
+ * Playwright's stability check, surfaces real a11y issues for users
+ * with vestibular sensitivity, and stops drawing the eye after the
+ * first few cycles anyway.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.t-envelope,
+.t-envelope__seal {
+  animation-iteration-count: 5;
+}

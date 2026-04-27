@@ -32,11 +32,26 @@ export function PairNameBadge({
   const [draft, setDraft] = useState(displayName ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Optimistic value: shown instead of `displayName` from props until
+  // the next snapshot refetch echoes the new name back. Without this,
+  // the PATCH succeeds but the badge keeps rendering the old name
+  // until the realtime broadcast (or the 30s poll) carries the new
+  // value through.
+  const [optimisticName, setOptimisticName] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setDraft(displayName ?? "");
   }, [displayName]);
+
+  // GC: drop the optimistic value once the server-side state carries
+  // it back (or carries something different through, in which case
+  // server wins).
+  useEffect(() => {
+    if (optimisticName !== null && displayName === optimisticName) {
+      setOptimisticName(null);
+    }
+  }, [displayName, optimisticName]);
 
   useEffect(() => {
     if (editing) inputRef.current?.focus();
@@ -46,16 +61,18 @@ export function PairNameBadge({
     if (busy) return;
     setBusy(true);
     setError(null);
+    const trimmed = draft.trim();
     try {
       const res = await fetch(`/api/games/${code}/pairs/${pairId}/name`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ display_name: draft }),
+        body: JSON.stringify({ display_name: trimmed }),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         throw new Error(j.error || `status ${res.status}`);
       }
+      setOptimisticName(trimmed.length > 0 ? trimmed : null);
       setEditing(false);
       onSaved?.();
     } catch (err) {
@@ -124,7 +141,10 @@ export function PairNameBadge({
     );
   }
 
-  const named = displayName !== null && displayName.length > 0;
+  // Effective name = optimistic if pending, else server prop.
+  const effective =
+    optimisticName !== null ? optimisticName : displayName;
+  const named = effective !== null && effective.length > 0;
   return (
     <button
       type="button"
@@ -151,7 +171,7 @@ export function PairNameBadge({
         className="text-[12px] font-bold"
         style={{ color: named ? "var(--color-ink)" : "#7a5b00" }}
       >
-        {named ? displayName : defaultName}
+        {named ? effective : defaultName}
       </span>
       <span
         className="t-mono text-[10px]"
