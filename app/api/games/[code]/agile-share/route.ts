@@ -63,7 +63,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }));
 
   const remaining = await repo.captureBuilderSnapshot(pairRound.id, snapshot);
-  void publishGameEvent(session.claims.game_id, "snapshot_shared");
+  await publishGameEvent(session.claims.game_id, "snapshot_shared");
   return NextResponse.json({
     ok: true,
     shares_remaining: remaining,

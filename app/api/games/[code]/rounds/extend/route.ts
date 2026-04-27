@@ -64,7 +64,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
 
   await repo.decrementRoundDuration(round.id, -delta);
-  void publishGameEvent(game.id, "round_extended", { delta_seconds: delta });
+  await publishGameEvent(game.id, "round_extended", { delta_seconds: delta });
 
   return NextResponse.json({ ok: true, delta_seconds: delta });
 }

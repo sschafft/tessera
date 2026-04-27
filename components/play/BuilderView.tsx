@@ -745,8 +745,8 @@ function BuilderInteractive({ state }: { state: PlayState }) {
           />
         </div>
         <aside
-          className="flex flex-shrink-0 flex-col items-end gap-3 self-start"
-          style={{ width: 320 }}
+          className="relative flex flex-shrink-0 flex-col items-end gap-3 self-start"
+          style={{ width: 320, zIndex: 30 }}
         >
           {state.brief && state.brief.role === "builder" && (
             // Key on the brief title so a super-power-driven brief

@@ -114,7 +114,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
 
   await repo.startRound(round.id);
-  void publishGameEvent(game.id, "round_started");
+  await publishGameEvent(game.id, "round_started");
 
   return NextResponse.json({
     ok: true,

@@ -249,7 +249,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     payload: body.payload ?? {},
     triggered_by: claims.sub,
   });
-  void publishGameEvent(game.id, "accelerant_triggered", {
+  await publishGameEvent(game.id, "accelerant_triggered", {
     kind: body.kind,
   });
 

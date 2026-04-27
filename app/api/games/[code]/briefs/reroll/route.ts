@@ -80,7 +80,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     title: fresh.title,
     rules: fresh.rules,
   });
-  void publishGameEvent(game.id, "brief_changed");
+  await publishGameEvent(game.id, "brief_changed");
 
   return NextResponse.json({
     ok: true,

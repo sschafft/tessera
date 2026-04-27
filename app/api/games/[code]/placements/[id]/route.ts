@@ -40,7 +40,7 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
   if ("error" in loaded) return loaded.error;
   const ok = await loaded.repo.deletePlacement(id);
   if (ok) {
-    void publishGameEvent(loaded.session.claims.game_id, "placement_removed");
+    await publishGameEvent(loaded.session.claims.game_id, "placement_removed");
   }
   return NextResponse.json({ ok });
 }
@@ -113,7 +113,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     if (!placement) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
     }
-    void publishGameEvent(loaded.session.claims.game_id, "placement_moved");
+    await publishGameEvent(loaded.session.claims.game_id, "placement_moved");
     return NextResponse.json({ ok: true, placement });
   } catch (err) {
     if (err instanceof PlacementCellTakenError) {

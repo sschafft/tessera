@@ -72,7 +72,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "game_not_found" }, { status: 404 });
   }
   await repo.updateScoring(game.id, patch);
-  void publishGameEvent(game.id, "scoring_changed");
+  await publishGameEvent(game.id, "scoring_changed");
 
   return NextResponse.json({
     ok: true,

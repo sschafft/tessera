@@ -126,8 +126,8 @@ export function GuiderView({ state }: GuiderViewProps) {
       )}
       </div>
       <aside
-        className="flex flex-shrink-0 flex-col items-end gap-3 pt-4"
-        style={{ width: 320 }}
+        className="relative flex flex-shrink-0 flex-col items-end gap-3 pt-4"
+        style={{ width: 320, zIndex: 30 }}
       >
         {state.brief && state.brief.role === "guider" && (
           // Remount on title change so super-power brief swaps reset
