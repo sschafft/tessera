@@ -270,4 +270,6 @@ jobs:
           # Substitute the trajectory id placeholder.
           sed -i "s|\$TRAJ|$TRAJ|g" /tmp/comment.md
 
-          gh pr comment "$PR_NUMBER" --body-file /tmp/comment.md
+          # gh defaults to inferring the repo from the local git context,
+          # but we never run actions/checkout, so we pass --repo explicitly.
+          gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}" --body-file /tmp/comment.md
