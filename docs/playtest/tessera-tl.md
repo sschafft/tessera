@@ -112,9 +112,13 @@ Inputs you have:
   /tmp/lint.log /tmp/tsc.log /tmp/build.log when applicable.
 
 Required reading (do this first):
-1. /tmp/repo/design/PRD.md — what we're trying to build.
-2. /tmp/repo/design/TDD.md — how we said we'd build it.
-3. /tmp/repo/design/design_patterns.md — canonical / emerging /
+1. /tmp/repo/README.md — the **public-facing README**. Treat its
+   claims (status, features, accelerant count, SDK versions, model
+   names, env vars, project tree) as a contract the code must back up.
+   Out-of-date wording here is the highest-impact docs drift to flag.
+2. /tmp/repo/design/PRD.md — what we're trying to build.
+3. /tmp/repo/design/TDD.md — how we said we'd build it.
+4. /tmp/repo/design/design_patterns.md — canonical / emerging /
    deprecated patterns. This is your "source of truth" for what counts
    as drift. Cite section names when calling out violations.
 
@@ -131,7 +135,14 @@ Walk the codebase. Categories to target, in priority order:
    places to add them first.
 6. Code smell — duplicated logic across files, dead code,
    inconsistent naming, leaky abstractions.
-7. Docs drift — TDD/PRD claims that no longer match shipped code.
+7. Docs drift — claims in README, PRD, or TDD that no longer match
+   shipped code. **README first**: it's what GitHub readers see, and
+   stale wording (e.g. "eight accelerants" when ten ship, "Gemini 1.5
+   Flash" after a model bump) is real cost. For PR-triggered runs:
+   if user-facing behaviour / models / env vars / accelerant lineup /
+   feature claims changed and the README was NOT updated in the same
+   PR, raise a `docs-drift` finding with severity `major` and put a
+   concrete README diff in `suggestion`.
 
 For each finding:
 - Be specific. "components/play/BuilderView.tsx:177-216" beats

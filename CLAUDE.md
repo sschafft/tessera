@@ -66,8 +66,9 @@ The PR is the *final* state of the review, not a running commentary. Order of op
    - The trajectory ID + raw output URL appear in the action log; the JSON findings are also extracted into `/tmp/findings.json` if you `gh run view --log` the run.
 2. **Address findings.** Walk the blockers + majors; fix or explicitly accept each. Minors land as follow-up issues unless trivial. Patterns the review proposes in `patterns_to_add` need a human call before being added to `design/design_patterns.md`.
 3. **Refresh `design/PRD.md` + `design/TDD.md`** if behaviour changed. Stale design docs are how drift starts.
-4. **Update `design/design_patterns.md`** with any new pattern this change introduces, or promote `emerging → canonical` once you hit a third use.
-5. **Open the PR.** The action auto-fires once on PR open as the review-of-record on the state being merged. Subsequent commits on the PR branch do NOT re-trigger the review — that's intentional. If you push fixes after the review and want a fresh check, kick off another `workflow_dispatch` run against the head ref.
+4. **Refresh the public `README.md`** if anything user-facing moved — accelerant count, brief sources, model names, env vars, project tree, role descriptions, status copy. The tessera-tl review treats README freshness as a hard expectation and will raise a `major` docs-drift finding when the README lags the code in a PR.
+5. **Update `design/design_patterns.md`** with any new pattern this change introduces, or promote `emerging → canonical` once you hit a third use.
+6. **Open the PR.** The action auto-fires once on PR open as the review-of-record on the state being merged. Subsequent commits on the PR branch do NOT re-trigger the review — that's intentional. If you push fixes after the review and want a fresh check, kick off another `workflow_dispatch` run against the head ref.
 
 Skip the auto-review on a specific PR with `[skip-tl]` in the PR title or by opening the PR as draft. Use this for: copy edits, single-component CSS tweaks, bug fixes with a clear root cause + test plan, routine dep bumps.
 

@@ -1,59 +1,22 @@
 {
   "name": "tessera-playtest-orchestrator",
-  "description": "Spins up a 10-agent concurrent Tessera workshop: 1 GM + 3 builders + 3 guiders + 3 observers, each in its own Daytona container with its own Playwright context. Aggregates per-player findings + latency samples + scaling observations into a unified report. The caller is expected to pre-create the game via POST /api/games and pass `code` + `host_token` here — keeps the orchestrator as a pure fan-out + aggregate flow with no extract step. See docs/playtest/orchestrator.md.",
+  "description": "Thin fan-out: dispatches a list of pre-rendered playtest instructions to the existing tessera-playtest-scenario task. Each child gets one role's full instruction string, runs it in its own Daytona container, and returns its per-player JSON. Aggregation happens client-side by reading the child trajectories. The caller is expected to render the instructions (one per role, with code + host_token already substituted) before triggering.",
   "workflow": {
     "init_params": {
-      "tessera_url": "https://tessera.schaffters.com",
-      "code": "(required: 6-char game code from POST /api/games)",
-      "host_token": "(required: host_token returned by POST /api/games — the GM child uses it to claim the GM session via /api/games/<code>/host-recover)",
-      "scenario": {
-        "complexity": 5,
-        "round_count": 1,
-        "round_duration_sec": 600,
-        "scoring_correct_pts": 10,
-        "scoring_wrong_pts": -1,
-        "trigger_super_powers": []
-      },
-      "roster": [
-        { "role": "gm",       "name": "Facilitator", "pair_idx": null },
-        { "role": "builder",  "name": "Avery",       "pair_idx": 0 },
-        { "role": "guider",   "name": "Bri",         "pair_idx": 0 },
-        { "role": "builder",  "name": "Cameron",     "pair_idx": 1 },
-        { "role": "guider",   "name": "Drew",        "pair_idx": 1 },
-        { "role": "builder",  "name": "Ellis",       "pair_idx": 2 },
-        { "role": "guider",   "name": "Finley",      "pair_idx": 2 },
-        { "role": "observer", "name": "Gray",        "pair_idx": 0 },
-        { "role": "observer", "name": "Harper",      "pair_idx": 1 },
-        { "role": "observer", "name": "Indigo",      "pair_idx": 2 }
-      ]
+      "rendered_instructions": [],
+      "max_concurrency": 10
     },
     "step_configs": {
       "simulate": {
         "activity": "list_emit_await",
-        "items_path": "init_params.roster",
-        "child_workflow_name": "tessera-playtest-player",
-        "child_init_params": {
-          "tessera_url": "{{init_params.tessera_url}}",
-          "code": "{{init_params.code}}",
-          "host_token": "{{init_params.host_token}}",
-          "scenario": "{{init_params.scenario}}"
-        },
-        "item_param_name": "assignment",
+        "items_path": "init_params.rendered_instructions",
+        "child_workflow_name": "tessera-playtest-scenario",
+        "item_param_name": "instruction",
         "max_concurrency": 10,
         "continue_on_error": true,
         "timeout_seconds": 2100
-      },
-      "synthesize": {
-        "activity": "simple_judge",
-        "depends_on": ["simulate"],
-        "model": "claude-opus-4-7",
-        "temperature": 0.2,
-        "output_format": "json",
-        "explanation_required": true,
-        "instruction": "You are synthesising the per-player playtest reports from a 10-agent concurrent Tessera workshop into a single executive report.\n\nInput: an array of per-player JSON reports (see schema in tessera-playtest-player). Mix of roles: 1 GM, 3 builders, 3 guiders, 3 observers.\n\nDeliverable: a single JSON object matching this schema:\n\n```json\n{\n  \"scenario_id\": \"orchestrator-c5-1round\",\n  \"duration_sec\": <int from longest session>,\n  \"outcome\": \"passed | partial | failed\",\n  \"executive_summary\": \"<one paragraph — what happened, what's working, what's broken>\",\n  \"per_role_summary\": {\n    \"gm\": \"...\",\n    \"builder\": \"...\",\n    \"guider\": \"...\",\n    \"observer\": \"...\"\n  },\n  \"concurrency_findings\": [\"<latency or fan-out observation>\", ...],\n  \"scaling_findings\": [\"<server-side perf or load observation>\", ...],\n  \"blockers\": [\"<must-fix items, severity=blocker>\"],\n  \"majors\": [\"<should-fix items>\"],\n  \"minors\": [\"<nice-to-fix>\"],\n  \"quick_wins\": [\"<low-effort high-impact>\"],\n  \"design_calls\": [\"<items needing user judgment before implementing>\"],\n  \"tech_debt\": [\"<deeper structural issues to track>\"]\n}\n```\n\nRules:\n- **Dedupe across players.** If 3 builders all flag 'place-piece feels laggy', that's one finding with 3 corroborators, not three.\n- **Prefer specific over generic.** 'Builder Avery saw a 250ms gap between click and piece visible' beats 'feels slow'.\n- **Roll up latency samples.** Compute approximate p50/p95 across each role's `latency_samples_ms` arrays. Surface as `concurrency_findings`.\n- **Sort blockers/majors/minors by impact.** A finding that breaks the demo > a finding that breaks one observer's edge case.\n- **Outcome rules:** `passed` = no blockers, ≤2 majors. `partial` = no blockers, 3+ majors OR any console error. `failed` = ≥1 blocker OR ≥1 player did not finish their session.\n- **No padding.** If a role had nothing notable, the role's summary is one sentence, not three.\n\nThe LAST thing in your output MUST be the single JSON object on its own (no prose after it). Put any chain-of-thought ABOVE that JSON.",
-        "criteria": "(legacy alias for instruction; some Jetty deployments expect this field name)"
       }
     },
-    "steps": ["simulate", "synthesize"]
+    "steps": ["simulate"]
   }
 }
