@@ -129,29 +129,47 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       const seed = `${game.id}:${nextIndex}:${pair.id}:${Date.now()}`;
       const goal = generatePattern({ complexity, seed });
       const entry: PreparedPair = { pair_id: pair.id, seed, goal };
-      if (game.builder_brief_on) {
-        entry.builder = await pickBrief({
-          role: "builder",
-          complexity,
-          source: builderSource,
-          game_id: game.id,
-          custom: game.builder_brief_custom,
-          exclude_titles: usedBuilderTitles,
-          allow_library_fallback: allowFallback,
-        });
-        usedBuilderTitles.push(entry.builder.title);
+      // Parallelise builder + guider brief picks within the pair —
+      // they're independent (different roles, separate Gemini budget
+      // reservations). Cuts each pair's wall-clock from
+      // builder-then-guider ≈ 4–8s sequential to max(builder, guider)
+      // ≈ 2–4s. With 4 pairs that's the difference between 16–32s
+      // (risks blowing maxDuration=30) and 8–16s.
+      //
+      // Pairs themselves stay sequential so the cross-pair
+      // exclude_titles dedup keeps working — the next pair's
+      // pick sees the previous pair's title.
+      const [builderBrief, guiderBrief] = await Promise.all([
+        game.builder_brief_on
+          ? pickBrief({
+              role: "builder",
+              complexity,
+              source: builderSource,
+              game_id: game.id,
+              custom: game.builder_brief_custom,
+              exclude_titles: usedBuilderTitles,
+              allow_library_fallback: allowFallback,
+            })
+          : Promise.resolve(undefined),
+        game.guider_brief_on
+          ? pickBrief({
+              role: "guider",
+              complexity,
+              source: guiderSource,
+              game_id: game.id,
+              custom: game.guider_brief_custom,
+              exclude_titles: usedGuiderTitles,
+              allow_library_fallback: allowFallback,
+            })
+          : Promise.resolve(undefined),
+      ]);
+      if (builderBrief) {
+        entry.builder = builderBrief;
+        usedBuilderTitles.push(builderBrief.title);
       }
-      if (game.guider_brief_on) {
-        entry.guider = await pickBrief({
-          role: "guider",
-          complexity,
-          source: guiderSource,
-          game_id: game.id,
-          custom: game.guider_brief_custom,
-          exclude_titles: usedGuiderTitles,
-          allow_library_fallback: allowFallback,
-        });
-        usedGuiderTitles.push(entry.guider.title);
+      if (guiderBrief) {
+        entry.guider = guiderBrief;
+        usedGuiderTitles.push(guiderBrief.title);
       }
       prepared.push(entry);
     }

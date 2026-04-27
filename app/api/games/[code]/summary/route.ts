@@ -65,55 +65,94 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     }>;
   }> = [];
 
-  for (const pair of pairs) {
-    const builder = pair.builder_id ? byId.get(pair.builder_id) : undefined;
-    const guider = pair.guider_id ? byId.get(pair.guider_id) : undefined;
-    let correct = 0;
-    let placed = 0;
-    let total = 0;
-    let totalScore = 0;
-    const perRound: Array<{
-      index: number;
-      correct: number;
-      total: number;
-      score: number;
-    }> = [];
-    for (const round of allRounds) {
-      const pr = await repo.findPairRound(round.id, pair.id);
-      if (!pr) continue;
-      const goal = (pr.goal_pattern as GoalPattern) ?? [];
-      const placements = await repo.listPlacements(pr.id);
-      const breakdown = scorePlacements(placements, goal, {
-        correctPts: game.scoring_correct_pts,
-        wrongPts: game.scoring_wrong_pts,
-      });
-      perRound.push({
-        index: round.index,
-        correct: breakdown.correct,
-        total: breakdown.total,
-        score: breakdown.score,
-      });
-      totalScore += breakdown.score;
-      if (latestRound && round.id === latestRound.id) {
-        correct = breakdown.correct;
-        placed = placements.length;
-        total = breakdown.total;
+  // Mid-game leak gate: while the game is still running, the
+  // builder / guider / observer learn correctness only via the
+  // builder's "Test solution" tap (which sets pair_round.test_enabled
+  // = true). /summary previously returned correct / placed / total
+  // for every pair regardless, which let any participant query the
+  // route mid-round and see how every pair was doing — defeating
+  // the point of the test-enabled gate. Now we expose per-round
+  // correctness only when (a) the round has ended, OR (b) test was
+  // explicitly enabled on that pair_round. Score and total counts
+  // remain hidden too since they're derived from `correct`.
+  const gameEnded = game.status === "ended";
+
+  // Parallelise the per-pair per-round fetch — was sequential
+  // pairs × rounds × 2 awaits, blew the dashboard / debrief load
+  // budget on long games. Same shape, batched.
+  const pairResults = await Promise.all(
+    pairs.map(async (pair) => {
+      const builder = pair.builder_id ? byId.get(pair.builder_id) : undefined;
+      const guider = pair.guider_id ? byId.get(pair.guider_id) : undefined;
+      const roundResults = await Promise.all(
+        allRounds.map(async (round) => {
+          const pr = await repo.findPairRound(round.id, pair.id);
+          if (!pr) return null;
+          const goal = (pr.goal_pattern as GoalPattern) ?? [];
+          const placements = await repo.listPlacements(pr.id);
+          const breakdown = scorePlacements(placements, goal, {
+            correctPts: game.scoring_correct_pts,
+            wrongPts: game.scoring_wrong_pts,
+          });
+          return {
+            round_id: round.id,
+            round_index: round.index,
+            round_status: round.status,
+            test_enabled: pr.test_enabled,
+            placements_count: placements.length,
+            breakdown,
+          };
+        }),
+      );
+      let correct = 0;
+      let placed = 0;
+      let total = 0;
+      let totalScore = 0;
+      const perRound: Array<{
+        index: number;
+        correct: number;
+        total: number;
+        score: number;
+      }> = [];
+      for (const r of roundResults) {
+        if (!r) continue;
+        const reveal =
+          gameEnded || r.round_status === "ended" || r.test_enabled;
+        // total_score is preserved across all rounds — it's the
+        // headline leaderboard number and the round needs to have
+        // happened for it to count, which the score already encodes.
+        // (Score is 0 if there are no placements.)
+        if (reveal) {
+          totalScore += r.breakdown.score;
+          perRound.push({
+            index: r.round_index,
+            correct: r.breakdown.correct,
+            total: r.breakdown.total,
+            score: r.breakdown.score,
+          });
+        }
+        if (latestRound && r.round_id === latestRound.id && reveal) {
+          correct = r.breakdown.correct;
+          placed = r.placements_count;
+          total = r.breakdown.total;
+        }
       }
-    }
-    const extras = Math.max(0, placed - correct);
-    summary.push({
-      pair_id: pair.id,
-      builder: builder?.display_name ?? null,
-      guider: guider?.display_name ?? null,
-      correct,
-      total,
-      placed,
-      extras,
-      complete: total > 0 && correct === total && placed === total,
-      total_score: totalScore,
-      rounds: perRound,
-    });
-  }
+      const extras = Math.max(0, placed - correct);
+      return {
+        pair_id: pair.id,
+        builder: builder?.display_name ?? null,
+        guider: guider?.display_name ?? null,
+        correct,
+        total,
+        placed,
+        extras,
+        complete: total > 0 && correct === total && placed === total,
+        total_score: totalScore,
+        rounds: perRound,
+      };
+    }),
+  );
+  summary.push(...pairResults);
 
   // Sort by total_score desc, then completeness, then accuracy ratio.
   summary.sort((a, b) => {
