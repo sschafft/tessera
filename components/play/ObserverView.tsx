@@ -15,66 +15,81 @@ export function ObserverView({ state }: ObserverViewProps) {
     return <WaitingForRound state={state} />;
   }
   const showCoords = (state.round.complexity ?? 5) <= 4;
+  const briefs = state.observer_briefs ?? [];
   return (
-    <section className="grid w-full" style={{ gridTemplateColumns: "1fr 1fr", gridTemplateRows: "1fr auto" }}>
-      {state.observer_briefs && state.observer_briefs.length > 0 && (
-        <div className="absolute right-6 top-20 z-20 flex flex-col gap-2">
-          {state.observer_briefs.map((b) => (
+    <section className="flex w-full flex-col">
+      {briefs.length > 0 && (
+        // Inline strip of brief seals at the top of the observer view.
+        // Earlier this was an absolute-positioned 320px column at
+        // right-6 — that overflowed the viewport at 1024px wide,
+        // clipping text and pushing the close button off-screen.
+        // Inline + minimised by default keeps the goal/builder canvases
+        // unobstructed; click a seal to expand the card.
+        <div className="flex flex-wrap items-center justify-end gap-3 border-b border-[var(--color-line)] bg-white px-4 py-3">
+          <span className="t-mono mr-auto text-[11px] uppercase tracking-widest text-[var(--color-ink-3)]">
+            Pair briefs
+          </span>
+          {briefs.map((b) => (
             <BriefEnvelope
               key={b.role}
               role={b.role}
               title={b.title}
               rules={b.rules}
-              defaultOpen
             />
           ))}
         </div>
       )}
-      <div className="flex flex-col items-center justify-center border-r border-[var(--color-line)] p-6">
-        <PaneHeader
-          title="Builder"
-          subtitle={`${state.placements.length} piece${state.placements.length === 1 ? "" : "s"} placed`}
-          colorVar="orange"
-        />
-        <div className="mt-3">
-          <PlayCanvas
-            pieces={state.placements}
-            complexity={state.round.complexity}
-            showCoords={showCoords}
+      <div
+        className="grid flex-1"
+        style={{
+          gridTemplateColumns: "1fr 1fr",
+          gridTemplateRows: "1fr auto",
+        }}
+      >
+        <div className="flex flex-col items-center justify-center border-r border-[var(--color-line)] p-6">
+          <PaneHeader
+            title="Builder"
+            subtitle={`${state.placements.length} piece${state.placements.length === 1 ? "" : "s"} placed`}
+            colorVar="orange"
           />
+          <div className="mt-3">
+            <PlayCanvas
+              pieces={state.placements}
+              complexity={state.round.complexity}
+              showCoords={showCoords}
+            />
+          </div>
+          <p className="t-mono mt-3 text-[11px] text-[var(--color-ink-3)]">
+            live · updates every 2 seconds
+          </p>
         </div>
-        <p className="t-mono mt-3 text-[11px] text-[var(--color-ink-3)]">
-          live · updates every 2 seconds
-        </p>
-      </div>
-      <div className="flex flex-col items-center justify-center p-6">
-        <PaneHeader title="Goal" subtitle="what they're aiming for" colorVar="blue" />
-        <div className="relative mt-3">
-          <span
-            className="t-stamp absolute -left-2 -top-4 z-10"
-            style={{
-              color: "var(--color-t-red)",
-              background: "#fffaf0",
-              padding: "5px 12px",
-            }}
-          >
-            ● THE GOAL
-          </span>
-          <PlayCanvas
-            pieces={state.goal}
-            complexity={state.round.complexity}
-            showCoords={showCoords}
-          />
+        <div className="flex flex-col items-center justify-center p-6">
+          <PaneHeader title="Goal" subtitle="what they're aiming for" colorVar="blue" />
+          <div className="relative mt-3">
+            <span
+              className="t-stamp absolute -left-2 -top-4 z-10"
+              style={{
+                color: "var(--color-t-red)",
+                background: "#fffaf0",
+                padding: "5px 12px",
+              }}
+            >
+              ● THE GOAL
+            </span>
+            <PlayCanvas
+              pieces={state.goal}
+              complexity={state.round.complexity}
+              showCoords={showCoords}
+            />
+          </div>
         </div>
-      </div>
 
-      {state.available_pairs && state.available_pairs.length > 1 && (
-        <div
-          className="col-span-2 flex items-center gap-3 border-t border-[var(--color-line)] bg-white px-6 py-3"
-        >
-          <PairSwitcher state={state} />
-        </div>
-      )}
+        {state.available_pairs && state.available_pairs.length > 1 && (
+          <div className="col-span-2 flex items-center gap-3 border-t border-[var(--color-line)] bg-white px-6 py-3">
+            <PairSwitcher state={state} />
+          </div>
+        )}
+      </div>
     </section>
   );
 }

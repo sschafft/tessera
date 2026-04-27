@@ -749,7 +749,15 @@ function BuilderInteractive({ state }: { state: PlayState }) {
           style={{ width: 320 }}
         >
           {state.brief && state.brief.role === "builder" && (
+            // Key on the brief title so a super-power-driven brief
+            // swap (Change builder brief) remounts the envelope —
+            // resets it to the sealed view so the player taps to
+            // re-open and the gate re-arms cleanly. Without this
+            // remount, the envelope keeps showing the old `view: open`
+            // state with the new brief content, while the parent gate
+            // re-arms; the player has no way to dismiss the gate.
             <BriefEnvelope
+              key={state.brief.title}
               role="builder"
               title={state.brief.title}
               rules={state.brief.rules}

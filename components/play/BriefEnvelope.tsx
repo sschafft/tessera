@@ -106,8 +106,15 @@ export function BriefEnvelope({
           border: emphasize
             ? "2px solid var(--color-t-red)"
             : "1.5px solid var(--color-ink)",
+          // Pulse 5 times then settle. We deliberately don't use
+          // `infinite` here: continuous motion blocks Playwright's
+          // click stability check, surfaces real a11y issues for
+          // vestibular sensitivity, and stops drawing the eye after
+          // the first few pulses anyway. PR #3 tried capping via a
+          // global rule but inline shorthand wins specificity, so the
+          // count is set inline now.
           animation: emphasize
-            ? "tessera-attention 1100ms ease-in-out infinite"
+            ? "tessera-attention 1100ms ease-in-out 5"
             : "none",
           boxShadow: emphasize
             ? "0 0 0 6px rgba(238, 58, 58, 0.12), 0 4px 0 rgba(0,0,0,.10)"
