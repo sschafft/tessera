@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { memo, type CSSProperties } from "react";
 
 export type TileShape =
   | "tri-up"
@@ -64,8 +64,12 @@ export interface TileProps {
  * Tile — a single absolutely-positioned SVG polygon. Pieces are stored in
  * grid coords (q, r) elsewhere; this component takes pixel coords because
  * it is also used decoratively (landing page hero, brief envelopes).
+ *
+ * React.memo'd so re-renders on the canvas (cursor hover, GC effects)
+ * don't churn every Tile when the underlying scalar props are
+ * identical to the previous render.
  */
-export function Tile({
+function TileImpl({
   kind,
   color = "blue",
   x,
@@ -125,3 +129,5 @@ export function Tile({
     </div>
   );
 }
+
+export const Tile = memo(TileImpl);
