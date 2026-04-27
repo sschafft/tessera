@@ -8,6 +8,31 @@ export interface JoinCallCtaProps {
 }
 
 /**
+ * Domains we treat as placeholder / non-real video URLs. Surface a
+ * "no call configured" hint instead of rendering a CTA that links into
+ * the void. example.com / example.org / localhost reach this when a GM
+ * filled the form with a sentinel during testing.
+ */
+const PLACEHOLDER_HOSTS = new Set([
+  "example.com",
+  "example.org",
+  "example.net",
+  "localhost",
+  "127.0.0.1",
+]);
+
+function isPlaceholderUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return [...PLACEHOLDER_HOSTS].some(
+      (h) => u.hostname === h || u.hostname.endsWith(`.${h}`),
+    );
+  } catch {
+    return true;
+  }
+}
+
+/**
  * Big primary "Join the video call" button used on the waiting / lobby
  * screens — the single most important action a player has before the
  * round starts. Tessera is a scaffold for a conversation; the
@@ -19,6 +44,28 @@ export function JoinCallCta({
   size = "lg",
 }: JoinCallCtaProps) {
   const big = size === "lg";
+  const placeholder = isPlaceholderUrl(videoCallUrl);
+  if (placeholder) {
+    return (
+      <div
+        className="flex flex-col items-center gap-1 rounded-[10px] px-4 py-3 text-center"
+        style={{
+          background: "var(--color-tint-yellow)",
+          color: "#7a5b00",
+          maxWidth: 360,
+        }}
+      >
+        <span className="text-[13px] font-semibold">
+          No video call configured
+        </span>
+        <span className="text-[12px]" style={{ lineHeight: 1.4 }}>
+          The facilitator hasn&apos;t set a real video link yet
+          ({new URL(videoCallUrl).hostname}). Hop into your usual call and
+          ping them.
+        </span>
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col items-center gap-3">
       <a

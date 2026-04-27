@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Avatar } from "@/components/primitives/Avatar";
 import type { TeamMode } from "@/lib/game/repository";
 import type { LobbyParticipant, LobbyPair } from "./MasterContent";
@@ -51,10 +51,16 @@ export function MasterLobby({
   const selectedCount = selectedIds.length;
 
   const maxPossiblePairs = Math.floor(members.length / 2);
+  // Track whether the GM has touched the field. If they've typed a
+  // value, never auto-overwrite it — the playtest surfaced the field
+  // silently changing from "3" to "1" after allocations succeeded,
+  // which was confusing.
   const [pairCountText, setPairCountText] = useState<string>(
     String(Math.max(1, maxPossiblePairs)),
   );
+  const userTouchedPairCount = useRef(false);
   useEffect(() => {
+    if (userTouchedPairCount.current) return;
     setPairCountText(String(Math.max(1, maxPossiblePairs)));
   }, [maxPossiblePairs]);
   const parsedPairCount = (() => {
@@ -169,7 +175,10 @@ export function MasterLobby({
                 min={1}
                 max={32}
                 value={pairCountText}
-                onChange={(e) => setPairCountText(e.target.value)}
+                onChange={(e) => {
+                  userTouchedPairCount.current = true;
+                  setPairCountText(e.target.value);
+                }}
                 disabled={busy}
                 className="t-mono rounded-md bg-white px-2 py-1 text-[12px] font-bold text-[var(--color-ink)] outline-none disabled:opacity-50"
                 style={{

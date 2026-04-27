@@ -690,7 +690,7 @@ function BuilderInteractive({ state }: { state: PlayState }) {
               <button
                 type="button"
                 onClick={shareProgress}
-                disabled={sharingProgress}
+                disabled={sharingProgress || visiblePieces.length === 0}
                 className="rounded-full px-4 py-1.5 text-[12px] font-bold disabled:opacity-50"
                 style={{
                   background: "var(--color-t-orange)",
@@ -698,7 +698,11 @@ function BuilderInteractive({ state }: { state: PlayState }) {
                   boxShadow:
                     "0 2px 0 rgba(0,0,0,.10), inset 0 -1px 0 rgba(0,0,0,.10)",
                 }}
-                title="Snap your current canvas to the guider so they can spot mistakes."
+                title={
+                  visiblePieces.length === 0
+                    ? "Place at least one piece before sharing — empty shares burn your share count."
+                    : "Snap your current canvas to the guider so they can spot mistakes."
+                }
               >
                 {sharingProgress
                   ? "Sharing…"
