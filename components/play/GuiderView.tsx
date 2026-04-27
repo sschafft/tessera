@@ -189,7 +189,7 @@ function BuilderSnapshotPanel({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="absolute bottom-6 right-6 z-10 w-[300px] cursor-pointer text-left"
+        className="absolute bottom-6 right-6 z-40 w-[300px] cursor-pointer text-left"
         style={{ background: "transparent", padding: 0, border: "none" }}
         aria-label="Open builder shared progress full screen"
       >
