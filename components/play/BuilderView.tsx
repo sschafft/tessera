@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Tile, type TileColor, type TileShape } from "@/components/canvas/Tile";
 import { InteractiveCanvas } from "@/components/canvas/InteractiveCanvas";
 import { PlayCanvas } from "@/components/canvas/PlayCanvas";
@@ -94,14 +101,17 @@ function BuilderInteractive({ state }: { state: PlayState }) {
   // shrinks the palette mid-round (super-power side-effect).
   useEffect(() => {
     if (!palette.includes(selectedColor)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- snaps a stale selection back into the active palette after a complexity change.
       setSelectedColor(palette[0] ?? "blue");
     }
   }, [palette, selectedColor]);
 
   // GC: any optimistic patch whose values now match state.placements
-  // can be dropped — the server caught up.
+  // can be dropped — the server caught up. design_patterns.md >
+  // "Optimistic UI with server reconciliation": GC by content match.
   useEffect(() => {
     if (optimisticPatches.size === 0) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- canonical optimistic-GC; no cascading-render risk because we early-return when nothing changes.
     setOptimisticPatches((prev) => {
       let changed = false;
       const next = new Map(prev);
@@ -127,6 +137,7 @@ function BuilderInteractive({ state }: { state: PlayState }) {
   // contains the new piece eliminates the visible stutter.
   useEffect(() => {
     if (optimistic.length === 0) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- canonical optimistic-add GC; same reason as the optimisticPatches GC above.
     setOptimistic((prev) => {
       const next = prev.filter((opt) => {
         const matched = state.placements.some(
@@ -174,28 +185,11 @@ function BuilderInteractive({ state }: { state: PlayState }) {
   };
   const stopEditing = useCallback(() => setEditingId(null), []);
 
-  // Esc cancels whichever mode is active.
-  useEffect(() => {
-    if (selectedShape === null && editingId === null) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setSelectedShape(null);
-        setEditingId(null);
-      } else if (e.key === "r" || e.key === "R") {
-        if (editingPiece) {
-          // Rotate the editing piece via API
-          void rotateEditing();
-        } else if (selectedShape !== null) {
-          setSelectedRotation((p) => (p + 1) % 4);
-        }
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-    // rotateEditing closes over editingPiece + state; it's stable in
-    // its own closure scope, but we recompute on dep change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedShape, editingId, editingPiece?.rot]);
+  // Forward-declared via ref so the Esc/R keydown effect (further
+  // down) can call rotateEditing without TS hoisting the function
+  // identifier out of scope. The ref is updated synchronously after
+  // every render via the useLayoutEffect below.
+  const rotateEditingRef = useRef<(() => Promise<void>) | null>(null);
 
   const place = useCallback(
     async (q: number, r: number) => {
@@ -291,6 +285,29 @@ function BuilderInteractive({ state }: { state: PlayState }) {
     [editingPiece, state.code],
   );
 
+  // Esc cancels whichever mode is active; R rotates the editing piece
+  // (or rotates the next-drop selection when in add mode). The actual
+  // rotateEditing function is defined just below and tracked via
+  // rotateEditingRef so the effect can call it without a forward-ref
+  // hazard.
+  useEffect(() => {
+    if (selectedShape === null && editingId === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setSelectedShape(null);
+        setEditingId(null);
+      } else if (e.key === "r" || e.key === "R") {
+        if (editingPiece) {
+          void rotateEditingRef.current?.();
+        } else if (selectedShape !== null) {
+          setSelectedRotation((p) => (p + 1) % 4);
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedShape, editingId, editingPiece]);
+
   const rotateEditing = useCallback(async () => {
     if (!editingPiece) return;
     const newRot = (editingPiece.rot + 1) % 4;
@@ -321,6 +338,14 @@ function BuilderInteractive({ state }: { state: PlayState }) {
       setError(err instanceof Error ? err.message : "rotate failed");
     }
   }, [editingPiece, state.code]);
+
+  // Mirror rotateEditing into the forward-ref so the keydown effect
+  // above can call it. useLayoutEffect runs synchronously after render
+  // commit and before the next paint, so the ref is up-to-date by the
+  // time any keydown fires.
+  useLayoutEffect(() => {
+    rotateEditingRef.current = rotateEditing;
+  });
 
   /**
    * Tap-occupied-cell-with-selection: convert the existing piece to
@@ -519,6 +544,7 @@ function BuilderInteractive({ state }: { state: PlayState }) {
     state.brief?.title ?? (state.brief ? "(present)" : null);
   const [briefOpened, setBriefOpened] = useState(briefSignature === null);
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- re-arms the brief gate when a super-power swaps the brief mid-round.
     setBriefOpened(briefSignature === null);
   }, [briefSignature]);
 
@@ -798,16 +824,16 @@ function TestSolutionCTA({
   result: TestResult | null;
   onTest: () => void;
 }) {
-  const [pulseKey, setPulseKey] = useState(0);
-  useEffect(() => {
-    if (result) setPulseKey((k) => k + 1);
-  }, [result]);
+  // The result chip pulses on every Test-solution submission. The
+  // pulse is React-keyed by the result.at timestamp so a fresh result
+  // remounts the div and replays the CSS animation — no need for a
+  // counter-in-effect to drive the remount.
   const anyCorrect = (result?.correct ?? 0) > 0;
   return (
     <div className="mt-2 flex w-full max-w-[640px] flex-col items-center gap-3">
       {result && (
         <div
-          key={pulseKey}
+          key={result.at}
           className="t-card flex w-full items-center gap-3 px-4 py-3"
           style={{
             background: anyCorrect
@@ -1250,6 +1276,7 @@ function PrototypeOverlay({
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
     if (!prototype) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional one-shot mount sync; same SSR-mismatch reason as PlayTopBar.useTimer.
     setNow(Date.now());
     const id = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(id);

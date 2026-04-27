@@ -442,11 +442,16 @@ export function MasterContent({
   const pairs = useMemo(() => data?.pairs ?? [], [data]);
 
   // Auto-focus the first pair once one exists; clear focus if the pair
-  // disappears (e.g. after a Shuffle).
+  // disappears (e.g. after a Shuffle). Sync state from a derived prop
+  // (the pairs list) — there's no cleaner place for this since
+  // MasterContent owns focusedPairId and the pairs list is fetched
+  // async by the same component.
   useEffect(() => {
     if (!focusedPairId && pairs.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- syncs focused-pair when the pairs list arrives or a Shuffle drops the focused row.
       setFocusedPairId(pairs[0]!.id);
     } else if (focusedPairId && !pairs.some((p) => p.id === focusedPairId)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- same: focused row disappeared, snap to the first remaining pair.
       setFocusedPairId(pairs[0]?.id ?? null);
     }
   }, [pairs, focusedPairId]);

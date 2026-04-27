@@ -165,6 +165,7 @@ function useTimer(
   // mount and ticks the timer down for real.
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional one-shot mount sync; the alternative is a hydration mismatch on the timer chip.
     setNow(Date.now());
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);

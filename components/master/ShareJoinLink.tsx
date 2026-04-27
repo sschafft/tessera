@@ -16,6 +16,7 @@ export function ShareJoinLink({ code }: ShareJoinLinkProps) {
   const [copiedKind, setCopiedKind] = useState<"link" | "code" | null>(null);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot read of window.location.origin after mount; can't be in useState init since SSR has no window.
     setOrigin(window.location.origin);
   }, []);
 

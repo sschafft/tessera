@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { getBrowserClient } from "@/lib/supabase/browser";
 import { topicFor } from "./topic";
 
@@ -17,8 +17,15 @@ export function useGameEvents(
   game_id: string | null | undefined,
   onEvent: () => void,
 ): void {
+  // Mirror the latest handler via a ref so the subscribe effect
+  // doesn't re-run every time the parent component recreates the
+  // callback. useLayoutEffect runs synchronously after DOM commit but
+  // before paint — strictly after render, so React's "no refs during
+  // render" rule is satisfied.
   const handlerRef = useRef(onEvent);
-  handlerRef.current = onEvent;
+  useLayoutEffect(() => {
+    handlerRef.current = onEvent;
+  });
 
   useEffect(() => {
     if (!game_id) return;

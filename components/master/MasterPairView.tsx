@@ -88,8 +88,12 @@ export function MasterPairView({
     }
   }, [code, pairId]);
 
-  // Refetch on pair change + on every realtime tick.
+  // Refetch on pair change + on every realtime tick. The setSnap(null)
+  // here clears the previous pair's snapshot so we don't render a
+  // stale "what they're aiming for" while the new pair's data flies
+  // back. Mark it as intentional for the lint rule.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- clears stale snapshot on pair switch; the fetch repopulates immediately.
     setSnap(null);
     void fetchSnap();
   }, [fetchSnap]);
