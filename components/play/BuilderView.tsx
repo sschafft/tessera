@@ -1,36 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Tile, type TileColor, type TileShape } from "@/components/canvas/Tile";
 import { InteractiveCanvas } from "@/components/canvas/InteractiveCanvas";
 import { PlayCanvas } from "@/components/canvas/PlayCanvas";
 import { BriefEnvelope } from "./BriefEnvelope";
 import { JoinCallCta } from "./JoinCallCta";
+import { BUILDER_SHAPES, paletteColorsFor } from "@/lib/pattern/palette";
 import type { PlacedPiece, PlayState } from "./PlayContent";
 
-const TRAY_SHAPES: TileShape[] = [
-  "tri-up",
-  "tri-dn",
-  "sq",
-  "rhomb",
-  "trap",
-  "hex",
-];
-
-const PALETTE: TileColor[] = [
-  "red",
-  "orange",
-  "yellow",
-  "green",
-  "blue",
-  "purple",
-  "pink",
-  "teal",
-];
-
 const SHAPE_LABEL: Record<TileShape, string> = {
-  "tri-up": "triangle ▲",
-  "tri-dn": "triangle ▼",
+  "tri-up": "triangle",
+  "tri-dn": "triangle",
   sq: "square",
   rhomb: "rhombus",
   trap: "trapezoid",
@@ -55,19 +36,66 @@ export function BuilderView({ state }: BuilderViewProps) {
 }
 
 function BuilderInteractive({ state }: { state: PlayState }) {
+  const complexity = state.round?.complexity ?? 5;
+  const palette = useMemo(() => paletteColorsFor(complexity), [complexity]);
   const [selectedShape, setSelectedShape] = useState<TileShape | null>(null);
-  const [selectedColor, setSelectedColor] = useState<TileColor>("blue");
+  const [selectedColor, setSelectedColor] = useState<TileColor>(
+    palette[0] ?? "blue",
+  );
   const [selectedRotation, setSelectedRotation] = useState(0);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [optimistic, setOptimistic] = useState<PlacedPiece[]>([]);
   const [pendingDeletes, setPendingDeletes] = useState<Set<string>>(new Set());
+  /**
+   * Optimistic field-level overrides applied to confirmed pieces, so
+   * rotates / moves / converts feel instant without waiting for the
+   * server roundtrip. Cleared once state.placements echoes the new
+   * value back (see GC effect below).
+   */
+  const [optimisticPatches, setOptimisticPatches] = useState<
+    Map<string, Partial<PlacedPiece>>
+  >(() => new Map());
   const [error, setError] = useState<string | null>(null);
   const [sharingProgress, setSharingProgress] = useState(false);
 
-  // Server placements + local optimistic adds, minus locally-pending deletes.
-  const visiblePieces = [...state.placements, ...optimistic].filter(
-    (p) => !pendingDeletes.has(p.id),
-  );
+  // Snap selected color to a value in the active palette if complexity
+  // shrinks the palette mid-round (super-power side-effect).
+  useEffect(() => {
+    if (!palette.includes(selectedColor)) {
+      setSelectedColor(palette[0] ?? "blue");
+    }
+  }, [palette, selectedColor]);
+
+  // GC: any optimistic patch whose values now match state.placements
+  // can be dropped — the server caught up.
+  useEffect(() => {
+    if (optimisticPatches.size === 0) return;
+    setOptimisticPatches((prev) => {
+      let changed = false;
+      const next = new Map(prev);
+      for (const [id, patch] of prev.entries()) {
+        const server = state.placements.find((p) => p.id === id);
+        if (!server) continue;
+        const stillNeeded = (Object.keys(patch) as (keyof PlacedPiece)[]).some(
+          (k) => patch[k] !== undefined && patch[k] !== server[k],
+        );
+        if (!stillNeeded) {
+          next.delete(id);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [state.placements, optimisticPatches]);
+
+  // Server placements + local optimistic adds, minus locally-pending
+  // deletes, with optimistic patches merged on top.
+  const visiblePieces = [...state.placements, ...optimistic]
+    .filter((p) => !pendingDeletes.has(p.id))
+    .map((p) => {
+      const patch = optimisticPatches.get(p.id);
+      return patch ? { ...p, ...patch } : p;
+    });
   const editingPiece =
     editingId === null
       ? null
@@ -77,10 +105,6 @@ function BuilderInteractive({ state }: { state: PlayState }) {
   const pickShape = (shape: TileShape | null) => {
     setSelectedShape(shape);
     if (shape !== null) setEditingId(null);
-  };
-  const startEditing = (piece: PlacedPiece) => {
-    setEditingId(piece.id);
-    setSelectedShape(null);
   };
   const stopEditing = useCallback(() => setEditingId(null), []);
 
@@ -150,17 +174,19 @@ function BuilderInteractive({ state }: { state: PlayState }) {
   const moveEditingTo = useCallback(
     async (q: number, r: number) => {
       if (!editingPiece) return;
-      // Optimistic: update the local view immediately.
-      const original = { q: editingPiece.q, r: editingPiece.r };
-      setOptimistic((prev) => [
-        ...prev,
-        { ...editingPiece, id: `move-${editingPiece.id}`, q, r },
-      ]);
-      setPendingDeletes((prev) => new Set(prev).add(editingPiece.id));
-
+      const id = editingPiece.id;
+      setError(null);
+      // Optimistic move via patch — piece appears in the new cell
+      // immediately while the PATCH is still in flight.
+      setOptimisticPatches((prev) => {
+        const next = new Map(prev);
+        next.set(id, { ...next.get(id), q, r });
+        return next;
+      });
+      if (id.startsWith("temp-")) return; // POST will sync the new q/r
       try {
         const res = await fetch(
-          `/api/games/${state.code}/placements/${editingPiece.id}`,
+          `/api/games/${state.code}/placements/${id}`,
           {
             method: "PATCH",
             headers: { "content-type": "application/json" },
@@ -171,31 +197,25 @@ function BuilderInteractive({ state }: { state: PlayState }) {
           const j = await res.json().catch(() => ({}));
           throw new Error(j.error || `status ${res.status}`);
         }
-        setOptimistic((prev) =>
-          prev.filter((p) => p.id !== `move-${editingPiece.id}`),
-        );
-        setPendingDeletes((prev) => {
-          const next = new Set(prev);
-          next.delete(editingPiece.id);
-          return next;
-        });
       } catch (err) {
-        // Roll back optimistic move.
-        setOptimistic((prev) =>
-          prev.filter((p) => p.id !== `move-${editingPiece.id}`),
-        );
-        setPendingDeletes((prev) => {
-          const next = new Set(prev);
-          next.delete(editingPiece.id);
+        // Drop the optimistic move so the piece reverts to its
+        // server cell on the next state refresh.
+        setOptimisticPatches((prev) => {
+          const next = new Map(prev);
+          const cur = next.get(id);
+          if (cur) {
+            const { q: _q, r: _r, ...rest } = cur;
+            void _q;
+            void _r;
+            if (Object.keys(rest).length === 0) next.delete(id);
+            else next.set(id, rest);
+          }
           return next;
         });
         const reason = err instanceof Error ? err.message : "move failed";
         setError(
           reason === "cell_taken" ? "That cell already has a piece." : reason,
         );
-        // Restore "editing at original cell" state by ensuring editingId stays
-        // pointed at the same id; PlayContent's poll will resync.
-        void original; // appease lint when we don't use it
       }
     },
     [editingPiece, state.code],
@@ -204,10 +224,18 @@ function BuilderInteractive({ state }: { state: PlayState }) {
   const rotateEditing = useCallback(async () => {
     if (!editingPiece) return;
     const newRot = (editingPiece.rot + 1) % 4;
+    const id = editingPiece.id;
     setError(null);
+    // Optimistic: apply rotation locally first.
+    setOptimisticPatches((prev) => {
+      const next = new Map(prev);
+      next.set(id, { ...next.get(id), rot: newRot });
+      return next;
+    });
+    if (id.startsWith("temp-")) return; // POST will sync the new rot
     try {
       const res = await fetch(
-        `/api/games/${state.code}/placements/${editingPiece.id}`,
+        `/api/games/${state.code}/placements/${id}`,
         {
           method: "PATCH",
           headers: { "content-type": "application/json" },
@@ -222,6 +250,66 @@ function BuilderInteractive({ state }: { state: PlayState }) {
       setError(err instanceof Error ? err.message : "rotate failed");
     }
   }, [editingPiece, state.code]);
+
+  /**
+   * Tap-occupied-cell-with-selection: convert the existing piece to
+   * the currently selected shape/color/rotation in place. Single
+   * PATCH; piece identity is preserved so stay-on-cell mutations
+   * don't churn through new IDs.
+   */
+  const convertPiece = useCallback(
+    async (target: PlacedPiece) => {
+      if (!selectedShape) return;
+      const id = target.id;
+      const patch = {
+        shape: selectedShape,
+        color: selectedColor,
+        rot: selectedRotation,
+      };
+      setError(null);
+      // Optimistic: apply locally.
+      setOptimisticPatches((prev) => {
+        const next = new Map(prev);
+        next.set(id, { ...next.get(id), ...patch });
+        return next;
+      });
+      if (id.startsWith("temp-")) return;
+      try {
+        const res = await fetch(
+          `/api/games/${state.code}/placements/${id}`,
+          {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(patch),
+          },
+        );
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          throw new Error(j.error || `status ${res.status}`);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "convert failed");
+      }
+    },
+    [selectedShape, selectedColor, selectedRotation, state.code],
+  );
+
+  /**
+   * Click on an existing piece. If a tray shape is selected, this is
+   * a "convert in place" tap — overwrite the piece with the active
+   * selection. Otherwise, enter edit mode for that piece.
+   */
+  const onPieceClick = useCallback(
+    (piece: PlacedPiece) => {
+      if (selectedShape) {
+        void convertPiece(piece);
+        return;
+      }
+      setEditingId(piece.id);
+      setSelectedShape(null);
+    },
+    [selectedShape, convertPiece],
+  );
 
   const deleteEditing = useCallback(async () => {
     if (!editingPiece) return;
@@ -320,7 +408,11 @@ function BuilderInteractive({ state }: { state: PlayState }) {
           color={selectedColor}
           rotation={selectedRotation}
         />
-        <Palette selected={selectedColor} onSelect={setSelectedColor} />
+        <Palette
+          selected={selectedColor}
+          onSelect={setSelectedColor}
+          colors={palette}
+        />
         <Tools
           rotation={selectedRotation}
           setRotation={setSelectedRotation}
@@ -352,18 +444,22 @@ function BuilderInteractive({ state }: { state: PlayState }) {
           )}
         </div>
         <div className="flex flex-col items-center gap-3">
-          <PrototypeOverlay prototype={state.prototype} />
+          <PrototypeOverlay
+            prototype={state.prototype}
+            complexity={complexity}
+          />
 
           <div className="relative">
             <InteractiveCanvas
               pieces={visiblePieces}
+              complexity={complexity}
               selectedShape={selectedShape}
               selectedColor={selectedColor}
               selectedRotation={selectedRotation}
               editingId={editingId}
               showCoords={showCoords}
               onPlace={place}
-              onPieceClick={startEditing}
+              onPieceClick={onPieceClick}
               onMoveTo={moveEditingTo}
             />
             {editingPiece && (
@@ -384,9 +480,21 @@ function BuilderInteractive({ state }: { state: PlayState }) {
                     editingPiece.r,
                   )} · click an empty cell to move it · press R to rotate`
                 : selectedShape
-                  ? "click a cell to place · click any piece to edit it"
-                  : "pick a shape from the tray, or click an existing piece to move it"}
+                  ? "click a cell to place · click any piece to swap it"
+                  : "pick a shape from the tray, or click an existing piece to edit it"}
             </p>
+            {state.goal_count > 0 && (
+              <span
+                className="t-mono rounded-full px-3 py-1 text-[11px] font-bold"
+                style={{
+                  background: "var(--color-paper-2)",
+                  color: "var(--color-ink-2)",
+                }}
+                aria-label={`${visiblePieces.length} of ${state.goal_count} placed`}
+              >
+                ◉ {visiblePieces.length} / {state.goal_count} placed
+              </span>
+            )}
             {state.test_enabled && state.accuracy && (
               <span className="t-mono rounded-full bg-[var(--color-paper-2)] px-3 py-1 text-[11px] font-bold">
                 ✓ {state.accuracy.correct} / {state.accuracy.total} correct
@@ -604,8 +712,8 @@ function Tray({
           </button>
         )}
       </div>
-      <div className="grid grid-cols-3 gap-2">
-        {TRAY_SHAPES.map((shape) => {
+      <div className="grid grid-cols-2 gap-2">
+        {BUILDER_SHAPES.map((shape) => {
           const isSelected = shape === selected;
           return (
             <button
@@ -645,10 +753,13 @@ function Tray({
 function Palette({
   selected,
   onSelect,
+  colors,
 }: {
   selected: TileColor;
   onSelect: (color: TileColor) => void;
+  colors: TileColor[];
 }) {
+  const cols = Math.min(colors.length, 3);
   return (
     <div>
       <div className="mb-2.5">
@@ -656,8 +767,11 @@ function Palette({
           Colour palette
         </span>
       </div>
-      <div className="grid grid-cols-4 gap-2">
-        {PALETTE.map((c) => (
+      <div
+        className="grid gap-2"
+        style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}
+      >
+        {colors.map((c) => (
           <button
             key={c}
             type="button"
@@ -745,8 +859,10 @@ function Tools({
 
 function PrototypeOverlay({
   prototype,
+  complexity,
 }: {
   prototype: PlayState["prototype"];
+  complexity: number;
 }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -780,7 +896,7 @@ function PrototypeOverlay({
           padding: 4,
         }}
       >
-        <PlayCanvas pieces={prototype.goal} />
+        <PlayCanvas pieces={prototype.goal} complexity={complexity} />
       </div>
       <span
         className="t-mono text-[10px] text-[var(--color-ink-3)]"

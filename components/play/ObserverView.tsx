@@ -37,7 +37,11 @@ export function ObserverView({ state }: ObserverViewProps) {
           colorVar="orange"
         />
         <div className="mt-3">
-          <PlayCanvas pieces={state.placements} showCoords={showCoords} />
+          <PlayCanvas
+            pieces={state.placements}
+            complexity={state.round.complexity}
+            showCoords={showCoords}
+          />
         </div>
         <p className="t-mono mt-3 text-[11px] text-[var(--color-ink-3)]">
           live · updates every 2 seconds
@@ -56,7 +60,11 @@ export function ObserverView({ state }: ObserverViewProps) {
           >
             ● THE GOAL
           </span>
-          <PlayCanvas pieces={state.goal} showCoords={showCoords} />
+          <PlayCanvas
+            pieces={state.goal}
+            complexity={state.round.complexity}
+            showCoords={showCoords}
+          />
         </div>
       </div>
 

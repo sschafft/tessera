@@ -4,26 +4,59 @@ import type { TileShape } from "@/components/canvas/Tile";
  * Coordinate system: integer grid (q, r) → pixel (x, y).
  *
  * Each grid cell is `CELL` px square; one piece occupies one cell on the
- * conceptual grid even though the visual tile may extend slightly beyond
- * (e.g. hex / trap have wider bounding boxes than the cell). The visual
- * size per shape is captured by SHAPE_SIZE_RATIO.
+ * conceptual grid. The grid is square and its size scales with the
+ * round's complexity (smaller = easier to talk about, larger = more
+ * placements possible).
  *
- * Origin is the top-left of the canvas. (0, 0) places the piece at
+ * Origin is the top-left of the canvas. Cell (0, 0) sits at
  * (PADDING, PADDING) px.
  */
 export const CELL = 64;
 export const PADDING = 32;
 
-export const GRID_WIDTH = 9;
-export const GRID_HEIGHT = 7;
+/** Hard upper bound on grid size. Used for server-side input validation. */
+export const MAX_GRID = 9;
 
-export const CANVAS_WIDTH = GRID_WIDTH * CELL + PADDING * 2;
-export const CANVAS_HEIGHT = GRID_HEIGHT * CELL + PADDING * 2;
+export interface GridSize {
+  w: number;
+  h: number;
+}
+
+const SIZE_BY_COMPLEXITY: Record<number, number> = {
+  1: 3,
+  2: 4,
+  3: 4,
+  4: 5,
+  5: 6,
+  6: 7,
+  7: 8,
+  8: 9,
+};
+
+/**
+ * Square grid dimensions for a given round complexity. Builders see
+ * fewer cells at low complexity (faster to scan, easier to describe on
+ * a call); higher complexity widens the canvas for richer patterns.
+ */
+export function gridSizeFor(complexity: number): GridSize {
+  const lvl = Math.max(1, Math.min(8, Math.round(complexity)));
+  const n = SIZE_BY_COMPLEXITY[lvl] ?? 6;
+  return { w: n, h: n };
+}
+
+export function canvasSizeFor(
+  complexity: number,
+): { width: number; height: number } {
+  const { w, h } = gridSizeFor(complexity);
+  return {
+    width: w * CELL + PADDING * 2,
+    height: h * CELL + PADDING * 2,
+  };
+}
 
 /**
  * Per-shape rendering size as a multiple of CELL. Larger shapes render
- * a bit bigger than their cell so the goal pattern feels chunky and
- * pieces visually overlap, like in the design.
+ * a bit bigger than their cell so the goal pattern feels chunky.
  */
 export const SHAPE_SIZE_RATIO: Record<TileShape, number> = {
   "tri-up": 1.05,
@@ -45,12 +78,6 @@ export interface Pixel {
   y: number;
 }
 
-/**
- * Top-left pixel position of a piece occupying cell (q, r). Tiles
- * accept absolute (x, y) of their bounding box's top-left, so the
- * caller subtracts the size offset themselves if they want the tile
- * centred on the cell.
- */
 export function cellToPixel(cell: Cell): Pixel {
   return {
     x: PADDING + cell.q * CELL,
@@ -59,23 +86,22 @@ export function cellToPixel(cell: Cell): Pixel {
 }
 
 /**
- * Closest cell for a given pixel coord. Used by drag-drop snapping in
- * milestone 3.2. Clamps to the grid envelope.
+ * Closest cell for a given pixel coord, clamped to the supplied grid
+ * size. Callers pass the round's grid (from gridSizeFor) so clamping
+ * matches what's actually rendered.
  */
-export function pixelToCell(pixel: Pixel): Cell {
+export function pixelToCell(
+  pixel: Pixel,
+  size: GridSize = { w: MAX_GRID, h: MAX_GRID },
+): Cell {
   const q = Math.round((pixel.x - PADDING) / CELL);
   const r = Math.round((pixel.y - PADDING) / CELL);
   return {
-    q: Math.max(0, Math.min(GRID_WIDTH - 1, q)),
-    r: Math.max(0, Math.min(GRID_HEIGHT - 1, r)),
+    q: Math.max(0, Math.min(size.w - 1, q)),
+    r: Math.max(0, Math.min(size.h - 1, r)),
   };
 }
 
-/**
- * Tile-bounding-box size in px for a given shape, given the configured
- * cell size. Useful when positioning a Tile so it visually fills the
- * cell.
- */
 export function tileSizeFor(shape: TileShape): number {
   return CELL * SHAPE_SIZE_RATIO[shape];
 }

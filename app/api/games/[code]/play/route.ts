@@ -217,6 +217,14 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
         }
       : null,
     goal,
+    /**
+     * Goal piece count, exposed even to the builder (who can't see
+     * the goal pattern). Powers the "X / Y placed" progress counter
+     * without leaking the actual layout / shapes / colors.
+     */
+    goal_count: pairRound
+      ? ((pairRound.goal_pattern as GoalPattern) ?? []).length
+      : 0,
     placements: placementsWithCorrect,
     accuracy,
     test_enabled: testEnabled,

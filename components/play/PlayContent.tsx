@@ -69,6 +69,8 @@ export interface PlayState {
     shares_remaining: number;
   } | null;
   goal: GoalPattern | null;
+  /** Goal piece count — exposed to all roles for the builder progress counter. */
+  goal_count: number;
   placements: PlacedPiece[];
   /** Server-computed accuracy gauge when test_enabled is true. */
   accuracy: { correct: number; total: number } | null;

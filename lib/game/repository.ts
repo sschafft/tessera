@@ -305,13 +305,20 @@ export interface GameRepository {
   clearPlacements(pair_round_id: string): Promise<number>;
 
   /**
-   * Update a placement's cell (q, r) and/or rotation. Throws
-   * PlacementCellTakenError when the new cell collides with another
-   * placement in the same pair_round.
+   * Update a placement's cell (q, r), rotation, shape, and/or color.
+   * Throws PlacementCellTakenError when a new (q, r) collides with
+   * another placement in the same pair_round. Used both for moves and
+   * for tap-occupied-cell-with-selection convert-in-place.
    */
   updatePlacement(
     id: string,
-    patch: { q?: number; r?: number; rot?: number },
+    patch: {
+      q?: number;
+      r?: number;
+      rot?: number;
+      shape?: string;
+      color?: string;
+    },
   ): Promise<PlacementRecord | null>;
 
   /**

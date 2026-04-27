@@ -52,11 +52,19 @@ export function RoundEndedView({ state }: RoundEndedViewProps) {
       <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
         <div className="t-card flex flex-col items-center gap-3 p-4">
           <PaneHeader title="What you built" colorVar="orange" />
-          <PlayCanvas pieces={placements} showCoords={showCoords} />
+          <PlayCanvas
+            pieces={placements}
+            complexity={state.round?.complexity ?? 5}
+            showCoords={showCoords}
+          />
         </div>
         <div className="t-card flex flex-col items-center gap-3 p-4">
           <PaneHeader title="What it should have been" colorVar="blue" />
-          <PlayCanvas pieces={goal} showCoords={showCoords} />
+          <PlayCanvas
+            pieces={goal}
+            complexity={state.round?.complexity ?? 5}
+            showCoords={showCoords}
+          />
         </div>
       </div>
 

@@ -1,19 +1,18 @@
-import {
-  CELL,
-  GRID_HEIGHT,
-  GRID_WIDTH,
-  PADDING,
-} from "@/lib/grid/coords";
+import { CELL, PADDING } from "@/lib/grid/coords";
 
 const LETTERS = "ABCDEFGHIJKLMN";
 
+export interface CoordinateLabelsProps {
+  width: number;
+  height: number;
+}
+
 /**
- * Letter (column) and number (row) labels along the top + left edges
- * of the canvas. Helps guider + builder talk about positions on a
- * call ("the red triangle goes on B3"). Only rendered at lower
- * complexity levels where the verbal scaffold is appropriate.
+ * Letter (column) and number (row) labels along the top + left edges.
+ * Helps guider + builder talk about positions on a call ("the red
+ * triangle goes on B3"). Sized to the round's grid via props.
  */
-export function CoordinateLabels() {
+export function CoordinateLabels({ width, height }: CoordinateLabelsProps) {
   return (
     <div
       aria-hidden="true"
@@ -28,8 +27,7 @@ export function CoordinateLabels() {
         letterSpacing: ".05em",
       }}
     >
-      {/* Column letters along the top */}
-      {Array.from({ length: GRID_WIDTH }, (_, q) => (
+      {Array.from({ length: width }, (_, q) => (
         <span
           key={`col-${q}`}
           style={{
@@ -43,8 +41,7 @@ export function CoordinateLabels() {
           {LETTERS[q] ?? ""}
         </span>
       ))}
-      {/* Row numbers down the left */}
-      {Array.from({ length: GRID_HEIGHT }, (_, r) => (
+      {Array.from({ length: height }, (_, r) => (
         <span
           key={`row-${r}`}
           style={{

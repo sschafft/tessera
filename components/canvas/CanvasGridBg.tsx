@@ -1,19 +1,26 @@
 import { CELL, PADDING } from "@/lib/grid/coords";
 
+export interface CanvasGridBgProps {
+  /** Total canvas width in px (used to clip the pattern at the right edge). */
+  width: number;
+  /** Total canvas height in px. */
+  height: number;
+}
+
 /**
  * Square cell-grid background for the canvas. One faint line every
- * CELL pixels, padded to match the grid origin. The grid is the
- * primary visual reference players use to align pieces; coordinate
- * labels (A1, B2, …) sit on top via <CoordinateLabels />.
+ * CELL pixels, padded to match the grid origin. Pattern is sized to
+ * the parent canvas via explicit width/height so smaller grids don't
+ * paint stray cells outside their envelope.
  */
-export function CanvasGridBg() {
+export function CanvasGridBg({ width, height }: CanvasGridBgProps) {
   return (
     <svg
+      width={width}
+      height={height}
       style={{
         position: "absolute",
         inset: 0,
-        width: "100%",
-        height: "100%",
         opacity: 0.6,
         pointerEvents: "none",
       }}
@@ -36,7 +43,13 @@ export function CanvasGridBg() {
           />
         </pattern>
       </defs>
-      <rect width="100%" height="100%" fill="url(#square-grid)" />
+      <rect
+        x={PADDING}
+        y={PADDING}
+        width={width - PADDING * 2}
+        height={height - PADDING * 2}
+        fill="url(#square-grid)"
+      />
     </svg>
   );
 }

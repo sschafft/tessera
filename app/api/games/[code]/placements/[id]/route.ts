@@ -3,7 +3,7 @@ import { isValidGameCode } from "@/lib/game/code";
 import { readSessionAndParticipant } from "@/lib/auth/session";
 import { publishGameEvent } from "@/lib/realtime/publish";
 import { getRepository } from "@/lib/game/getRepository";
-import { GRID_HEIGHT, GRID_WIDTH } from "@/lib/grid/coords";
+import { MAX_GRID } from "@/lib/grid/coords";
 import { PlacementCellTakenError } from "@/lib/game/repository.memory";
 
 export const runtime = "nodejs";
@@ -49,7 +49,29 @@ interface PatchPayload {
   q?: number;
   r?: number;
   rot?: number;
+  shape?: string;
+  color?: string;
 }
+
+const VALID_SHAPES = new Set([
+  "tri-up",
+  "tri-dn",
+  "sq",
+  "rhomb",
+  "trap",
+  "hex",
+  "pent",
+]);
+const VALID_COLORS = new Set([
+  "red",
+  "orange",
+  "yellow",
+  "green",
+  "blue",
+  "purple",
+  "pink",
+  "teal",
+]);
 
 function isInt(n: unknown): n is number {
   return typeof n === "number" && Number.isInteger(n);
@@ -70,18 +92,26 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   if (
     body.q === undefined &&
     body.r === undefined &&
-    body.rot === undefined
+    body.rot === undefined &&
+    body.shape === undefined &&
+    body.color === undefined
   ) {
     return NextResponse.json({ error: "no_fields" }, { status: 400 });
   }
-  if (body.q !== undefined && (!isInt(body.q) || body.q < 0 || body.q >= GRID_WIDTH)) {
+  if (body.q !== undefined && (!isInt(body.q) || body.q < 0 || body.q >= MAX_GRID)) {
     return NextResponse.json({ error: "invalid_q" }, { status: 400 });
   }
-  if (body.r !== undefined && (!isInt(body.r) || body.r < 0 || body.r >= GRID_HEIGHT)) {
+  if (body.r !== undefined && (!isInt(body.r) || body.r < 0 || body.r >= MAX_GRID)) {
     return NextResponse.json({ error: "invalid_r" }, { status: 400 });
   }
   if (body.rot !== undefined && (!isInt(body.rot) || body.rot < 0 || body.rot > 3)) {
     return NextResponse.json({ error: "invalid_rot" }, { status: 400 });
+  }
+  if (body.shape !== undefined && (typeof body.shape !== "string" || !VALID_SHAPES.has(body.shape))) {
+    return NextResponse.json({ error: "invalid_shape" }, { status: 400 });
+  }
+  if (body.color !== undefined && (typeof body.color !== "string" || !VALID_COLORS.has(body.color))) {
+    return NextResponse.json({ error: "invalid_color" }, { status: 400 });
   }
 
   try {

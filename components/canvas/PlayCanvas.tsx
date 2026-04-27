@@ -2,20 +2,19 @@ import { CanvasGridBg } from "./CanvasGridBg";
 import { CoordinateLabels } from "./CoordinateLabels";
 import { Tile } from "./Tile";
 import {
-  CANVAS_HEIGHT,
-  CANVAS_WIDTH,
   CELL,
+  canvasSizeFor,
   cellToPixel,
+  gridSizeFor,
   tileSizeFor,
 } from "@/lib/grid/coords";
 import type { GoalPiece } from "@/lib/pattern/types";
 
 export interface PlayCanvasProps {
   pieces: GoalPiece[];
-  /**
-   * Optional class name for the wrapper. Caller controls margins +
-   * borders; the canvas sizes itself from the grid math.
-   */
+  /** Round complexity — drives grid + canvas size. */
+  complexity: number;
+  /** Optional class name for the wrapper. */
   className?: string;
   /** Render pieces as ghosts (translucent) — used for goal previews. */
   ghost?: boolean;
@@ -24,31 +23,33 @@ export interface PlayCanvasProps {
 }
 
 /**
- * Read-only canvas. Draws the square grid background plus an array
- * of pieces at their (q, r) cell coords. Used for guider goal
- * preview, observer split view, and (in 3.2) builder placement
- * render.
+ * Read-only canvas. Square grid sized to round complexity, plus an
+ * array of pieces at their (q, r) cells. Used for guider goal preview,
+ * observer split view, and GM dashboards.
  */
 export function PlayCanvas({
   pieces,
+  complexity,
   className,
   ghost = false,
   showCoords = false,
 }: PlayCanvasProps) {
+  const grid = gridSizeFor(complexity);
+  const { width, height } = canvasSizeFor(complexity);
   return (
     <div
       className={className}
       style={{
         position: "relative",
-        width: CANVAS_WIDTH,
-        height: CANVAS_HEIGHT,
+        width,
+        height,
         background: "var(--color-paper)",
         borderRadius: "var(--radius-lg)",
         overflow: "hidden",
       }}
     >
-      <CanvasGridBg />
-      {showCoords && <CoordinateLabels />}
+      <CanvasGridBg width={width} height={height} />
+      {showCoords && <CoordinateLabels width={grid.w} height={grid.h} />}
       {pieces.map((p, i) => {
         const { x, y } = cellToPixel({ q: p.q, r: p.r });
         const size = tileSizeFor(p.shape);

@@ -1,45 +1,25 @@
-import type { TileColor, TileShape } from "@/components/canvas/Tile";
+import { gridSizeFor } from "@/lib/grid/coords";
+import { BUILDER_COLORS, BUILDER_SHAPES, paletteColorCount } from "./palette";
 import type {
   GeneratePatternInput,
   GoalPattern,
   GoalPiece,
 } from "./types";
 
-const ALL_COLORS: TileColor[] = [
-  "red",
-  "orange",
-  "yellow",
-  "green",
-  "blue",
-  "purple",
-  "pink",
-  "teal",
-];
-
-const ALL_SHAPES: TileShape[] = [
-  "tri-up",
-  "tri-dn",
-  "sq",
-  "rhomb",
-  "trap",
-  "hex",
-];
-
 interface ComplexityProfile {
   pieces: [number, number]; // min, max
   shapes: number; // distinct shape kinds available
-  colors: number; // distinct colors available
 }
 
 const PROFILES: Record<number, ComplexityProfile> = {
-  1: { pieces: [3, 3], shapes: 1, colors: 1 },
-  2: { pieces: [4, 4], shapes: 2, colors: 2 },
-  3: { pieces: [5, 5], shapes: 2, colors: 3 },
-  4: { pieces: [6, 7], shapes: 3, colors: 3 },
-  5: { pieces: [8, 8], shapes: 3, colors: 4 },
-  6: { pieces: [9, 10], shapes: 4, colors: 5 },
-  7: { pieces: [11, 12], shapes: 5, colors: 6 },
-  8: { pieces: [13, 16], shapes: 6, colors: 7 },
+  1: { pieces: [3, 3], shapes: 1 },
+  2: { pieces: [4, 4], shapes: 2 },
+  3: { pieces: [5, 5], shapes: 2 },
+  4: { pieces: [6, 7], shapes: 3 },
+  5: { pieces: [8, 8], shapes: 3 },
+  6: { pieces: [9, 10], shapes: 4 },
+  7: { pieces: [11, 12], shapes: 4 },
+  8: { pieces: [13, 16], shapes: 4 },
 };
 
 /**
@@ -81,17 +61,14 @@ function shuffle<T>(rng: () => number, arr: T[]): T[] {
   return out;
 }
 
-/** Canvas grid envelope. The pattern generator targets a 9-wide × 7-tall area. */
-const GRID_WIDTH = 9;
-const GRID_HEIGHT = 7;
-
 /**
  * Generate a goal pattern. Pieces are placed on a square grid (q, r)
- * with one piece per cell. Higher complexity = more pieces, more shape
- * + colour variety.
+ * with one piece per cell. Higher complexity = wider grid, more
+ * pieces, more shape + colour variety.
  *
- * The pattern is centred-ish: lower complexities cluster pieces around
- * the centre; higher complexities spread out.
+ * The pattern is centre-clustered: every complexity weights cells
+ * closer to the middle higher, so patterns feel composed rather than
+ * scattered to the corners.
  */
 export function generatePattern({
   complexity,
@@ -100,25 +77,26 @@ export function generatePattern({
   const lvl = Math.max(1, Math.min(8, Math.round(complexity)));
   const profile = PROFILES[lvl]!;
   const rng = makeRng(seed);
+  const grid = gridSizeFor(lvl);
 
-  // Pick subsets of shapes + colors for this pattern.
-  const shapes = shuffle(rng, ALL_SHAPES).slice(0, profile.shapes);
-  const colors = shuffle(rng, ALL_COLORS).slice(0, profile.colors);
+  // Pick subsets of shapes + colors for this pattern. Color count comes
+  // from the shared palette helper so the builder's tray and the goal
+  // pattern always agree on the active palette.
+  const shapes = shuffle(rng, BUILDER_SHAPES).slice(0, profile.shapes);
+  const colors = shuffle(rng, BUILDER_COLORS).slice(0, paletteColorCount(lvl));
 
   const targetCount = pickInt(rng, profile.pieces[0], profile.pieces[1]);
 
-  // Build a list of candidate cells, prefer cells closer to centre at
-  // low complexity. Centre is (4, 3).
+  // Build a list of candidate cells, prefer cells closer to centre.
   const cells: { q: number; r: number; weight: number }[] = [];
-  const cx = 4;
-  const cy = 3;
-  for (let q = 0; q < GRID_WIDTH; q++) {
-    for (let r = 0; r < GRID_HEIGHT; r++) {
+  const cx = (grid.w - 1) / 2;
+  const cy = (grid.h - 1) / 2;
+  const spread = grid.w; // diagonal-ish reach
+  for (let q = 0; q < grid.w; q++) {
+    for (let r = 0; r < grid.h; r++) {
       const dist = Math.hypot(q - cx, r - cy);
-      // tighter spread at lower complexity
-      const spread = 1.5 + lvl * 0.5;
-      const weight = Math.max(0, spread - dist);
-      if (weight > 0) cells.push({ q, r, weight });
+      const weight = Math.max(0.05, spread - dist);
+      cells.push({ q, r, weight });
     }
   }
 

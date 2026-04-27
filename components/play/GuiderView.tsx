@@ -42,7 +42,11 @@ export function GuiderView({ state }: GuiderViewProps) {
         >
           ● THE GOAL · only you see this
         </span>
-        <PlayCanvas pieces={state.goal} showCoords={showCoords} />
+        <PlayCanvas
+          pieces={state.goal}
+          complexity={state.round.complexity}
+          showCoords={showCoords}
+        />
       </div>
       <p
         className="t-mono max-w-[520px] text-center text-[12px] text-[var(--color-ink-3)]"
@@ -67,7 +71,11 @@ export function GuiderView({ state }: GuiderViewProps) {
               className="overflow-hidden rounded-[10px]"
               style={{ transform: "scale(0.4)", transformOrigin: "top left", height: 200, marginBottom: -200 }}
             >
-              <PlayCanvas pieces={state.builder_snapshot} showCoords={showCoords} />
+              <PlayCanvas
+                pieces={state.builder_snapshot}
+                complexity={state.round.complexity}
+                showCoords={showCoords}
+              />
             </div>
           </div>
         </div>

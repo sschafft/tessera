@@ -119,6 +119,9 @@ export default async function PlayPage({ params }: PageProps) {
         }
       : null,
     goal,
+    goal_count: pairRound
+      ? ((pairRound.goal_pattern as GoalPattern) ?? []).length
+      : 0,
     placements: placementsRaw.map((p) => ({
       id: p.id,
       shape: p.shape as PlayState["placements"][number]["shape"],

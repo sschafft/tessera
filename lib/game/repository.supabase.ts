@@ -477,13 +477,21 @@ export class SupabaseGameRepository implements GameRepository {
 
   async updatePlacement(
     id: string,
-    patch: { q?: number; r?: number; rot?: number },
+    patch: {
+      q?: number;
+      r?: number;
+      rot?: number;
+      shape?: string;
+      color?: string;
+    },
   ): Promise<PlacementRecord | null> {
     const supabase = getServiceClient();
     const update: Database["public"]["Tables"]["placements"]["Update"] = {};
     if (patch.q !== undefined) update.q = patch.q;
     if (patch.r !== undefined) update.r = patch.r;
     if (patch.rot !== undefined) update.rot = patch.rot;
+    if (patch.shape !== undefined) update.shape = patch.shape;
+    if (patch.color !== undefined) update.color = patch.color;
     const { data, error } = await supabase
       .from("placements")
       .update(update)

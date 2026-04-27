@@ -370,7 +370,13 @@ export class MemoryGameRepository implements GameRepository {
 
   async updatePlacement(
     id: string,
-    patch: { q?: number; r?: number; rot?: number },
+    patch: {
+      q?: number;
+      r?: number;
+      rot?: number;
+      shape?: string;
+      color?: string;
+    },
   ): Promise<PlacementRecord | null> {
     const existing = this.placements.get(id);
     if (!existing) return null;
@@ -391,6 +397,8 @@ export class MemoryGameRepository implements GameRepository {
     existing.q = newQ;
     existing.r = newR;
     if (patch.rot !== undefined) existing.rot = patch.rot;
+    if (patch.shape !== undefined) existing.shape = patch.shape;
+    if (patch.color !== undefined) existing.color = patch.color;
     return existing;
   }
 

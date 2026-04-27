@@ -161,6 +161,7 @@ export function MasterPairView({
           <CanvasScale>
             <PlayCanvas
               pieces={snap?.placements ?? []}
+              complexity={snap?.round?.complexity ?? 5}
               showCoords={showCoords}
             />
           </CanvasScale>
@@ -168,7 +169,11 @@ export function MasterPairView({
         <div className="t-card flex flex-col items-center gap-2 p-3">
           <PaneHeader title="Goal" subtitle="only the guider sees this" color="blue" />
           <CanvasScale>
-            <PlayCanvas pieces={snap?.goal ?? []} showCoords={showCoords} />
+            <PlayCanvas
+              pieces={snap?.goal ?? []}
+              complexity={snap?.round?.complexity ?? 5}
+              showCoords={showCoords}
+            />
           </CanvasScale>
         </div>
       </div>

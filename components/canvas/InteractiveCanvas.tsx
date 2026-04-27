@@ -5,19 +5,19 @@ import { CanvasGridBg } from "./CanvasGridBg";
 import { CoordinateLabels } from "./CoordinateLabels";
 import { Tile, type TileColor, type TileShape } from "./Tile";
 import {
-  CANVAS_HEIGHT,
-  CANVAS_WIDTH,
   CELL,
-  GRID_HEIGHT,
-  GRID_WIDTH,
   PADDING,
+  canvasSizeFor,
   cellToPixel,
+  gridSizeFor,
   tileSizeFor,
 } from "@/lib/grid/coords";
 import type { PlacedPiece } from "@/components/play/PlayContent";
 
 export interface InteractiveCanvasProps {
   pieces: PlacedPiece[];
+  /** Round complexity — drives grid + canvas size. */
+  complexity: number;
   /** Selected shape from the tray; non-null = "add" mode. */
   selectedShape: TileShape | null;
   selectedColor: TileColor;
@@ -29,32 +29,37 @@ export interface InteractiveCanvasProps {
 
   /** Click on an empty cell with a tray shape selected. */
   onPlace: (q: number, r: number) => void;
-  /** Click on an existing piece — caller decides to select or move-to-cell. */
+  /**
+   * Click on an existing piece. The caller decides what to do:
+   *   - In Add mode: convert that piece to the selected shape/color/rot.
+   *   - Otherwise: enter edit mode for that piece.
+   */
   onPieceClick: (piece: PlacedPiece) => void;
   /**
-   * Click on an empty cell while a piece is in edit mode. Caller moves
-   * the editing piece there.
+   * Click on an empty cell while a piece is in edit mode. The caller
+   * moves the editing piece there.
    */
   onMoveTo: (q: number, r: number) => void;
 }
 
 /**
- * Builder canvas with three interaction modes:
- *   1. Idle — no shape selected, no piece edited. Hovering an empty
- *      cell shows nothing; clicking a piece selects it for editing.
- *   2. Add — a tray shape is selected. Hovering shows a ghost preview
- *      of the new piece on the targeted cell. Click empty → place.
- *      Click an existing piece → swap to edit mode.
- *   3. Edit — a placement is selected. The piece shows a dashed
- *      bounding box and corner handles. Hover an empty cell shows a
- *      "move here" preview. Click → moves. Click another piece → swap
- *      selection.
+ * Builder canvas. One shape per cell on a square grid sized to the
+ * round's complexity.
  *
- * The canvas always renders a target-cell highlight under the cursor
- * when in Add or Edit mode so the snap target is unambiguous.
+ *   - Idle (no shape selected, no piece edited):
+ *     hover does nothing; clicking a piece selects it for editing.
+ *   - Add (a tray shape is selected):
+ *     hover shows a ghost preview of the new piece on the targeted
+ *     cell. Click empty → place. Click an existing piece → caller
+ *     converts it in place to the selection.
+ *   - Edit (an existing placement is selected):
+ *     piece shows a dashed bounding box and corner handles. Hover an
+ *     empty cell → "move here" preview. Click empty → moves. Click
+ *     another piece → swap selection.
  */
 export function InteractiveCanvas({
   pieces,
+  complexity,
   selectedShape,
   selectedColor,
   selectedRotation,
@@ -66,6 +71,8 @@ export function InteractiveCanvas({
 }: InteractiveCanvasProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<{ q: number; r: number } | null>(null);
+  const grid = gridSizeFor(complexity);
+  const { width, height } = canvasSizeFor(complexity);
 
   const occupiedById = new Map(pieces.map((p) => [p.id, p]));
   const occupiedByCell = new Map(pieces.map((p) => [`${p.q},${p.r}`, p]));
@@ -81,7 +88,7 @@ export function InteractiveCanvas({
     const y = e.clientY - rect.top;
     const q = Math.round((x - PADDING) / CELL);
     const r = Math.round((y - PADDING) / CELL);
-    if (q < 0 || q >= GRID_WIDTH || r < 0 || r >= GRID_HEIGHT) return null;
+    if (q < 0 || q >= grid.w || r < 0 || r >= grid.h) return null;
     return { q, r };
   };
 
@@ -122,13 +129,16 @@ export function InteractiveCanvas({
       ? "move"
       : "crosshair";
 
-  // Decide what to render at the hover cell.
-  const hoverCellEmpty =
-    hover && !occupiedByCell.has(`${hover.q},${hover.r}`);
-  const showHoverHighlight = interactive && hover && hoverCellEmpty;
-  const showAddGhost =
-    inAddMode && hoverCellEmpty && hover && selectedShape;
+  // What to render at the hover cell.
+  const hoverCellOccupant =
+    hover && occupiedByCell.get(`${hover.q},${hover.r}`);
+  const hoverCellEmpty = hover && !hoverCellOccupant;
+  const showHoverHighlight = interactive && hoverCellEmpty;
+  const showAddGhost = inAddMode && hoverCellEmpty && hover && selectedShape;
   const showMoveGhost = inEditMode && hoverCellEmpty && hover && editing;
+  // Add-mode hovering an occupied cell → preview the swap with a red
+  // outline on the existing piece + a small "swap" pill.
+  const showSwapHint = inAddMode && hover && hoverCellOccupant;
 
   return (
     <div
@@ -138,16 +148,16 @@ export function InteractiveCanvas({
       onClick={handleClick}
       style={{
         position: "relative",
-        width: CANVAS_WIDTH,
-        height: CANVAS_HEIGHT,
+        width,
+        height,
         background: "var(--color-paper)",
         borderRadius: "var(--radius-lg)",
         overflow: "hidden",
         cursor,
       }}
     >
-      <CanvasGridBg />
-      {showCoords && <CoordinateLabels />}
+      <CanvasGridBg width={width} height={height} />
+      {showCoords && <CoordinateLabels width={grid.w} height={grid.h} />}
 
       {/* Cell highlight under cursor */}
       {showHoverHighlight && hover && (
@@ -168,6 +178,25 @@ export function InteractiveCanvas({
               : "rgba(44, 123, 232, 0.08)",
             transition: "left 70ms linear, top 70ms linear",
             pointerEvents: "none",
+          }}
+        />
+      )}
+
+      {/* Swap-hint outline on an existing piece in add mode */}
+      {showSwapHint && hover && (
+        <div
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            left: PADDING + hover.q * CELL - 4,
+            top: PADDING + hover.r * CELL - 4,
+            width: CELL + 8,
+            height: CELL + 8,
+            borderRadius: 10,
+            border: "2px dashed var(--color-t-red)",
+            background: "rgba(238, 58, 58, 0.06)",
+            pointerEvents: "none",
+            transition: "left 70ms linear, top 70ms linear",
           }}
         />
       )}
@@ -194,7 +223,7 @@ export function InteractiveCanvas({
         );
       })}
 
-      {/* Add-mode ghost: selected tray shape on hovered cell */}
+      {/* Add-mode ghost: selected tray shape on hovered empty cell */}
       {showAddGhost && hover && selectedShape && (() => {
         const { x, y } = cellToPixel(hover);
         const size = tileSizeFor(selectedShape);
