@@ -16,8 +16,10 @@
 - **Square grid scales with complexity.** 3×3 at c=1 up to 9×9 at
   c=8; replaces the fixed 9×7 envelope. (§6.4, §6.5)
 - **Builder palette trimmed** to 4 fixed shapes (sq, tri-up, rhomb,
-  hex) and a 3..6 colour set sized to complexity. Same set powers the
-  goal generator. (§6.4)
+  trap) and a 3..6 colour set sized to complexity. Hex was dropped
+  during v1.1 alpha — it rendered identically at every 90°
+  rotation step on the square grid, so the rotation tool was a no-op
+  for hex pieces. Same palette powers the goal generator. (§6.4)
 - **Optimistic builder UI.** Local React state is the source of truth
   during a round; debounced server sync. Place / move / rotate /
   convert / delete all feel instant. (§6.4, TDD §X1)
@@ -164,15 +166,7 @@ Two-tab card: **Host a game** | **Join a game**.
 - Three columns:
   - **Left sidebar (320px):** **Lobby** panel up top (unallocated people with avatars; selectable rows; smart action bar — pair-selected when 2 picked, "→ existing pair" / "👁 as observer" when 1 or 3+, plus "🎲 Auto-allocate all" with rule chips: pairs of 2 / mix teams / 1 observer per 2 pairs). Below: **Pairs list** with progress bars, "% / placed / off / status" line, footer with `+ add pair` and `shuffle`.
   - **Center column:** Focused pair detail — pair name, **Send accelerant** button, builder canvas + goal canvas side by side, then a **Briefs in play** card showing both briefs (only the GM sees both) with a **Re-roll briefs** button.
-  - **Right rail (360px):** **Accelerants** panel — segmented control to scope a trigger to *this pair* or *all pairs*, then a vertical scrollable list of 8 chunky toy-button accelerants:
-    1. **🔮 Prototype unlock** — 5-second glimpse of the goal for the builder.
-    2. **📖 Reveal briefs** — both players see each other's brief.
-    3. **✓ Test build** — builder sees per-piece correctness + accuracy %.
-    4. **↻ Agile share** — surface 3 builder previews to the guider.
-    5. **⏱ Time pressure** — subtract 3:00 from the round timer (with a sting sound).
-    6. **✦ Vocab swap** — force the guider's brief to a new constraint mid-round.
-    7. **🎲 Randomizer** — reset the goal pattern for the pair (or all pairs).
-    8. **✎ Requirement change** — mutate one element (color/position/shape) in the goal pattern.
+  - **Right rail (360px):** **Accelerants** panel — segmented control to scope a trigger to *this pair* or *all pairs*, then 10 chunky toy-button super-powers plus an inline scoring tile. The full canonical list (kinds + per-pair / per-game caps + cooldowns) lives in §6.3; the rail surfaces those buttons in the order: **🔮 Prototype unlock**, **📖 Reveal briefs**, **✓ Test build**, **↻ Agile share**, **⏱ Time pressure**, **✦ Change builder brief**, **🎲 Randomizer**, **✎ Requirement change**, **+ Make it harder**, **− Make it easier**.
 
 ---
 
@@ -229,9 +223,11 @@ recompute every visible / cumulative score immediately.
 
 ### 6.4 Canvas, pieces, and "correctness"
 - **Pieces:** the builder picks from a fixed set of 4 shapes —
-  **square, triangle, rhombus, hexagon**. The Tile component still
-  supports the original 7 shapes for any historic data; new patterns
-  use only these 4.
+  **square, triangle, rhombus, trapezoid**. v1.1 swapped hexagon out
+  for trapezoid: hexagons render visually identically at 0/90/180/270°
+  on the square grid, so rotation never told the builder anything new
+  about a hex piece. The Tile component still supports the original 7
+  shapes for any historic data; new patterns use only these 4.
 - **Colors:** sized to complexity — 2 at c=1 up to 6 at c=8, drawn
   from `red / blue / yellow / green / orange / purple` in that order.
   The same set powers the goal generator and the builder palette.
@@ -280,7 +276,7 @@ and the builder palette share these numbers.
 | 7 | 8×8 | 11–12 | 4 | 5 | |
 | 8 | 9×9 | 13–16 | 4 | 6 | Edge piece logic, max diversity |
 
-The shape pool maxes at 4 (sq, tri-up, rhomb, hex) at every
+The shape pool maxes at 4 (sq, tri-up, rhomb, trap) at every
 complexity above 5; complexity scales colour variety + grid + piece
 count rather than shape count, so the builder's tray stays scannable.
 
@@ -373,15 +369,15 @@ on the Start button each round.
 
 | Layer | Choice | Why |
 | --- | --- | --- |
-| Frontend framework | **Next.js 15 (App Router) + TypeScript** | First-class on Vercel; React server components; route handlers for our Gemini proxy. |
-| Styling | **Tailwind CSS** + a small `tessera.css` layer that ports `tokens.css` (envelope, stamp, chunky shadow utilities) | Tokens-first, keeps the design's distinctive components straightforward. |
-| State (client) | **Zustand** for local game state; **`@tanstack/react-query`** for server state. | Lightweight; avoids Redux ceremony. |
-| Realtime + DB | **Supabase** (Postgres + Realtime + Storage if needed) | Free tier covers our scale; Realtime channels for canvas/lobby/timer; RLS keeps private brief content private. |
-| Drag-and-drop | **dnd-kit** | Pointer/keyboard/touch support; works well with snap grids. |
+| Frontend framework | **Next.js 16 (App Router) + TypeScript** | First-class on Vercel; React server components; route handlers for our Gemini proxy. |
+| Styling | **Tailwind CSS v4** with `@theme` tokens, plus a small `tessera.css` layer for the envelope / stamp / chunky shadow utilities | Tokens-first, keeps the design's distinctive components straightforward. |
+| State (client) | **Local React state** for game state; hand-rolled fetch + setInterval for the polling fallback alongside Supabase Realtime broadcast for instant updates. No Zustand or react-query — the lifecycle is short enough that a per-route `useState` + the broadcast-triggers-refetch pattern (design_patterns.md) covers it without a global store. |
+| Realtime + DB | **Supabase** (Postgres + Realtime). Free tier covers our scale; we publish to a per-game broadcast topic via the REST endpoint and consume it from the browser client. RLS isn't currently used on broadcast — the topic is keyed by an unguessable `game_id`. |
+| Placement input | **Tap-to-place** (no DnD library). Drag-and-drop was prototyped but felt heavy on a touch device; tap-cell + a tap-to-edit affordance is the canon. See design_patterns.md > "No drag-and-drop for placements". |
 | Canvas rendering | **SVG** (not Canvas/WebGL) | Pieces are simple polygons, designs already in SVG, easy to debug + accessibility. |
-| Brief generation | **Gemini API** (`gemini-flash`) via a Next.js route handler | Free tier; key never leaves the server. |
+| Brief generation | **Gemini 2.0 Flash** via a Next.js route handler. (1.5-flash was deprecated in late 2025.) | Free tier; key never leaves the server. |
 | Hosting | **Vercel** | Native Next.js. |
-| Auth model | **Anonymous JWTs minted server-side** (game-scoped); **Supabase RLS** uses claims `{ game_id, role, participant_id }` | No accounts needed, but every realtime/db op is authorized. |
+| Auth model | **Anonymous JWTs minted server-side** (game-scoped) using **jose** + HS256; bcryptjs hashes the host- and player-recovery tokens. **Supabase RLS** uses claims `{ game_id, role, participant_id }` for the (planned) DB-direct paths. | No accounts needed, but every realtime/db op is authorized. |
 
 ---
 

@@ -3,8 +3,12 @@ import { isValidGameCode } from "@/lib/game/code";
 import { readSessionAndParticipant } from "@/lib/auth/session";
 import { publishGameEvent } from "@/lib/realtime/publish";
 import { getRepository } from "@/lib/game/getRepository";
-import { MAX_GRID } from "@/lib/grid/coords";
+import { MAX_GRID, gridSizeFor } from "@/lib/grid/coords";
 import { PlacementCellTakenError } from "@/lib/game/repository.memory";
+import {
+  BUILDER_COLOR_SET,
+  BUILDER_SHAPE_SET,
+} from "@/lib/pattern/palette";
 
 export const runtime = "nodejs";
 
@@ -53,20 +57,6 @@ interface PatchPayload {
   color?: string;
 }
 
-// Same tightened palette as the POST sibling — only the four shipped
-// builder shapes. Retired tri-dn / hex / pent get a 400 here too.
-const VALID_SHAPES = new Set(["sq", "tri-up", "rhomb", "trap"]);
-const VALID_COLORS = new Set([
-  "red",
-  "orange",
-  "yellow",
-  "green",
-  "blue",
-  "purple",
-  "pink",
-  "teal",
-]);
-
 function isInt(n: unknown): n is number {
   return typeof n === "number" && Number.isInteger(n);
 }
@@ -101,11 +91,40 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   if (body.rot !== undefined && (!isInt(body.rot) || body.rot < 0 || body.rot > 3)) {
     return NextResponse.json({ error: "invalid_rot" }, { status: 400 });
   }
-  if (body.shape !== undefined && (typeof body.shape !== "string" || !VALID_SHAPES.has(body.shape))) {
+  if (
+    body.shape !== undefined &&
+    (typeof body.shape !== "string" ||
+      !BUILDER_SHAPE_SET.has(body.shape as never))
+  ) {
     return NextResponse.json({ error: "invalid_shape" }, { status: 400 });
   }
-  if (body.color !== undefined && (typeof body.color !== "string" || !VALID_COLORS.has(body.color))) {
+  if (
+    body.color !== undefined &&
+    (typeof body.color !== "string" ||
+      !BUILDER_COLOR_SET.has(body.color as never))
+  ) {
     return NextResponse.json({ error: "invalid_color" }, { status: 400 });
+  }
+
+  // Tighten q/r against the running round's actual grid envelope —
+  // MAX_GRID above is the broad UI cap; this rejects a PATCH that
+  // moves a piece outside the current round's per-complexity grid
+  // (e.g. q=8 on a 3×3 round would land but never score).
+  if (body.q !== undefined || body.r !== undefined) {
+    const round = await loaded.repo.findLatestRound(
+      loaded.session.claims.game_id,
+    );
+    if (round && round.status === "running") {
+      const grid = gridSizeFor(round.complexity);
+      const q = body.q ?? loaded.placement.q;
+      const r = body.r ?? loaded.placement.r;
+      if (q >= grid.w) {
+        return NextResponse.json({ error: "invalid_q" }, { status: 400 });
+      }
+      if (r >= grid.h) {
+        return NextResponse.json({ error: "invalid_r" }, { status: 400 });
+      }
+    }
   }
 
   try {

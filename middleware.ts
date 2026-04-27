@@ -105,6 +105,17 @@ export function middleware(req: NextRequest) {
     );
   }
   bucket.hits.push(now);
+  // Drop fully-empty entries opportunistically so the per-process Map
+  // doesn't grow unbounded across long-lived warm instances (open
+  // wifi / NAT'd attendees flood the IP space). The previous comment
+  // claimed this happened automatically — it didn't; buckets only got
+  // trimmed on a same-IP hit. 1% sweep amortises the work without
+  // blocking the hot path.
+  if (Math.random() < 0.01) {
+    for (const [k, v] of buckets) {
+      if (v.hits.length === 0) buckets.delete(k);
+    }
+  }
   const remaining = MAX_REQUESTS - bucket.hits.length;
   const res = NextResponse.next();
   res.headers.set("X-RateLimit-Limit", String(MAX_REQUESTS));

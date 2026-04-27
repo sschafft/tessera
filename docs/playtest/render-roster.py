@@ -128,7 +128,7 @@ GUIDER_PLAYBOOK = (
     "**Phase B — round 1 guider loop**\n"
     "4. Tap your sealed brief (seal animation should stop after ~5 cycles). Read the brief.\n"
     "5. Observe the goal canvas pattern — note readability at complexity {complexity}.\n"
-    "6. **Rename the pair**: click the PairNameBadge (yellow when unnamed). Set to 'The Pelicans'. **CRITICAL**: verify the badge updates IMMEDIATELY in your tab (no waiting for refetch). Before this fix, the first save returned 200 but the badge stayed stale.\n"
+    "6. **Rename the pair**: click the PairNameBadge (yellow when unnamed). Set to '{pair_name_suggestion}'. **CRITICAL**: verify the badge updates IMMEDIATELY in your tab (no waiting for refetch). Before this fix, the first save returned 200 but the badge stayed stale.\n"
     "7. **Brief minimise**: tap the `−` button. Verify the brief collapses to just the seal circle and stays out of the canvas. Click the seal to re-expand.\n"
     "8. **Brief re-seal**: tap the `×` button. Verify it goes back to the sealed state.\n"
     "9. If your GM fires 'Agile share', observe the 'Builder shared progress' panel appear in the bottom-right. Click it; verify full-screen modal opens. Press Esc; verify it closes.\n"
@@ -183,6 +183,15 @@ round_2_action_multi = (
     "Set complexity for round 2 (try {complexity_plus} for harder), then click 'Start round 2'."
 ).format(complexity_plus=min(COMPLEXITY + 1, 8))
 
+# Per-pair name suggestion so the leaderboard ends up with three
+# distinguishable team names instead of three "The Pelicans". Surfaces
+# the per-pair display_name plumbing on the GameEndedView.
+PAIR_NAME_SUGGESTIONS = {
+    0: "The Pelicans",
+    1: "The Foxes",
+    2: "The Otters",
+}
+
 round_2_action_single = (
     "(round_count=1, so no round 2 — observe that the start button is hidden / replaced with End game)"
 )
@@ -211,6 +220,9 @@ for i, entry in enumerate(ROSTER):
         ),
         recovery_test=(
             recovery_test_avery if entry["name"] == "Avery" else recovery_test_other
+        ),
+        pair_name_suggestion=PAIR_NAME_SUGGESTIONS.get(
+            entry["pair_idx"], "The Crew"
         ),
     )
     body = PLAYBOOK[role].format(**fmt_args)

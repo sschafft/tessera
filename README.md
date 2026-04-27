@@ -46,7 +46,7 @@ Minimum viable game: 1 GM + 1 Builder + 1 Guider.
 - **Test solution + scoring.** Builder hits a "Test solution" CTA at any time; the round computes correct/wrong against the goal pattern and lights green/red highlights per piece. Per-wrong penalty is GM-tunable; scores can go negative.
 - **Pair self-naming.** A modal nudges each pair to name themselves after they read the brief. Falls back to "<builder> ↔ <guider>" if skipped. Editable inline at any time.
 - **Live multi-pair dashboard.** GM sees every pair's progress at a glance, drills into any one, fires accelerants per-pair or globally, and can re-roll briefs per-side.
-- **Sealed briefs from three sources.** Pre-seeded library (~30 entries), GM free-text custom briefs, or AI-generated via **Gemini 2.0 Flash** with atomic per-game / global daily caps and graceful fallback to the library on failure.
+- **Sealed briefs from three sources.** Pre-seeded library (~33 entries), GM free-text custom briefs, or AI-generated via **Gemini 2.0 Flash** with atomic per-game / global daily caps and graceful fallback to the library on failure.
 - **Ten super-powers.** Prototype unlock, reveal briefs, agile share, time pressure, change builder brief, change guider brief, randomizer, requirement change, make it harder, make it easier — each a single-click GM mechanic that maps to a real-world facilitation lesson. The rail also has a fullscreen modal grid and an inline scoring tile.
 - **Brief envelope with minimise.** Players can minimise their brief to just the seal circle so it doesn't overlay the canvas, expand it again with one click, or re-seal it.
 - **Realtime updates.** Supabase Realtime broadcast keeps every connected client in sync within ~200ms; a 30-second polling loop is the fallback when sockets drop.
@@ -54,7 +54,7 @@ Minimum viable game: 1 GM + 1 Builder + 1 Guider.
 - **GM debrief prompts + leaderboard.** Game-end view ships with three retro questions to seed the post-game conversation, plus a pair leaderboard ranked by total score.
 - **Tone.js sound effects.** Synthesised round-end ding, last-two-minutes warning, time-pressure sting, game-end fanfare. Respects the GM's per-game `sound_on` toggle.
 - **Host recovery.** Bookmark URL with a recovery token in the fragment so the GM never gets locked out of their own dashboard if their tab dies. Stays valid for the life of the game.
-- **Auto-purge.** Games are soft-deleted 24h after the last interaction, hard-deleted after 7 days.
+- **Game lifecycle.** A `bump_game_interaction` trigger maintains `last_interaction_at` so a future scheduled job can soft-delete games 24h after last activity and hard-delete after 7 days. The schema + status enum are in place; the cron is on the tech-debt register, not yet wired.
 
 ---
 
@@ -111,7 +111,7 @@ See [`design/TDD.md` §11](./design/TDD.md) for the full setup including Vercel 
 
 | Variable | Scope | Purpose |
 | --- | --- | --- |
-| `NEXT_PUBLIC_SUPABASE_URL` | client + server | |
+| `NEXT_PUBLIC_SUPABASE_URL` | client + server | Browser uses it as the Realtime endpoint; server uses it for service-role REST calls (broadcast publish, repository queries) |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | client + server | Browser uses it for Realtime broadcast subscriptions |
 | `SUPABASE_SERVICE_ROLE_KEY` | server only | Used by route handlers; bypasses RLS |
 | `TESSERA_JWT_SECRET` | server | Signs our session JWTs (independent of Supabase's JWT secret) |
