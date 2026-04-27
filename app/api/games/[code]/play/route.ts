@@ -44,12 +44,16 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
   }
 
   const repo = getRepository();
-  const game = await repo.findGameByCode(code);
+  // Wave 1: game lookup + latest round in parallel — both depend only
+  // on game_id (which we already have from the JWT claim, and which
+  // findGameByCode confirms still exists).
+  const [game, round] = await Promise.all([
+    repo.findGameByCode(code),
+    repo.findLatestRound(claims.game_id),
+  ]);
   if (!game || game.id !== claims.game_id) {
     return NextResponse.json({ error: "game_not_found" }, { status: 404 });
   }
-
-  const round = await repo.findLatestRound(game.id);
 
   // No allocation yet — just return participant + game shell.
   if (!me.pair_id) {
@@ -68,8 +72,10 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       round: roundSummary(round),
       pair_round: null,
       goal: null,
+      goal_count: 0,
       placements: [],
       accuracy: null,
+      live_score: null,
       test_enabled: false,
       briefs_revealed: false,
       brief: null,
@@ -82,11 +88,14 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     });
   }
 
-  const pair = await repo.findPairById(me.pair_id);
+  // Wave 2: pair + pair_round in parallel — neither depends on the
+  // other. partnerOf would be a third here but it needs the pair
+  // result, so it lands in wave 3 after pair resolves.
+  const [pair, pairRound] = await Promise.all([
+    repo.findPairById(me.pair_id),
+    round !== null ? repo.findPairRound(round.id, me.pair_id) : Promise.resolve(null),
+  ]);
   const partner = await partnerOf(repo, me, pair);
-
-  const pairRound =
-    round !== null ? await repo.findPairRound(round.id, me.pair_id) : null;
 
   // What the player can see — role-gated:
   //   builder: never sees the goal; sees own placements
@@ -97,6 +106,63 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
   // placements + everyone's brief, so the pair can debrief together.
   const roundEnded = round?.status === "ended";
 
+  // Wave 3: parallelise everything that needs pairRound — placements,
+  // every brief lookup, the observer-pairs index. Was previously up to
+  // 5 sequential awaits at the bottom of the route; now they fan out.
+  const showGoal =
+    me.role === "guider" || me.role === "observer" || roundEnded;
+  const showPlacements =
+    me.role === "builder" || me.role === "observer" || roundEnded;
+  const briefsOpen = pairRound && (pairRound.briefs_revealed || roundEnded);
+
+  const placementsPromise =
+    showPlacements && pairRound
+      ? repo.listPlacements(pairRound.id)
+      : Promise.resolve(
+          [] as Awaited<ReturnType<typeof repo.listPlacements>>,
+        );
+  const myBriefPromise =
+    pairRound && (me.role === "builder" || me.role === "guider")
+      ? repo.findBrief(pairRound.id, me.role)
+      : Promise.resolve(null);
+  const partnerBriefPromise =
+    pairRound && briefsOpen
+      ? me.role === "builder"
+        ? repo.findBrief(pairRound.id, "guider")
+        : me.role === "guider"
+          ? repo.findBrief(pairRound.id, "builder")
+          : Promise.resolve(null)
+      : Promise.resolve(null);
+  const observerBriefsPromise =
+    pairRound && briefsOpen && me.role === "observer"
+      ? repo.listBriefsForPairRound(pairRound.id)
+      : Promise.resolve(
+          null as Awaited<
+            ReturnType<typeof repo.listBriefsForPairRound>
+          > | null,
+        );
+  const observerPairsPromise =
+    me.role === "observer"
+      ? Promise.all([
+          repo.listPairs(game.id),
+          repo.listActiveParticipants(game.id),
+        ])
+      : Promise.resolve(null);
+
+  const [
+    placements,
+    myBrief,
+    partnerBrief,
+    observerBriefs,
+    observerPairsResult,
+  ] = await Promise.all([
+    placementsPromise,
+    myBriefPromise,
+    partnerBriefPromise,
+    observerBriefsPromise,
+    observerPairsPromise,
+  ]);
+
   // Observers get a list of all pairs (with names) so they can
   // switch between them via the bottom strip.
   let availablePairs: Array<{
@@ -104,9 +170,8 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     builder_name: string | null;
     guider_name: string | null;
   }> | null = null;
-  if (me.role === "observer") {
-    const pairs = await repo.listPairs(game.id);
-    const allParticipants = await repo.listActiveParticipants(game.id);
+  if (observerPairsResult) {
+    const [pairs, allParticipants] = observerPairsResult;
     const byId = new Map(allParticipants.map((p) => [p.id, p]));
     availablePairs = pairs.map((p) => ({
       id: p.id,
@@ -119,40 +184,9 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     }));
   }
 
-  const showGoal =
-    me.role === "guider" || me.role === "observer" || roundEnded;
-  const showPlacements =
-    me.role === "builder" || me.role === "observer" || roundEnded;
   const goal: GoalPattern | null =
     showGoal && pairRound
       ? (pairRound.goal_pattern as GoalPattern)
-      : null;
-  const placements =
-    showPlacements && pairRound
-      ? await repo.listPlacements(pairRound.id)
-      : [];
-
-  // Each player sees only their own brief by default. Reveal Briefs
-  // accelerant flips pair_rounds.briefs_revealed; once set, builder +
-  // guider can see each other's. Observers see neither (until the
-  // accelerant fires, then they see both too). After round end,
-  // everyone sees both briefs (debrief mode).
-  const briefsOpen = pairRound && (pairRound.briefs_revealed || roundEnded);
-  const myBrief =
-    pairRound && (me.role === "builder" || me.role === "guider")
-      ? await repo.findBrief(pairRound.id, me.role)
-      : null;
-  const partnerBrief =
-    pairRound && briefsOpen
-      ? me.role === "builder"
-        ? await repo.findBrief(pairRound.id, "guider")
-        : me.role === "guider"
-          ? await repo.findBrief(pairRound.id, "builder")
-          : null
-      : null;
-  const observerBriefs =
-    pairRound && briefsOpen && me.role === "observer"
-      ? await repo.listBriefsForPairRound(pairRound.id)
       : null;
 
   // Test-build accelerant: builder + observer get per-placement

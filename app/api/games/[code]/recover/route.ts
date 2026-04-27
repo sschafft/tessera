@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isValidGameCode } from "@/lib/game/code";
 import { mintSession } from "@/lib/auth/jwt";
 import { setSessionCookie } from "@/lib/auth/cookie";
-import { verifyPlayerToken } from "@/lib/auth/playerToken";
+import { verifyRecoveryToken } from "@/lib/auth/recoveryToken";
 import { getRepository } from "@/lib/game/getRepository";
 
 export const runtime = "nodejs";
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     );
   }
 
-  const ok = await verifyPlayerToken(
+  const ok = await verifyRecoveryToken(
     body.token,
     participant.recovery_token_hash,
   );

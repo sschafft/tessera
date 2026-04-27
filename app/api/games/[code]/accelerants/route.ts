@@ -106,20 +106,30 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "pair_not_found" }, { status: 400 });
   }
 
-  // Apply per-kind side effects.
+  // Per-pair side effects. Was previously a sequential
+  // `for (const pair of targetedPairs)` per case — for scope='all'
+  // with the documented 50-participant cap (~25 pairs), brief-
+  // rerolling kinds would chain 25 Gemini calls (~2-4s each) and
+  // routinely blow the maxDuration=15 budget. We now Promise.all
+  // the per-pair work; the gemini.ts 6s timeout (PR #8) caps any
+  // single hung call.
   switch (body.kind) {
     case "reveal_briefs":
-      for (const pair of targetedPairs) {
-        const pr = await repo.findPairRound(round.id, pair.id);
-        if (pr) await repo.setBriefsRevealed(pr.id);
-      }
+      await Promise.all(
+        targetedPairs.map(async (pair) => {
+          const pr = await repo.findPairRound(round.id, pair.id);
+          if (pr) await repo.setBriefsRevealed(pr.id);
+        }),
+      );
       break;
 
     case "test_build":
-      for (const pair of targetedPairs) {
-        const pr = await repo.findPairRound(round.id, pair.id);
-        if (pr) await repo.setTestEnabled(pr.id, true);
-      }
+      await Promise.all(
+        targetedPairs.map(async (pair) => {
+          const pr = await repo.findPairRound(round.id, pair.id);
+          if (pr) await repo.setTestEnabled(pr.id, true);
+        }),
+      );
       break;
 
     case "time_pressure": {
@@ -137,43 +147,47 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         role === "builder" ? game.builder_brief_source : game.guider_brief_source;
       const custom =
         role === "builder" ? game.builder_brief_custom : game.guider_brief_custom;
-      for (const pair of targetedPairs) {
-        const pr = await repo.findPairRound(round.id, pair.id);
-        if (!pr) continue;
-        const current = await repo.findBrief(pr.id, role);
-        const exclude = current ? [current.title] : [];
-        const fresh = await pickBrief({
-          role,
-          complexity: round.complexity,
-          source,
-          game_id: game.id,
-          custom,
-          exclude_titles: exclude,
-        });
-        await repo.upsertBrief({
-          pair_round_id: pr.id,
-          role,
-          source: fresh.source,
-          title: fresh.title,
-          rules: fresh.rules,
-        });
-      }
+      await Promise.all(
+        targetedPairs.map(async (pair) => {
+          const pr = await repo.findPairRound(round.id, pair.id);
+          if (!pr) return;
+          const current = await repo.findBrief(pr.id, role);
+          const exclude = current ? [current.title] : [];
+          const fresh = await pickBrief({
+            role,
+            complexity: round.complexity,
+            source,
+            game_id: game.id,
+            custom,
+            exclude_titles: exclude,
+          });
+          await repo.upsertBrief({
+            pair_round_id: pr.id,
+            role,
+            source: fresh.source,
+            title: fresh.title,
+            rules: fresh.rules,
+          });
+        }),
+      );
       break;
     }
 
     case "randomizer":
-      for (const pair of targetedPairs) {
-        const pr = await repo.findPairRound(round.id, pair.id);
-        if (!pr) continue;
-        // Re-seed deterministically with the event timestamp so two
-        // randomizer triggers in a row don't collide.
-        const newSeed = `${pr.pattern_seed}:rand:${Date.now()}`;
-        const newPattern = generatePattern({
-          complexity: round.complexity,
-          seed: newSeed,
-        });
-        await repo.updateGoalPattern(pr.id, newPattern, newSeed);
-      }
+      await Promise.all(
+        targetedPairs.map(async (pair) => {
+          const pr = await repo.findPairRound(round.id, pair.id);
+          if (!pr) return;
+          // Re-seed deterministically with the event timestamp so two
+          // randomizer triggers in a row don't collide.
+          const newSeed = `${pr.pattern_seed}:rand:${Date.now()}`;
+          const newPattern = generatePattern({
+            complexity: round.complexity,
+            seed: newSeed,
+          });
+          await repo.updateGoalPattern(pr.id, newPattern, newSeed);
+        }),
+      );
       break;
 
     case "harder":
@@ -186,31 +200,35 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       // Hold the round's grid envelope so existing placements stay
       // on-canvas — only piece count + colour variety shift.
       const grid = gridSizeFor(round.complexity);
-      for (const pair of targetedPairs) {
-        const pr = await repo.findPairRound(round.id, pair.id);
-        if (!pr) continue;
-        const newSeed = `${pr.pattern_seed}:${body.kind}:${Date.now()}`;
-        const newPattern = generatePattern({
-          complexity: newComplexity,
-          seed: newSeed,
-          grid,
-        });
-        await repo.updateGoalPattern(pr.id, newPattern, newSeed);
-      }
+      await Promise.all(
+        targetedPairs.map(async (pair) => {
+          const pr = await repo.findPairRound(round.id, pair.id);
+          if (!pr) return;
+          const newSeed = `${pr.pattern_seed}:${body.kind}:${Date.now()}`;
+          const newPattern = generatePattern({
+            complexity: newComplexity,
+            seed: newSeed,
+            grid,
+          });
+          await repo.updateGoalPattern(pr.id, newPattern, newSeed);
+        }),
+      );
       break;
     }
 
     case "requirement_change":
-      for (const pair of targetedPairs) {
-        const pr = await repo.findPairRound(round.id, pair.id);
-        if (!pr) continue;
-        const current = pr.goal_pattern as GoalPattern;
-        if (!Array.isArray(current) || current.length === 0) continue;
-        const grid = gridSizeFor(round.complexity);
-        const mutated = mutateOne(current, grid);
-        const newSeed = `${pr.pattern_seed}:req:${Date.now()}`;
-        await repo.updateGoalPattern(pr.id, mutated, newSeed);
-      }
+      await Promise.all(
+        targetedPairs.map(async (pair) => {
+          const pr = await repo.findPairRound(round.id, pair.id);
+          if (!pr) return;
+          const current = pr.goal_pattern as GoalPattern;
+          if (!Array.isArray(current) || current.length === 0) return;
+          const grid = gridSizeFor(round.complexity);
+          const mutated = mutateOne(current, grid);
+          const newSeed = `${pr.pattern_seed}:req:${Date.now()}`;
+          await repo.updateGoalPattern(pr.id, mutated, newSeed);
+        }),
+      );
       break;
 
     case "prototype": {
@@ -222,10 +240,12 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           ? body.payload.duration_seconds
           : 5;
       const until = new Date(Date.now() + seconds * 1000);
-      for (const pair of targetedPairs) {
-        const pr = await repo.findPairRound(round.id, pair.id);
-        if (pr) await repo.setPrototypeUntil(pr.id, until);
-      }
+      await Promise.all(
+        targetedPairs.map(async (pair) => {
+          const pr = await repo.findPairRound(round.id, pair.id);
+          if (pr) await repo.setPrototypeUntil(pr.id, until);
+        }),
+      );
       break;
     }
 

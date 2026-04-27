@@ -1,7 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { mintSession } from "@/lib/auth/jwt";
 import { setSessionCookie } from "@/lib/auth/cookie";
-import { generateHostToken, hashHostToken } from "@/lib/auth/hostToken";
+import {
+  generateRecoveryToken,
+  hashRecoveryToken,
+} from "@/lib/auth/recoveryToken";
 import { generateGameCode } from "@/lib/game/code";
 import { getRepository } from "@/lib/game/getRepository";
 import type {
@@ -159,8 +162,8 @@ export async function POST(req: NextRequest) {
   }
 
   const code = generateGameCode();
-  const hostToken = generateHostToken();
-  const hostTokenHash = await hashHostToken(hostToken);
+  const hostToken = generateRecoveryToken();
+  const hostTokenHash = await hashRecoveryToken(hostToken);
   const gmParticipantId = crypto.randomUUID();
 
   const repo = getRepository();
