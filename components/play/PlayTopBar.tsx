@@ -158,13 +158,22 @@ function hostnameOf(u: string): string {
 function useTimer(
   round: { started_at: string | null; duration_seconds: number; status: string } | null,
 ): number {
-  const [now, setNow] = useState(() => Date.now());
+  // SSR-safe: `now` stays null until the client mounts. Initial server +
+  // first client render both compute remaining off the static
+  // duration_seconds, so the rendered "X:XX" string matches and React
+  // doesn't fire hydration error #418. The interval kicks in after
+  // mount and ticks the timer down for real.
+  const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
+    setNow(Date.now());
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
   if (!round || round.status !== "running" || !round.started_at) {
     return round?.duration_seconds ?? 0;
+  }
+  if (now === null) {
+    return round.duration_seconds;
   }
   const startedMs = new Date(round.started_at).getTime();
   const elapsed = Math.floor((now - startedMs) / 1000);

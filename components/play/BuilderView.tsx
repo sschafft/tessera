@@ -1234,14 +1234,20 @@ function PrototypeOverlay({
   prototype: PlayState["prototype"];
   complexity: number;
 }) {
-  const [now, setNow] = useState(() => Date.now());
+  // SSR-safe: `now` is null until the client mounts. Without this, the
+  // useState(() => Date.now()) initialiser produced different values
+  // between SSR and hydration, contributing to React error #418 on
+  // /play reloads when a prototype window happened to be active.
+  const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
     if (!prototype) return;
+    setNow(Date.now());
     const id = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(id);
   }, [prototype]);
 
   if (!prototype) return null;
+  if (now === null) return null;
   const endsMs = new Date(prototype.ends_at).getTime();
   const remaining = Math.max(0, Math.ceil((endsMs - now) / 1000));
   if (remaining === 0) return null;

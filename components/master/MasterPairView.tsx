@@ -34,6 +34,13 @@ interface PairSnapshot {
     correct: boolean;
   }>;
   accuracy: { correct: number; total: number } | null;
+  score: {
+    score: number;
+    correct: number;
+    wrong: number;
+    total: number;
+    penalty_applied: boolean;
+  } | null;
   builder_name: string | null;
   builder_color: TileColor | null;
   guider_name: string | null;
@@ -122,21 +129,47 @@ export function MasterPairView({
           </h2>
         </div>
         {snap?.accuracy && (snap.accuracy.total ?? 0) > 0 && (
-          <span
-            className="t-mono rounded-full px-3.5 py-2 text-[13px] font-bold"
-            style={{
-              background:
-                snap.accuracy.correct === snap.accuracy.total
-                  ? "var(--color-tint-green)"
-                  : "var(--color-paper-2)",
-              color:
-                snap.accuracy.correct === snap.accuracy.total
-                  ? "var(--color-t-green)"
-                  : "var(--color-ink)",
-            }}
-          >
-            ✓ {snap.accuracy.correct} / {snap.accuracy.total}
-          </span>
+          <div className="flex items-center gap-2">
+            {snap.score && (
+              <span
+                className="t-mono rounded-full px-3.5 py-2 text-[13px] font-bold"
+                style={(() => {
+                  const s = snap.score.score;
+                  const tint = s > 0 ? "green" : s < 0 ? "red" : null;
+                  if (tint === null) {
+                    return {
+                      background: "var(--color-paper-2)",
+                      color: "var(--color-ink-2)",
+                      boxShadow: "inset 0 0 0 1.5px var(--color-line)",
+                    };
+                  }
+                  return {
+                    background: `var(--color-tint-${tint})`,
+                    color: `var(--color-t-${tint})`,
+                    boxShadow: `inset 0 0 0 1.5px var(--color-t-${tint})`,
+                  };
+                })()}
+                aria-label={`Score ${snap.score.score}, ${snap.score.correct} of ${snap.score.total} correct`}
+              >
+                ★ {snap.score.score} pt{Math.abs(snap.score.score) === 1 ? "" : "s"}
+              </span>
+            )}
+            <span
+              className="t-mono rounded-full px-3.5 py-2 text-[13px] font-bold"
+              style={{
+                background:
+                  snap.accuracy.correct === snap.accuracy.total
+                    ? "var(--color-tint-green)"
+                    : "var(--color-paper-2)",
+                color:
+                  snap.accuracy.correct === snap.accuracy.total
+                    ? "var(--color-t-green)"
+                    : "var(--color-ink)",
+              }}
+            >
+              ✓ {snap.accuracy.correct} / {snap.accuracy.total}
+            </span>
+          </div>
         )}
       </div>
 

@@ -120,9 +120,15 @@ export interface PlayContentProps {
 }
 
 // Realtime broadcast handles the snappy updates; this polling cadence
-// is the safety net (e.g. when the WS connection drops or the
-// browser loses focus and pauses sockets).
-const POLL_MS = 30_000;
+// is the safety net (e.g. when the WS connection drops, the browser
+// pauses sockets, or NEXT_PUBLIC_SUPABASE_ANON_KEY isn't wired on the
+// client). Was 30s — playtests showed round-2 transitions, observer
+// counter updates, and lobby role-assignment refreshes all stalled
+// for the full 30s window when realtime didn't reach the client.
+// 10s is the right tradeoff: still negligible server load (one
+// /play hit per player every 10s) and brings every "didn't see the
+// change instantly" symptom inside acceptable workshop pacing.
+const POLL_MS = 10_000;
 
 export function PlayContent({ code, initial }: PlayContentProps) {
   const router = useRouter();

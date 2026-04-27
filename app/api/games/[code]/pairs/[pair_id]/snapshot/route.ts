@@ -119,6 +119,17 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     goal,
     placements,
     accuracy: { correct, total: goal.length },
+    // Live score for the focused pair — surfaces alongside accuracy on
+    // the master dashboard so the GM can read engagement (and tee up
+    // a real-time leaderboard discussion) without waiting for the
+    // round-end debrief.
+    score: {
+      score: breakdown.score,
+      correct: breakdown.correct,
+      wrong: breakdown.wrong,
+      total: breakdown.total,
+      penalty_applied: breakdown.penaltyApplied,
+    },
     builder_name: builder?.display_name ?? null,
     builder_color: (builder?.color as string | undefined) ?? null,
     guider_name: guider?.display_name ?? null,
