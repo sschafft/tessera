@@ -156,6 +156,7 @@ export class MemoryGameRepository implements GameRepository {
       game_id,
       builder_id,
       guider_id,
+      display_name: null,
       created_at: new Date().toISOString(),
     };
     this.pairs.set(pair.id, pair);
@@ -184,6 +185,14 @@ export class MemoryGameRepository implements GameRepository {
     }
     p.role = "observer";
     p.pair_id = pair_id;
+  }
+
+  async setPairDisplayName(
+    pair_id: string,
+    name: string | null,
+  ): Promise<void> {
+    const p = this.pairs.get(pair_id);
+    if (p) p.display_name = name;
   }
 
   async clearAllocations(game_id: string): Promise<void> {

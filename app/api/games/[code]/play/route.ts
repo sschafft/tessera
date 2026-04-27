@@ -207,7 +207,9 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
           color: partner.color,
         }
       : null,
-    pair: pair ? { id: pair.id } : null,
+    pair: pair
+      ? { id: pair.id, display_name: pair.display_name ?? null }
+      : null,
     round: roundSummary(round),
     pair_round: pairRound
       ? {

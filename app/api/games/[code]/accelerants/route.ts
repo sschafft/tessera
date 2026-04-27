@@ -3,6 +3,7 @@ import { isValidGameCode } from "@/lib/game/code";
 import { readSessionForGame } from "@/lib/auth/session";
 import { getRepository } from "@/lib/game/getRepository";
 import { generatePattern } from "@/lib/pattern/generator";
+import { gridSizeFor } from "@/lib/grid/coords";
 import { pickBrief } from "@/lib/briefs/orchestrator";
 import { publishGameEvent } from "@/lib/realtime/publish";
 
@@ -17,7 +18,7 @@ import type {
   GoalPattern,
   GoalPiece,
 } from "@/lib/pattern/types";
-import type { TileColor, TileShape } from "@/components/canvas/Tile";
+import { BUILDER_COLORS, BUILDER_SHAPES } from "@/lib/pattern/palette";
 
 export const runtime = "nodejs";
 
@@ -175,13 +176,38 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       }
       break;
 
+    case "harder":
+    case "easier": {
+      const delta = body.kind === "harder" ? 1 : -1;
+      const newComplexity = Math.max(
+        1,
+        Math.min(8, round.complexity + delta),
+      );
+      // Hold the round's grid envelope so existing placements stay
+      // on-canvas — only piece count + colour variety shift.
+      const grid = gridSizeFor(round.complexity);
+      for (const pair of targetedPairs) {
+        const pr = await repo.findPairRound(round.id, pair.id);
+        if (!pr) continue;
+        const newSeed = `${pr.pattern_seed}:${body.kind}:${Date.now()}`;
+        const newPattern = generatePattern({
+          complexity: newComplexity,
+          seed: newSeed,
+          grid,
+        });
+        await repo.updateGoalPattern(pr.id, newPattern, newSeed);
+      }
+      break;
+    }
+
     case "requirement_change":
       for (const pair of targetedPairs) {
         const pr = await repo.findPairRound(round.id, pair.id);
         if (!pr) continue;
         const current = pr.goal_pattern as GoalPattern;
         if (!Array.isArray(current) || current.length === 0) continue;
-        const mutated = mutateOne(current);
+        const grid = gridSizeFor(round.complexity);
+        const mutated = mutateOne(current, grid);
         const newSeed = `${pr.pattern_seed}:req:${Date.now()}`;
         await repo.updateGoalPattern(pr.id, mutated, newSeed);
       }
@@ -235,55 +261,40 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   });
 }
 
-const SHAPES: TileShape[] = [
-  "tri-up",
-  "tri-dn",
-  "sq",
-  "rhomb",
-  "trap",
-  "hex",
-];
-const COLORS: TileColor[] = [
-  "red",
-  "orange",
-  "yellow",
-  "green",
-  "blue",
-  "purple",
-  "pink",
-  "teal",
-];
-
 /**
  * Mutate exactly one piece in a goal pattern. Picks one of {color,
  * shape, position, rotation} at random; for position, swaps with a
- * random unoccupied cell on the 9×7 grid.
+ * random unoccupied cell on the supplied grid envelope.
  */
-function mutateOne(pattern: GoalPattern): GoalPattern {
+function mutateOne(
+  pattern: GoalPattern,
+  grid: { w: number; h: number },
+): GoalPattern {
   const out = pattern.map((p) => ({ ...p })) as GoalPiece[];
   const idx = Math.floor(Math.random() * out.length);
   const target = out[idx]!;
   const facet = Math.floor(Math.random() * 4);
   switch (facet) {
     case 0: {
-      const others = COLORS.filter((c) => c !== target.color);
+      const others = BUILDER_COLORS.filter((c) => c !== target.color);
       target.color = others[Math.floor(Math.random() * others.length)]!;
       break;
     }
     case 1: {
-      const others = SHAPES.filter((s) => s !== target.shape);
+      const others = BUILDER_SHAPES.filter((s) => s !== target.shape);
       target.shape = others[Math.floor(Math.random() * others.length)]!;
       break;
     }
     case 2: {
-      target.rot = (target.rot + 1 + Math.floor(Math.random() * 4)) % 6;
+      // Pick a different rotation in the 0..3 / 90° space.
+      target.rot = (target.rot + 1 + Math.floor(Math.random() * 3)) % 4;
       break;
     }
     case 3: {
       const occupied = new Set(out.map((p) => `${p.q},${p.r}`));
       const candidates: { q: number; r: number }[] = [];
-      for (let q = 0; q < 9; q++) {
-        for (let r = 0; r < 7; r++) {
+      for (let q = 0; q < grid.w; q++) {
+        for (let r = 0; r < grid.h; r++) {
           if (!occupied.has(`${q},${r}`)) candidates.push({ q, r });
         }
       }

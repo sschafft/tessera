@@ -73,11 +73,12 @@ function shuffle<T>(rng: () => number, arr: T[]): T[] {
 export function generatePattern({
   complexity,
   seed,
+  grid: gridOverride,
 }: GeneratePatternInput): GoalPattern {
   const lvl = Math.max(1, Math.min(8, Math.round(complexity)));
   const profile = PROFILES[lvl]!;
   const rng = makeRng(seed);
-  const grid = gridSizeFor(lvl);
+  const grid = gridOverride ?? gridSizeFor(lvl);
 
   // Pick subsets of shapes + colors for this pattern. Color count comes
   // from the shared palette helper so the builder's tray and the goal

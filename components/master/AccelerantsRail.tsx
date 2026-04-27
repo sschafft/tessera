@@ -82,6 +82,20 @@ const BUTTONS: RailButtonSpec[] = [
     title: "Requirement change",
     sub: "Mutate one element in the goal pattern.",
   },
+  {
+    kind: "harder",
+    icon: "▲",
+    color: "red",
+    title: "Make it harder",
+    sub: "Re-roll the goal at +1 complexity.",
+  },
+  {
+    kind: "easier",
+    icon: "▼",
+    color: "green",
+    title: "Make it easier",
+    sub: "Re-roll the goal at −1 complexity.",
+  },
 ];
 
 export interface AccelerantsRailProps {
@@ -109,6 +123,7 @@ export function AccelerantsRail({
   onScoring,
 }: AccelerantsRailProps) {
   const [scope, setScope] = useState<"pair" | "all">("pair");
+  const [prototypeSec, setPrototypeSec] = useState(5);
 
   const focusedName = focusedPair ? "this pair" : "—";
   const segmentOptions = [
@@ -186,6 +201,19 @@ export function AccelerantsRail({
               busy ||
               (scope === "pair" && !focusedPair) ||
               !POLICIES[b.kind].implemented
+            }
+            payload={
+              b.kind === "prototype"
+                ? { duration_seconds: prototypeSec }
+                : undefined
+            }
+            extra={
+              b.kind === "prototype" ? (
+                <PrototypeDurationControl
+                  seconds={prototypeSec}
+                  onChange={setPrototypeSec}
+                />
+              ) : null
             }
             onTrigger={onTrigger}
           />
@@ -308,6 +336,8 @@ function RailButton({
   scope,
   focusedPairId,
   disabled,
+  payload,
+  extra,
   onTrigger,
 }: {
   spec: RailButtonSpec;
@@ -315,6 +345,10 @@ function RailButton({
   scope: "pair" | "all";
   focusedPairId: string | null;
   disabled: boolean;
+  /** Optional payload merged into the trigger call (e.g. duration_seconds). */
+  payload?: Record<string, unknown>;
+  /** Optional inline control rendered below the spec body (e.g. duration knob). */
+  extra?: React.ReactNode;
   onTrigger: (
     kind: string,
     scope: "pair" | "all",
@@ -337,22 +371,28 @@ function RailButton({
   const finalDisabled = disabled || reachedCap;
 
   return (
-    <button
-      type="button"
-      onClick={() =>
-        onTrigger(
-          spec.kind,
-          scope,
-          scope === "pair" ? focusedPairId : null,
-        )
-      }
-      disabled={finalDisabled}
-      className="relative flex w-full cursor-pointer items-start gap-3 rounded-[14px] border-[1.5px] bg-white p-3.5 text-left transition-transform disabled:cursor-not-allowed disabled:opacity-50"
+    <div
+      className="relative flex w-full flex-col gap-2 rounded-[14px] border-[1.5px] bg-white p-3.5"
       style={{
         borderColor: "var(--color-line)",
         boxShadow: "0 3px 0 rgba(0,0,0,.08)",
+        opacity: finalDisabled ? 0.5 : 1,
       }}
     >
+      <button
+        type="button"
+        onClick={() =>
+          onTrigger(
+            spec.kind,
+            scope,
+            scope === "pair" ? focusedPairId : null,
+            payload,
+          )
+        }
+        disabled={finalDisabled}
+        className="flex w-full cursor-pointer items-start gap-3 text-left disabled:cursor-not-allowed"
+        style={{ background: "transparent", border: "none", padding: 0 }}
+      >
       <span
         aria-hidden="true"
         className="grid h-[38px] w-[38px] flex-shrink-0 place-items-center rounded-[10px] text-[18px]"
@@ -387,6 +427,50 @@ function RailButton({
           </span>
         )}
       </span>
-    </button>
+      </button>
+      {extra && <div>{extra}</div>}
+    </div>
+  );
+}
+
+function PrototypeDurationControl({
+  seconds,
+  onChange,
+}: {
+  seconds: number;
+  onChange: (s: number) => void;
+}) {
+  const options = [3, 5, 10, 15];
+  return (
+    <div className="flex items-center justify-between gap-2 pt-1">
+      <span className="text-[11px] font-semibold text-[var(--color-ink-2)]">
+        Glimpse duration
+      </span>
+      <div
+        className="flex gap-0.5 rounded-full bg-[var(--color-paper-2)] p-0.5"
+        role="radiogroup"
+      >
+        {options.map((opt) => {
+          const active = seconds === opt;
+          return (
+            <button
+              key={opt}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              onClick={() => onChange(opt)}
+              className="t-mono rounded-full px-2 py-0.5 text-[10px] font-bold"
+              style={{
+                background: active ? "#fff" : "transparent",
+                color: active ? "var(--color-t-blue)" : "var(--color-ink-3)",
+                boxShadow: active ? "0 1px 2px rgba(0,0,0,.10)" : "none",
+              }}
+            >
+              {opt}s
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }

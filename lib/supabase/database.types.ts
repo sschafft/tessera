@@ -302,6 +302,7 @@ export type Database = {
         Row: {
           builder_id: string | null
           created_at: string
+          display_name: string | null
           game_id: string
           guider_id: string | null
           id: string
@@ -309,6 +310,7 @@ export type Database = {
         Insert: {
           builder_id?: string | null
           created_at?: string
+          display_name?: string | null
           game_id: string
           guider_id?: string | null
           id?: string
@@ -316,6 +318,7 @@ export type Database = {
         Update: {
           builder_id?: string | null
           created_at?: string
+          display_name?: string | null
           game_id?: string
           guider_id?: string | null
           id?: string
@@ -548,6 +551,8 @@ export type Database = {
         | "change_builder_brief"
         | "randomizer"
         | "requirement_change"
+        | "harder"
+        | "easier"
       brief_source_t: "gm" | "library" | "gemini"
       game_status_t: "lobby" | "running" | "ended" | "purged"
       role_t: "gm" | "builder" | "guider" | "observer" | "lobby"
@@ -691,6 +696,8 @@ export const Constants = {
         "change_builder_brief",
         "randomizer",
         "requirement_change",
+        "harder",
+        "easier",
       ],
       brief_source_t: ["gm", "library", "gemini"],
       game_status_t: ["lobby", "running", "ended", "purged"],

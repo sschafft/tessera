@@ -24,4 +24,11 @@ export interface GeneratePatternInput {
   complexity: number;
   /** A short string seed; fed into the PRNG. */
   seed: string;
+  /**
+   * Optional grid override. When set, the pattern is constrained to
+   * this w × h envelope regardless of complexity-derived sizing —
+   * used by the harder / easier super-powers, which keep the round's
+   * grid intact while bumping piece/colour density.
+   */
+  grid?: { w: number; h: number };
 }

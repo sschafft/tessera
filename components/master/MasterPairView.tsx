@@ -146,9 +146,11 @@ export function MasterPairView({
         </p>
       )}
 
-      {/* Canvases */}
-      <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
-        <div className="t-card flex flex-col items-center gap-2 p-3">
+      {/* Two-column observation: builder canvas + brief on the left,
+          guider goal canvas + brief on the right. Tightened padding so
+          the focused-pair view fills more of the centre column. */}
+      <div className="grid gap-2" style={{ gridTemplateColumns: "1fr 1fr" }}>
+        <div className="t-card flex flex-col items-center gap-1.5 p-2">
           <PaneHeader
             title="Builder"
             subtitle={
@@ -166,7 +168,7 @@ export function MasterPairView({
             />
           </CanvasScale>
         </div>
-        <div className="t-card flex flex-col items-center gap-2 p-3">
+        <div className="t-card flex flex-col items-center gap-1.5 p-2">
           <PaneHeader title="Goal" subtitle="only the guider sees this" color="blue" />
           <CanvasScale>
             <PlayCanvas
@@ -176,6 +178,18 @@ export function MasterPairView({
             />
           </CanvasScale>
         </div>
+        <BriefCard
+          role="builder"
+          brief={snap?.builder_brief ?? null}
+          onReroll={() => onReroll(pairId, "builder")}
+          busy={busy}
+        />
+        <BriefCard
+          role="guider"
+          brief={snap?.guider_brief ?? null}
+          onReroll={() => onReroll(pairId, "guider")}
+          busy={busy}
+        />
       </div>
 
       {noRound && (
@@ -183,29 +197,6 @@ export function MasterPairView({
           No round started yet. Start a round to populate canvases + briefs.
         </p>
       )}
-
-      {/* Briefs (only the GM sees both) */}
-      <div className="t-card p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <span className="text-[12px] font-bold uppercase tracking-wide text-[var(--color-ink-2)]">
-            Briefs in play (only you see both)
-          </span>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <BriefCard
-            role="builder"
-            brief={snap?.builder_brief ?? null}
-            onReroll={() => onReroll(pairId, "builder")}
-            busy={busy}
-          />
-          <BriefCard
-            role="guider"
-            brief={snap?.guider_brief ?? null}
-            onReroll={() => onReroll(pairId, "guider")}
-            busy={busy}
-          />
-        </div>
-      </div>
     </div>
   );
 }

@@ -22,7 +22,8 @@ export interface TopBarControlsProps {
   actionError: string | null;
   /** Whether at least one pair exists — used to explain a disabled Start. */
   pairsCount: number;
-  onStart: () => void;
+  /** Start the next round with the chosen complexity (1..8). */
+  onStart: (complexity?: number) => void;
   onEnd: () => void;
   onEndGame: () => void;
   /** Add seconds to the running round timer. */
@@ -61,6 +62,14 @@ export function TopBarControls({
   const isLastTwoMinutes = isRunning && remaining > 0 && remaining <= 120;
   const idx = round?.index ?? 1;
   const nextIdx = isRoundEnded ? idx + 1 : idx;
+  const startComplexityDefault = isRoundEnded ? complexity : complexity;
+  const [startComplexity, setStartComplexity] = useState(startComplexityDefault);
+  // Re-seed when the underlying default changes (new round, replay).
+  useEffect(() => {
+    setStartComplexity(startComplexityDefault);
+  }, [startComplexityDefault]);
+  const bumpComplexity = (delta: number) =>
+    setStartComplexity((c) => Math.max(1, Math.min(8, c + delta)));
 
   // Auto-fire end-round when timer hits 0 while running. The endpoint
   // is idempotent so multiple clients firing is harmless.
@@ -175,15 +184,46 @@ export function TopBarControls({
             {busy ? "Ending…" : "End game"}
           </button>
         ) : (
-          <button
-            type="button"
-            className="t-btn t-btn--primary t-btn--sm disabled:opacity-50"
-            onClick={onStart}
-            disabled={!canStart || busy}
-            title={canStart ? undefined : "Allocate at least one pair first."}
-          >
-            {busy ? "Starting…" : `Start round ${nextIdx}`}
-          </button>
+          <div className="flex items-center gap-1.5">
+            <div
+              className="t-mono flex items-center gap-1 rounded-full bg-[var(--color-paper-2)] px-2 py-1 text-[11px] font-bold"
+              title="Round complexity"
+            >
+              <span style={{ color: "var(--color-ink-3)" }}>complexity</span>
+              <button
+                type="button"
+                onClick={() => bumpComplexity(-1)}
+                disabled={busy || startComplexity <= 1}
+                className="grid h-5 w-5 place-items-center rounded-full bg-white text-[12px] font-bold disabled:opacity-50"
+                style={{ border: "1.5px solid var(--color-line)" }}
+                aria-label="Decrease complexity"
+              >
+                −
+              </button>
+              <span style={{ minWidth: 14, textAlign: "center" }}>
+                {startComplexity}
+              </span>
+              <button
+                type="button"
+                onClick={() => bumpComplexity(+1)}
+                disabled={busy || startComplexity >= 8}
+                className="grid h-5 w-5 place-items-center rounded-full bg-white text-[12px] font-bold disabled:opacity-50"
+                style={{ border: "1.5px solid var(--color-line)" }}
+                aria-label="Increase complexity"
+              >
+                +
+              </button>
+            </div>
+            <button
+              type="button"
+              className="t-btn t-btn--primary t-btn--sm disabled:opacity-50"
+              onClick={() => onStart(startComplexity)}
+              disabled={!canStart || busy}
+              title={canStart ? undefined : "Allocate at least one pair first."}
+            >
+              {busy ? "Starting…" : `Start round ${nextIdx}`}
+            </button>
+          </div>
         )}
 
         {!gameEnded && !isRunning && !isRoundEnded && (

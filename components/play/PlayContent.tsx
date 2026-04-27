@@ -54,7 +54,7 @@ export interface PlayState {
     role: PlayRole;
     color: TileColor;
   } | null;
-  pair: { id: string } | null;
+  pair: { id: string; display_name: string | null } | null;
   round: {
     id: string;
     index: number;

@@ -16,7 +16,9 @@ export type AccelerantKind =
   | "vocab_swap"
   | "change_builder_brief"
   | "randomizer"
-  | "requirement_change";
+  | "requirement_change"
+  | "harder"
+  | "easier";
 
 export type AccelerantScope = "pair" | "all";
 
@@ -48,6 +50,8 @@ export const POLICIES: Record<AccelerantKind, AccelerantPolicy> = {
     cooldownSeconds: 0,
     implemented: true,
   },
+  harder: { maxPerRound: null, cooldownSeconds: 0, implemented: true },
+  easier: { maxPerRound: null, cooldownSeconds: 0, implemented: true },
 };
 
 export interface PriorEvent {

@@ -9,6 +9,7 @@ import { JoinCallCta } from "./JoinCallCta";
 import { BUILDER_SHAPES, paletteColorsFor } from "@/lib/pattern/palette";
 import { playTestSolution } from "@/lib/sound";
 import { BriefGate } from "./BriefGate";
+import { PairNameBadge } from "./PairNameBadge";
 import type { PlacedPiece, PlayState } from "./PlayContent";
 
 interface TestResult {
@@ -456,15 +457,33 @@ function BuilderInteractive({ state }: { state: PlayState }) {
     setBriefOpened(briefSignature === null);
   }, [briefSignature]);
 
+  const partnerName = state.partner?.display_name ?? "guider";
+  const meName = state.me.display_name;
+  const defaultPairName = `${meName} ↔ ${partnerName}`;
+
   return (
     <div className="grid w-full relative" style={{ gridTemplateColumns: "280px 1fr" }}>
       <aside className="flex flex-col gap-5 border-r border-[var(--color-line)] bg-[var(--color-paper-2)] p-5">
+        {state.pair && (
+          <PairNameBadge
+            code={state.code}
+            pairId={state.pair.id}
+            displayName={state.pair.display_name}
+            defaultName={defaultPairName}
+          />
+        )}
         <ModeBanner
           shape={selectedShape}
           color={selectedColor}
           rotation={selectedRotation}
           editing={editingPiece}
-          onClearAdd={() => setSelectedShape(null)}
+          onPickAdd={() => {
+            setEditingId(null);
+            if (!selectedShape) setSelectedShape(BUILDER_SHAPES[0]!);
+          }}
+          onPickEdit={() => {
+            setSelectedShape(null);
+          }}
           onStopEditing={stopEditing}
         />
         <Tray
@@ -725,81 +744,116 @@ function ModeBanner({
   color,
   rotation,
   editing,
-  onClearAdd,
+  onPickAdd,
+  onPickEdit,
   onStopEditing,
 }: {
   shape: TileShape | null;
   color: TileColor;
   rotation: number;
   editing: PlacedPiece | null;
-  onClearAdd: () => void;
+  /** Switch to add mode — caller picks a default shape if none active. */
+  onPickAdd: () => void;
+  /** Switch to edit-prep mode (no shape selected, click a piece to edit). */
+  onPickEdit: () => void;
   onStopEditing: () => void;
 }) {
-  if (editing) {
-    return (
-      <div
-        className="flex items-center gap-2 rounded-[12px] border-[1.5px] px-3 py-2"
-        style={{
-          background: "var(--color-tint-orange)",
-          borderColor: "var(--color-t-orange)",
-        }}
-      >
-        <span
-          className="t-mono text-[10px] font-bold uppercase tracking-wide"
-          style={{ color: "var(--color-t-orange)" }}
-        >
-          Edit mode
-        </span>
-        <span className="text-[12px] font-semibold text-[var(--color-ink)]">
-          {SHAPE_LABEL[editing.shape]} at {cellLabel(editing.q, editing.r)}
-        </span>
-        <button
-          type="button"
-          onClick={onStopEditing}
-          className="t-mono ml-auto rounded-full px-2 py-0.5 text-[10px] underline"
-          style={{ color: "var(--color-t-orange)" }}
-        >
-          done
-        </button>
-      </div>
-    );
-  }
-  if (shape) {
-    return (
-      <div
-        className="flex items-center gap-2 rounded-[12px] border-[1.5px] px-3 py-2"
-        style={{
-          background: "var(--color-tint-blue)",
-          borderColor: "var(--color-t-blue)",
-        }}
-      >
-        <span
-          className="t-mono text-[10px] font-bold uppercase tracking-wide"
-          style={{ color: "var(--color-t-blue)" }}
-        >
-          Add mode
-        </span>
-        <span className="text-[12px] font-semibold text-[var(--color-ink)]">
-          {color} {SHAPE_LABEL[shape]}{rotation > 0 ? ` · ${rotation * 90}°` : ""}
-        </span>
-        <button
-          type="button"
-          onClick={onClearAdd}
-          className="t-mono ml-auto rounded-full px-2 py-0.5 text-[10px] underline"
-          style={{ color: "var(--color-t-blue)" }}
-        >
-          clear
-        </button>
-      </div>
-    );
-  }
+  const inAdd = shape !== null;
+  const inEdit = editing !== null;
+  const detail = inEdit
+    ? `${SHAPE_LABEL[editing.shape]} at ${cellLabel(editing.q, editing.r)}`
+    : inAdd
+      ? `${color} ${SHAPE_LABEL[shape!]}${rotation > 0 ? ` · ${rotation * 90}°` : ""}`
+      : "tap Add to place a shape · tap Edit then a piece to tweak it";
+
   return (
-    <div
-      className="rounded-[12px] border border-[var(--color-line)] px-3 py-2 text-[12px] text-[var(--color-ink-3)]"
-      style={{ background: "#fff" }}
-    >
-      Pick a shape to add, or click a piece to move it.
+    <div className="flex flex-col gap-1.5">
+      <div
+        className="grid grid-cols-2 gap-1 rounded-[14px] p-1"
+        style={{ background: "var(--color-paper-2)" }}
+      >
+        <ModeButton
+          active={inAdd}
+          colorVar="blue"
+          icon="+"
+          label="Add"
+          sub={inAdd ? "placing" : "place a shape"}
+          onClick={onPickAdd}
+        />
+        <ModeButton
+          active={inEdit}
+          colorVar="orange"
+          icon="✎"
+          label="Edit"
+          sub={inEdit ? "editing" : "tap a piece"}
+          onClick={() => {
+            if (inEdit) onStopEditing();
+            else onPickEdit();
+          }}
+        />
+      </div>
+      <p
+        className="t-mono px-1 text-[11px] leading-tight text-[var(--color-ink-3)]"
+        aria-live="polite"
+      >
+        {detail}
+      </p>
     </div>
+  );
+}
+
+function ModeButton({
+  active,
+  colorVar,
+  icon,
+  label,
+  sub,
+  onClick,
+}: {
+  active: boolean;
+  colorVar: "blue" | "orange";
+  icon: string;
+  label: string;
+  sub: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className="flex items-center gap-2 rounded-[10px] px-2.5 py-2 text-left transition-colors"
+      style={{
+        background: active ? "#fff" : "transparent",
+        color: active ? `var(--color-t-${colorVar})` : "var(--color-ink-2)",
+        boxShadow: active ? "0 1px 3px rgba(0,0,0,.10)" : "none",
+        border: active
+          ? `1.5px solid var(--color-t-${colorVar})`
+          : "1.5px solid transparent",
+      }}
+    >
+      <span
+        aria-hidden="true"
+        className="grid h-7 w-7 flex-shrink-0 place-items-center rounded-full text-[14px] font-bold"
+        style={{
+          background: active
+            ? `var(--color-tint-${colorVar})`
+            : "var(--color-paper)",
+          color: `var(--color-t-${colorVar})`,
+        }}
+      >
+        {icon}
+      </span>
+      <span className="flex flex-col">
+        <span className="text-[13px] font-bold">{label}</span>
+        <span
+          className="t-mono text-[10px]"
+          style={{ color: active ? "inherit" : "var(--color-ink-3)" }}
+        >
+          {sub}
+        </span>
+      </span>
+    </button>
   );
 }
 

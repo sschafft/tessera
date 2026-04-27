@@ -99,7 +99,9 @@ export default async function PlayPage({ params }: PageProps) {
           color: partner.color as TileColor,
         }
       : null,
-    pair: pair ? { id: pair.id } : null,
+    pair: pair
+      ? { id: pair.id, display_name: pair.display_name ?? null }
+      : null,
     round: round
       ? {
           id: round.id,

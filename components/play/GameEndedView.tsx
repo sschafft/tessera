@@ -148,6 +148,43 @@ export function GameEndedView({ code, workshopName }: GameEndedViewProps) {
         </p>
       )}
 
+      <div className="t-card flex w-full flex-col gap-2.5 p-5 text-left">
+        <span
+          className="t-mono text-[11px] uppercase tracking-widest text-[var(--color-ink-3)]"
+          style={{ letterSpacing: ".15em" }}
+        >
+          Debrief prompts
+        </span>
+        <p className="text-[12px] text-[var(--color-ink-3)]">
+          Pick one to start the conversation on the call:
+        </p>
+        <ul className="flex flex-col gap-2">
+          {[
+            "Which brief was hardest to translate around — and what was the workaround?",
+            "Where did you and your partner first diverge from the goal? How did you notice?",
+            "If you had one more minute, what's the first thing you'd fix or ask?",
+          ].map((q, i) => (
+            <li
+              key={i}
+              className="rounded-[10px] px-3 py-2 text-[13px]"
+              style={{
+                background: "var(--color-paper-2)",
+                color: "var(--color-ink)",
+                lineHeight: 1.4,
+              }}
+            >
+              <span
+                className="t-mono mr-2 text-[11px] font-bold"
+                style={{ color: "var(--color-ink-3)" }}
+              >
+                {i + 1}.
+              </span>
+              {q}
+            </li>
+          ))}
+        </ul>
+      </div>
+
       {error && (
         <p className="text-[12px] text-[var(--color-t-red)]">{error}</p>
       )}

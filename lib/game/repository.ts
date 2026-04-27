@@ -88,6 +88,7 @@ export interface PairRecord {
   game_id: string;
   builder_id: string | null;
   guider_id: string | null;
+  display_name: string | null;
   created_at: string;
 }
 
@@ -214,6 +215,12 @@ export interface GameRepository {
    * participant's role + pair_id; does not modify the pair row.
    */
   assignObserver(participant_id: string, pair_id: string): Promise<void>;
+
+  /**
+   * Set or clear a pair's self-chosen display name. Empty string
+   * clears the name (UI falls back to "Builder ↔ Guider").
+   */
+  setPairDisplayName(pair_id: string, name: string | null): Promise<void>;
 
   /**
    * Reset every participant in a game back to the lobby and delete all

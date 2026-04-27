@@ -229,12 +229,13 @@ export function MasterContent({
   } | null>(null);
 
   const startRound = useCallback(
-    async (override?: BriefSource) => {
+    async (override?: BriefSource, complexity?: number) => {
       setBusy(true);
       setActionError(null);
       try {
         const body: Record<string, unknown> = {};
         if (override) body.brief_source_override = override;
+        if (typeof complexity === "number") body.complexity = complexity;
         const res = await fetch(`/api/games/${code}/rounds/start`, {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -266,9 +267,12 @@ export function MasterContent({
     [code, fetchSnapshot],
   );
 
-  const startRoundDefault = useCallback(() => {
-    void startRound();
-  }, [startRound]);
+  const startRoundDefault = useCallback(
+    (complexity?: number) => {
+      void startRound(undefined, complexity);
+    },
+    [startRound],
+  );
 
   const startWithLibrary = useCallback(() => {
     void startRound("library");

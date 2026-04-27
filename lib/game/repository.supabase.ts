@@ -233,7 +233,9 @@ export class SupabaseGameRepository implements GameRepository {
     if (error || !data) {
       throw new Error(`createPair: ${error?.message ?? "unknown"}`);
     }
-    return toPairRecord(data as DbPair);
+    // The RPC's return type predates the display_name column; new
+    // pairs are always unnamed at creation.
+    return toPairRecord({ ...data, display_name: null } as DbPair);
   }
 
   async listPairs(game_id: string): Promise<PairRecord[]> {
@@ -257,6 +259,18 @@ export class SupabaseGameRepository implements GameRepository {
       .update({ role: "observer", pair_id })
       .eq("id", participant_id);
     if (error) throw new Error(`assignObserver: ${error.message}`);
+  }
+
+  async setPairDisplayName(
+    pair_id: string,
+    name: string | null,
+  ): Promise<void> {
+    const supabase = getServiceClient();
+    const { error } = await supabase
+      .from("pairs")
+      .update({ display_name: name })
+      .eq("id", pair_id);
+    if (error) throw new Error(`setPairDisplayName: ${error.message}`);
   }
 
   async clearAllocations(game_id: string): Promise<void> {
@@ -854,6 +868,7 @@ function toPairRecord(row: DbPair): PairRecord {
     game_id: row.game_id,
     builder_id: row.builder_id,
     guider_id: row.guider_id,
+    display_name: row.display_name,
     created_at: row.created_at,
   };
 }

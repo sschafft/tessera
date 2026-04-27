@@ -5,6 +5,7 @@ import { PlayCanvas } from "@/components/canvas/PlayCanvas";
 import { BriefEnvelope } from "./BriefEnvelope";
 import { BriefGate } from "./BriefGate";
 import { JoinCallCta } from "./JoinCallCta";
+import { PairNameBadge } from "./PairNameBadge";
 import type { PlayState } from "./PlayContent";
 
 export interface GuiderViewProps {
@@ -23,8 +24,20 @@ export function GuiderView({ state }: GuiderViewProps) {
     return <WaitingForRound state={state} />;
   }
   const showCoords = (state.round.complexity ?? 5) <= 4;
+  const partnerName = state.partner?.display_name ?? "builder";
+  const defaultPairName = `${state.me.display_name} ↔ ${partnerName}`;
   return (
     <section className="relative mx-auto flex w-full max-w-[1100px] flex-1 flex-col items-center justify-center gap-6 p-6">
+      {state.pair && (
+        <div className="absolute left-6 top-6 z-30">
+          <PairNameBadge
+            code={state.code}
+            pairId={state.pair.id}
+            displayName={state.pair.display_name}
+            defaultName={defaultPairName}
+          />
+        </div>
+      )}
       <div className="absolute right-6 top-6 z-30 flex flex-col gap-3">
         {state.brief && state.brief.role === "guider" && (
           <BriefEnvelope
@@ -70,32 +83,115 @@ export function GuiderView({ state }: GuiderViewProps) {
       </p>
 
       {state.builder_snapshot && state.builder_snapshot.length > 0 && (
-        <div className="absolute bottom-6 right-6 z-10 w-[300px]">
-          <div className="t-card flex flex-col gap-2 p-3">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-ink-2)]">
-                Builder shared progress
-              </span>
-              <span className="t-mono text-[10px] text-[var(--color-ink-3)]">
-                preview · {state.builder_snapshot.length} placed
-              </span>
-            </div>
-            <div
-              className="overflow-hidden rounded-[10px]"
-              style={{ transform: "scale(0.4)", transformOrigin: "top left", height: 200, marginBottom: -200 }}
-            >
-              <PlayCanvas
-                pieces={state.builder_snapshot}
-                complexity={state.round.complexity}
-                showCoords={showCoords}
-              />
-            </div>
-          </div>
-        </div>
+        <BuilderSnapshotPanel
+          snapshot={state.builder_snapshot}
+          complexity={state.round.complexity}
+          showCoords={showCoords}
+        />
       )}
 
       {!briefOpened && <BriefGate role="guider" />}
     </section>
+  );
+}
+
+function BuilderSnapshotPanel({
+  snapshot,
+  complexity,
+  showCoords,
+}: {
+  snapshot: NonNullable<PlayState["builder_snapshot"]>;
+  complexity: number;
+  showCoords: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="absolute bottom-6 right-6 z-10 w-[300px] cursor-pointer text-left"
+        style={{ background: "transparent", padding: 0, border: "none" }}
+        aria-label="Open builder shared progress full screen"
+      >
+        <div className="t-card flex flex-col gap-2 p-3 hover:shadow-md-soft">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-ink-2)]">
+              Builder shared progress
+            </span>
+            <span className="t-mono text-[10px] text-[var(--color-ink-3)]">
+              tap to expand · {snapshot.length} placed
+            </span>
+          </div>
+          <div
+            className="overflow-hidden rounded-[10px]"
+            style={{
+              transform: "scale(0.4)",
+              transformOrigin: "top left",
+              height: 200,
+              marginBottom: -200,
+            }}
+          >
+            <PlayCanvas
+              pieces={snapshot}
+              complexity={complexity}
+              showCoords={showCoords}
+            />
+          </div>
+        </div>
+      </button>
+
+      {open && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: "rgba(31,26,20,0.62)" }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setOpen(false);
+          }}
+        >
+          <div
+            className="t-card flex flex-col items-center gap-3 p-5"
+            style={{ background: "#fff", maxWidth: "92vw", maxHeight: "92vh" }}
+          >
+            <div className="flex w-full items-center justify-between gap-3">
+              <span
+                className="t-mono text-[11px] uppercase tracking-widest text-[var(--color-ink-3)]"
+                style={{ letterSpacing: ".15em" }}
+              >
+                Builder shared progress · {snapshot.length} placed
+              </span>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                aria-label="Close"
+                className="grid h-8 w-8 place-items-center rounded-md text-[20px] text-[var(--color-ink-2)]"
+                style={{ background: "var(--color-paper-2)" }}
+              >
+                ×
+              </button>
+            </div>
+            <PlayCanvas
+              pieces={snapshot}
+              complexity={complexity}
+              showCoords={showCoords}
+            />
+            <span className="t-mono text-[10px] text-[var(--color-ink-3)]">
+              Esc or click outside to close
+            </span>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
