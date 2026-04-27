@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Avatar } from "@/components/primitives/Avatar";
 import type { TeamMode } from "@/lib/game/repository";
 import type { LobbyParticipant, LobbyPair } from "./MasterContent";
@@ -19,7 +19,10 @@ export interface MasterLobbyProps {
   busy: boolean;
   pairs: LobbyPair[];
   participants: LobbyParticipant[];
-  onAuto: () => void;
+  /** Auto-create N pairs from the lobby (random builder/guider per pair). */
+  onAutoPairs: (count: number) => void;
+  /** Distribute remaining lobby members across pairs as observers. */
+  onAutoObservers: () => void;
   onPair: (builderId: string) => void;
   onObserver: (pairId: string) => void;
 }
@@ -37,7 +40,8 @@ export function MasterLobby({
   busy,
   pairs,
   participants,
-  onAuto,
+  onAutoPairs,
+  onAutoObservers,
   onPair,
   onObserver,
 }: MasterLobbyProps) {
@@ -45,6 +49,21 @@ export function MasterLobby({
     members.some((m) => m.id === id),
   );
   const selectedCount = selectedIds.length;
+
+  const maxPossiblePairs = Math.floor(members.length / 2);
+  const [pairCountText, setPairCountText] = useState<string>(
+    String(Math.max(1, maxPossiblePairs)),
+  );
+  useEffect(() => {
+    setPairCountText(String(Math.max(1, maxPossiblePairs)));
+  }, [maxPossiblePairs]);
+  const parsedPairCount = (() => {
+    const n = parseInt(pairCountText, 10);
+    if (!Number.isFinite(n) || n <= 0) return 0;
+    return Math.min(32, n);
+  })();
+  const unallocatedCount = members.length;
+  const canAutoPair = members.length >= 2 && parsedPairCount > 0;
 
   return (
     <div className="border-b border-[var(--color-line)] bg-[var(--color-paper)]">
@@ -103,7 +122,7 @@ export function MasterLobby({
       </div>
 
       {/* Action bar */}
-      <div className="flex flex-col gap-1.5 px-3 pb-3">
+      <div className="flex flex-col gap-2 px-3 pb-3">
         {selectedCount === 2 && (
           <PairAssignButton
             members={members.filter((m) => selectedIds.includes(m.id))}
@@ -131,15 +150,70 @@ export function MasterLobby({
           />
         )}
 
-        <button
-          type="button"
-          onClick={onAuto}
-          disabled={busy || members.length < 2}
-          className="rounded-[10px] border-[1.5px] border-[var(--color-ink)] bg-white px-3 py-2 text-[12px] font-bold text-[var(--color-ink)] disabled:opacity-50"
-          style={{ boxShadow: "0 2px 0 var(--color-ink)" }}
+        <div
+          className="flex flex-col gap-2 rounded-[12px] bg-[var(--color-paper-2)] p-2.5"
+          style={{ border: "1.5px solid var(--color-line)" }}
         >
-          🎲 Auto-allocate all
-        </button>
+          <div className="flex items-center justify-between gap-2">
+            <span className="t-mono text-[10px] uppercase tracking-widest text-[var(--color-ink-3)]">
+              Auto-allocate
+            </span>
+            <span className="t-mono text-[10px] text-[var(--color-ink-3)]">
+              {unallocatedCount} unassigned
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-1.5 text-[11px] font-semibold text-[var(--color-ink-2)]">
+              <input
+                type="number"
+                min={1}
+                max={32}
+                value={pairCountText}
+                onChange={(e) => setPairCountText(e.target.value)}
+                disabled={busy}
+                className="t-mono rounded-md bg-white px-2 py-1 text-[12px] font-bold text-[var(--color-ink)] outline-none disabled:opacity-50"
+                style={{
+                  border: "1.5px solid var(--color-line)",
+                  width: 56,
+                  textAlign: "center",
+                }}
+                aria-label="Number of pairs to auto-create"
+              />
+              <span style={{ color: "var(--color-ink-3)" }}>pairs</span>
+            </label>
+            <button
+              type="button"
+              onClick={() => onAutoPairs(parsedPairCount)}
+              disabled={busy || !canAutoPair}
+              className="flex-1 rounded-[10px] border-[1.5px] border-[var(--color-ink)] bg-white px-3 py-2 text-[12px] font-bold text-[var(--color-ink)] disabled:opacity-50"
+              style={{ boxShadow: "0 2px 0 var(--color-ink)" }}
+              title={
+                canAutoPair
+                  ? `Pair up ${parsedPairCount * 2} players from the lobby (random builder/guider per pair).`
+                  : "Need at least 2 players in the lobby."
+              }
+            >
+              ⇄ Create {parsedPairCount || 0} pair
+              {parsedPairCount === 1 ? "" : "s"}
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={onAutoObservers}
+            disabled={busy || pairs.length === 0 || members.length === 0}
+            className="rounded-[10px] border-[1.5px] border-[var(--color-line)] bg-white px-3 py-2 text-[12px] font-bold text-[var(--color-ink-2)] disabled:opacity-50"
+            title={
+              pairs.length === 0
+                ? "Create at least one pair first."
+                : members.length === 0
+                  ? "Nobody left in the lobby."
+                  : `Spread ${members.length} unassigned ${members.length === 1 ? "player" : "players"} across ${pairs.length} pair${pairs.length === 1 ? "" : "s"} as observers.`
+            }
+          >
+            👁 Auto-assign {members.length > 0 ? members.length : ""} observer
+            {members.length === 1 ? "" : "s"}
+          </button>
+        </div>
 
         {selectedCount > 0 && (
           <button

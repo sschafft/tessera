@@ -10,14 +10,27 @@ export interface BriefEnvelopeProps {
   defaultOpen?: boolean;
   /** Called the first time the envelope is opened. */
   onOpen?: () => void;
+  /** Called when the player minimises the open card to the seal circle. */
+  onMinimize?: () => void;
+  /** Called when the player closes the open card (× or minimise). Useful
+   *  for one-shot follow-ups that should fire only after the brief has
+   *  actually been read, e.g. the pair-name nudge. */
+  onClose?: () => void;
   /** When true, the envelope pulses to draw attention (used by the gate). */
   emphasize?: boolean;
 }
 
+type View = "sealed" | "open" | "minimized";
+
 /**
- * Sealed envelope for a player's secret brief. Click to peel open;
- * click × to seal again. Visual style ports the .t-envelope utility
- * defined in styles/tessera.css.
+ * Sealed envelope for a player's secret brief. Three views:
+ *   - sealed    : full envelope card with the seal seam (first impression)
+ *   - open      : full card with title + rules
+ *   - minimized : just the seal circle, parked off the canvas
+ *
+ * Once peeled open, the player can either re-seal (× → back to sealed)
+ * or minimise (− → just the seal circle so the canvas isn't blocked).
+ * Clicking the minimised circle re-expands straight to the open card.
  *
  * Per the locked decisions, the brief content is plain text — no
  * dangerouslySetInnerHTML — so even GM-authored free-text briefs in M5.6
@@ -29,19 +42,52 @@ export function BriefEnvelope({
   rules,
   defaultOpen = false,
   onOpen,
+  onMinimize,
+  onClose,
   emphasize = false,
 }: BriefEnvelopeProps) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [view, setView] = useState<View>(defaultOpen ? "open" : "sealed");
   const roleLabel = role === "builder" ? "Builder" : "Guider";
   const colorVar =
     role === "builder" ? "var(--color-t-red)" : "var(--color-t-blue)";
 
   const handleOpen = () => {
-    setOpen(true);
+    setView("open");
     onOpen?.();
   };
+  const handleMinimize = () => {
+    setView("minimized");
+    onMinimize?.();
+    onClose?.();
+  };
+  const handleSeal = () => {
+    setView("sealed");
+    onClose?.();
+  };
 
-  if (!open) {
+  if (view === "minimized") {
+    return (
+      <button
+        type="button"
+        onClick={handleOpen}
+        aria-label={`Re-open ${roleLabel.toLowerCase()}'s brief`}
+        title={`${roleLabel}'s brief — click to reopen`}
+        className="t-envelope__seal"
+        style={{
+          width: 56,
+          height: 56,
+          fontSize: 24,
+          position: "static",
+          cursor: "pointer",
+          border: "none",
+        }}
+      >
+        {role[0]?.toUpperCase()}
+      </button>
+    );
+  }
+
+  if (view === "sealed") {
     return (
       <button
         type="button"
@@ -124,14 +170,35 @@ export function BriefEnvelope({
         >
           ● {roleLabel.toUpperCase()} · CONFIDENTIAL
         </span>
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          aria-label="Seal envelope"
-          className="grid h-7 w-7 place-items-center rounded-md text-[18px] text-[var(--color-ink-2)]"
-        >
-          ×
-        </button>
+        <div className="flex items-center gap-0.5">
+          <button
+            type="button"
+            onClick={handleMinimize}
+            aria-label="Minimise envelope to the seal"
+            title="Minimise"
+            className="grid h-7 w-7 place-items-center rounded-md text-[var(--color-ink-2)] hover:bg-[var(--color-paper-2)]"
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                display: "block",
+                width: 12,
+                height: 2,
+                background: "currentColor",
+                borderRadius: 1,
+              }}
+            />
+          </button>
+          <button
+            type="button"
+            onClick={handleSeal}
+            aria-label="Seal envelope"
+            title="Re-seal"
+            className="grid h-7 w-7 place-items-center rounded-md text-[18px] text-[var(--color-ink-2)] hover:bg-[var(--color-paper-2)]"
+          >
+            ×
+          </button>
+        </div>
       </div>
       <div
         className="t-display mb-2.5"

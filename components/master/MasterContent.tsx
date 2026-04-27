@@ -229,13 +229,19 @@ export function MasterContent({
   } | null>(null);
 
   const startRound = useCallback(
-    async (override?: BriefSource, complexity?: number) => {
+    async (
+      override?: BriefSource,
+      complexity?: number,
+      durationSeconds?: number,
+    ) => {
       setBusy(true);
       setActionError(null);
       try {
         const body: Record<string, unknown> = {};
         if (override) body.brief_source_override = override;
         if (typeof complexity === "number") body.complexity = complexity;
+        if (typeof durationSeconds === "number")
+          body.duration_seconds = durationSeconds;
         const res = await fetch(`/api/games/${code}/rounds/start`, {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -268,8 +274,8 @@ export function MasterContent({
   );
 
   const startRoundDefault = useCallback(
-    (complexity?: number) => {
-      void startRound(undefined, complexity);
+    (complexity?: number, durationSeconds?: number) => {
+      void startRound(undefined, complexity, durationSeconds);
     },
     [startRound],
   );
@@ -356,7 +362,20 @@ export function MasterContent({
 
   const updateScoring = useCallback(
     async (patch: { correct_pts?: number; wrong_pts?: number }) => {
-      setBusy(true);
+      // Apply locally first so the +/− buttons feel instant. Without
+      // this, the panel's displayed value lags behind the click by the
+      // round-trip + fetchSnapshot, which read as a broken button.
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              scoring: {
+                correct_pts: patch.correct_pts ?? prev.scoring.correct_pts,
+                wrong_pts: patch.wrong_pts ?? prev.scoring.wrong_pts,
+              },
+            }
+          : prev,
+      );
       setActionError(null);
       try {
         const res = await fetch(`/api/games/${code}/scoring`, {
@@ -371,8 +390,7 @@ export function MasterContent({
         await fetchSnapshot();
       } catch (err) {
         setActionError(err instanceof Error ? err.message : "scoring failed");
-      } finally {
-        setBusy(false);
+        await fetchSnapshot();
       }
     },
     [code, fetchSnapshot],
@@ -515,7 +533,16 @@ export function MasterContent({
       />
       <div
         className="grid min-h-0 flex-1"
-        style={{ gridTemplateColumns: "320px 1fr 360px" }}
+        style={{
+          // Hero layout when nobody's joined yet: lobby column eats the
+          // middle so the share-link CTA + pairing controls sit front
+          // and centre. Once players land, snap back to the workshop
+          // layout (lobby | focused pair | super powers).
+          gridTemplateColumns:
+            participants.length === 0 && pairs.length === 0
+              ? "minmax(420px, 720px) 1fr 360px"
+              : "320px 1fr 360px",
+        }}
       >
         <aside className="flex flex-col border-r border-[var(--color-line)] bg-white">
           <MasterLobby
@@ -531,7 +558,10 @@ export function MasterContent({
             busy={busy}
             pairs={pairs}
             participants={participants}
-            onAuto={() => allocate({ kind: "auto" })}
+            onAutoPairs={(count) =>
+              allocate({ kind: "auto_pairs", count })
+            }
+            onAutoObservers={() => allocate({ kind: "auto_observers" })}
             onPair={(builderId) => {
               const arr = Array.from(selected);
               if (arr.length !== 2) return;

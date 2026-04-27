@@ -129,24 +129,33 @@ export function PairNameBadge({
     <button
       type="button"
       onClick={() => setEditing(true)}
-      className="flex items-center gap-2 rounded-full bg-[var(--color-paper-2)] px-3 py-1 hover:bg-white"
-      style={{ border: "1.5px solid var(--color-line)" }}
-      aria-label="Rename pair"
+      className="flex items-center gap-2 rounded-full px-3 py-1.5 transition-colors hover:bg-white"
+      style={{
+        background: named ? "var(--color-paper-2)" : "var(--color-tint-yellow)",
+        border: named
+          ? "1.5px solid var(--color-line)"
+          : "1.5px dashed var(--color-t-yellow)",
+      }}
+      aria-label={named ? "Rename pair" : "Name this pair"}
     >
       <span
-        className="t-mono text-[10px] uppercase tracking-widest text-[var(--color-ink-3)]"
-        style={{ letterSpacing: ".12em" }}
+        className="t-mono text-[10px] uppercase tracking-widest"
+        style={{
+          letterSpacing: ".12em",
+          color: named ? "var(--color-ink-3)" : "#7a5b00",
+        }}
       >
-        pair
+        {named ? "pair" : "name your pair"}
       </span>
       <span
         className="text-[12px] font-bold"
-        style={{ color: named ? "var(--color-ink)" : "var(--color-ink-3)" }}
+        style={{ color: named ? "var(--color-ink)" : "#7a5b00" }}
       >
         {named ? displayName : defaultName}
       </span>
       <span
-        className="t-mono text-[9px] text-[var(--color-ink-3)]"
+        className="t-mono text-[10px]"
+        style={{ color: named ? "var(--color-ink-3)" : "#7a5b00" }}
         aria-hidden="true"
       >
         ✎

@@ -10,6 +10,7 @@ import { BUILDER_SHAPES, paletteColorsFor } from "@/lib/pattern/palette";
 import { playTestSolution } from "@/lib/sound";
 import { BriefGate } from "./BriefGate";
 import { PairNameBadge } from "./PairNameBadge";
+import { PairNameModal } from "./PairNameModal";
 import type { PlacedPiece, PlayState } from "./PlayContent";
 
 interface TestResult {
@@ -119,6 +120,28 @@ function BuilderInteractive({ state }: { state: PlayState }) {
     });
   }, [state.placements, optimisticPatches]);
 
+  // GC optimistic adds once the server-confirmed piece appears at the
+  // same cell with matching shape/colour. Dropping the temp piece on
+  // POST success used to leave a flicker gap before the realtime
+  // broadcast caught up; keeping it until state.placements actually
+  // contains the new piece eliminates the visible stutter.
+  useEffect(() => {
+    if (optimistic.length === 0) return;
+    setOptimistic((prev) => {
+      const next = prev.filter((opt) => {
+        const matched = state.placements.some(
+          (sp) =>
+            sp.q === opt.q &&
+            sp.r === opt.r &&
+            sp.shape === opt.shape &&
+            sp.color === opt.color,
+        );
+        return !matched;
+      });
+      return next.length === prev.length ? prev : next;
+    });
+  }, [state.placements, optimistic.length]);
+
   // Server placements + local optimistic adds, minus locally-pending
   // deletes, with optimistic patches merged on top. The server's
   // `correct` flag is intentionally ignored — we use the local
@@ -206,7 +229,9 @@ function BuilderInteractive({ state }: { state: PlayState }) {
           const j = await res.json().catch(() => ({}));
           throw new Error(j.error || `status ${res.status}`);
         }
-        setOptimistic((prev) => prev.filter((p) => p.id !== tempId));
+        // Leave the optimistic piece in place — the GC effect drops it
+        // once state.placements echoes the same q/r/shape/colour back,
+        // which avoids the flicker between POST success and broadcast.
       } catch (err) {
         setOptimistic((prev) => prev.filter((p) => p.id !== tempId));
         setError(err instanceof Error ? err.message : "place failed");
@@ -501,6 +526,34 @@ function BuilderInteractive({ state }: { state: PlayState }) {
   const meName = state.me.display_name;
   const defaultPairName = `${meName} ↔ ${partnerName}`;
 
+  // Pair-name nudge: pop a one-shot modal when the player closes their
+  // brief and the pair still has no name set. SessionStorage keeps the
+  // dismissal sticky per pair so we don't pester them.
+  const [showNameNudge, setShowNameNudge] = useState(false);
+  const pairNeedsName =
+    state.pair !== null &&
+    (state.pair.display_name === null || state.pair.display_name === "");
+  const onBriefClose = useCallback(() => {
+    if (!state.pair || !pairNeedsName) return;
+    const key = `tessera_pair_name_dismissed_${state.pair.id}`;
+    if (
+      typeof window !== "undefined" &&
+      window.sessionStorage.getItem(key) === "1"
+    ) {
+      return;
+    }
+    setShowNameNudge(true);
+  }, [state.pair, pairNeedsName]);
+  const dismissNameNudge = useCallback(() => {
+    if (state.pair && typeof window !== "undefined") {
+      window.sessionStorage.setItem(
+        `tessera_pair_name_dismissed_${state.pair.id}`,
+        "1",
+      );
+    }
+    setShowNameNudge(false);
+  }, [state.pair]);
+
   return (
     <div className="grid w-full relative" style={{ gridTemplateColumns: "280px 1fr" }}>
       <aside className="flex flex-col gap-5 border-r border-[var(--color-line)] bg-[var(--color-paper-2)] p-5">
@@ -549,29 +602,9 @@ function BuilderInteractive({ state }: { state: PlayState }) {
           </p>
         )}
       </aside>
-      <section className="relative flex items-start justify-center overflow-auto p-6">
-        <div className="absolute right-6 top-6 z-30 flex flex-col gap-3">
-          {state.brief && state.brief.role === "builder" && (
-            <BriefEnvelope
-              role="builder"
-              title={state.brief.title}
-              rules={state.brief.rules}
-              onOpen={() => setBriefOpened(true)}
-              emphasize={!briefOpened}
-            />
-          )}
-          {state.partner_brief && (
-            <BriefEnvelope
-              role={state.partner_brief.role}
-              title={state.partner_brief.title}
-              rules={state.partner_brief.rules}
-              defaultOpen
-            />
-          )}
-        </div>
-
+      <section className="relative flex items-start gap-4 overflow-auto p-6">
         {!briefOpened && <BriefGate role="builder" />}
-        <div className="flex flex-col items-center gap-3">
+        <div className="flex flex-1 flex-col items-center gap-3">
           <PrototypeOverlay
             prototype={state.prototype}
             complexity={complexity}
@@ -626,20 +659,27 @@ function BuilderInteractive({ state }: { state: PlayState }) {
             {state.live_score && (
               <span
                 className="t-mono rounded-full px-3 py-1 text-[11px] font-bold"
-                style={{
-                  background:
-                    state.live_score.score > 0
-                      ? "var(--color-tint-green)"
-                      : "var(--color-paper-2)",
-                  color:
-                    state.live_score.score > 0
-                      ? "var(--color-t-green)"
-                      : "var(--color-ink-2)",
-                  boxShadow:
-                    state.live_score.score > 0
-                      ? "inset 0 0 0 1.5px var(--color-t-green)"
-                      : "inset 0 0 0 1.5px var(--color-line)",
-                }}
+                style={(() => {
+                  const s = state.live_score.score;
+                  const tint =
+                    s > 0
+                      ? "green"
+                      : s < 0
+                        ? "red"
+                        : null;
+                  if (tint === null) {
+                    return {
+                      background: "var(--color-paper-2)",
+                      color: "var(--color-ink-2)",
+                      boxShadow: "inset 0 0 0 1.5px var(--color-line)",
+                    };
+                  }
+                  return {
+                    background: `var(--color-tint-${tint})`,
+                    color: `var(--color-t-${tint})`,
+                    boxShadow: `inset 0 0 0 1.5px var(--color-t-${tint})`,
+                  };
+                })()}
                 aria-label={`Score ${state.live_score.score}, ${state.live_score.correct} of ${state.live_score.total} correct`}
               >
                 ★ {state.live_score.score} pts · {state.live_score.correct} /{" "}
@@ -700,7 +740,37 @@ function BuilderInteractive({ state }: { state: PlayState }) {
             onTest={testSolution}
           />
         </div>
+        <aside
+          className="flex flex-shrink-0 flex-col items-end gap-3 self-start"
+          style={{ width: 320 }}
+        >
+          {state.brief && state.brief.role === "builder" && (
+            <BriefEnvelope
+              role="builder"
+              title={state.brief.title}
+              rules={state.brief.rules}
+              onOpen={() => setBriefOpened(true)}
+              onClose={onBriefClose}
+              emphasize={!briefOpened}
+            />
+          )}
+          {state.partner_brief && (
+            <BriefEnvelope
+              role={state.partner_brief.role}
+              title={state.partner_brief.title}
+              rules={state.partner_brief.rules}
+              defaultOpen
+            />
+          )}
+        </aside>
       </section>
+      {showNameNudge && state.pair && (
+        <PairNameModal
+          code={state.code}
+          pairId={state.pair.id}
+          onClose={dismissNameNudge}
+        />
+      )}
     </div>
   );
 }

@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { PlayCanvas } from "@/components/canvas/PlayCanvas";
 import { BriefEnvelope } from "./BriefEnvelope";
 import { BriefGate } from "./BriefGate";
 import { JoinCallCta } from "./JoinCallCta";
 import { PairNameBadge } from "./PairNameBadge";
+import { PairNameModal } from "./PairNameModal";
 import type { PlayState } from "./PlayContent";
 
 export interface GuiderViewProps {
@@ -20,6 +21,33 @@ export function GuiderView({ state }: GuiderViewProps) {
     setBriefOpened(briefSignature === null);
   }, [briefSignature]);
 
+  // Pair-name nudge — fires after the player closes their own brief if
+  // the pair is still anonymous. SessionStorage tracks dismissal per
+  // pair so this never pesters a player twice in a session.
+  const [showNameNudge, setShowNameNudge] = useState(false);
+  const onBriefClose = useCallback(() => {
+    const pair = state.pair;
+    if (!pair) return;
+    if (pair.display_name && pair.display_name.length > 0) return;
+    const key = `tessera_pair_name_dismissed_${pair.id}`;
+    if (
+      typeof window !== "undefined" &&
+      window.sessionStorage.getItem(key) === "1"
+    ) {
+      return;
+    }
+    setShowNameNudge(true);
+  }, [state.pair]);
+  const dismissNameNudge = useCallback(() => {
+    if (state.pair && typeof window !== "undefined") {
+      window.sessionStorage.setItem(
+        `tessera_pair_name_dismissed_${state.pair.id}`,
+        "1",
+      );
+    }
+    setShowNameNudge(false);
+  }, [state.pair]);
+
   if (!state.round || state.round.status !== "running" || !state.goal) {
     return <WaitingForRound state={state} />;
   }
@@ -27,7 +55,7 @@ export function GuiderView({ state }: GuiderViewProps) {
   const partnerName = state.partner?.display_name ?? "builder";
   const defaultPairName = `${state.me.display_name} ↔ ${partnerName}`;
   return (
-    <section className="relative mx-auto flex w-full max-w-[1100px] flex-1 flex-col items-center justify-center gap-6 p-6">
+    <section className="relative flex w-full flex-1 gap-4 p-6">
       {state.pair && (
         <div className="absolute left-6 top-6 z-30">
           <PairNameBadge
@@ -38,25 +66,7 @@ export function GuiderView({ state }: GuiderViewProps) {
           />
         </div>
       )}
-      <div className="absolute right-6 top-6 z-30 flex flex-col gap-3">
-        {state.brief && state.brief.role === "guider" && (
-          <BriefEnvelope
-            role="guider"
-            title={state.brief.title}
-            rules={state.brief.rules}
-            onOpen={() => setBriefOpened(true)}
-            emphasize={!briefOpened}
-          />
-        )}
-        {state.partner_brief && (
-          <BriefEnvelope
-            role={state.partner_brief.role}
-            title={state.partner_brief.title}
-            rules={state.partner_brief.rules}
-            defaultOpen
-          />
-        )}
-      </div>
+      <div className="flex flex-1 flex-col items-center justify-center gap-6">
       <div className="relative">
         <span
           className="t-stamp absolute -left-2 -top-4 z-10"
@@ -71,20 +81,22 @@ export function GuiderView({ state }: GuiderViewProps) {
         {state.live_score && (
           <span
             className="t-mono absolute -right-2 -top-4 z-10 rounded-full px-3 py-1 text-[11px] font-bold"
-            style={{
-              background:
-                state.live_score.score > 0
-                  ? "var(--color-tint-green)"
-                  : "var(--color-paper-2)",
-              color:
-                state.live_score.score > 0
-                  ? "var(--color-t-green)"
-                  : "var(--color-ink-2)",
-              boxShadow:
-                state.live_score.score > 0
-                  ? "inset 0 0 0 1.5px var(--color-t-green)"
-                  : "inset 0 0 0 1.5px var(--color-line)",
-            }}
+            style={(() => {
+              const s = state.live_score.score;
+              const tint = s > 0 ? "green" : s < 0 ? "red" : null;
+              if (tint === null) {
+                return {
+                  background: "var(--color-paper-2)",
+                  color: "var(--color-ink-2)",
+                  boxShadow: "inset 0 0 0 1.5px var(--color-line)",
+                };
+              }
+              return {
+                background: `var(--color-tint-${tint})`,
+                color: `var(--color-t-${tint})`,
+                boxShadow: `inset 0 0 0 1.5px var(--color-t-${tint})`,
+              };
+            })()}
             aria-label={`Builder score ${state.live_score.score}, ${state.live_score.correct} of ${state.live_score.total} correct`}
           >
             ★ {state.live_score.score} pts · {state.live_score.correct} /{" "}
@@ -112,8 +124,39 @@ export function GuiderView({ state }: GuiderViewProps) {
           showCoords={showCoords}
         />
       )}
+      </div>
+      <aside
+        className="flex flex-shrink-0 flex-col items-end gap-3 pt-4"
+        style={{ width: 320 }}
+      >
+        {state.brief && state.brief.role === "guider" && (
+          <BriefEnvelope
+            role="guider"
+            title={state.brief.title}
+            rules={state.brief.rules}
+            onOpen={() => setBriefOpened(true)}
+            onClose={onBriefClose}
+            emphasize={!briefOpened}
+          />
+        )}
+        {state.partner_brief && (
+          <BriefEnvelope
+            role={state.partner_brief.role}
+            title={state.partner_brief.title}
+            rules={state.partner_brief.rules}
+            defaultOpen
+          />
+        )}
+      </aside>
 
       {!briefOpened && <BriefGate role="guider" />}
+      {showNameNudge && state.pair && (
+        <PairNameModal
+          code={state.code}
+          pairId={state.pair.id}
+          onClose={dismissNameNudge}
+        />
+      )}
     </section>
   );
 }

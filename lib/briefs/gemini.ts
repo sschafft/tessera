@@ -3,7 +3,9 @@ import "server-only";
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import type { BriefRole } from "@/lib/game/repository";
 
-const MODEL = "gemini-1.5-flash";
+// gemini-1.5-flash was deprecated in late 2025; gemini-2.0-flash is
+// the current free-tier replacement and uses the same API surface.
+const MODEL = "gemini-2.0-flash";
 
 export class GeminiUnavailableError extends Error {
   constructor() {
@@ -73,7 +75,7 @@ export async function generateBriefViaGemini(
         required: ["title", "rules"],
       },
       temperature: 1.0,
-      maxOutputTokens: 256,
+      maxOutputTokens: 512,
     },
   });
 

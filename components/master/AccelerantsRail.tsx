@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   POLICIES,
   countPriorEvents,
@@ -117,6 +117,16 @@ export function AccelerantsRail({
 }: AccelerantsRailProps) {
   const [scope, setScope] = useState<"pair" | "all">("pair");
   const [prototypeSec, setPrototypeSec] = useState(5);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    if (!expanded) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setExpanded(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [expanded]);
 
   const focusedName = focusedPair ? "this pair" : "—";
   const segmentOptions = [
@@ -124,10 +134,10 @@ export function AccelerantsRail({
     { value: "all" as const, label: "All pairs" },
   ];
 
-  return (
-    <div className="flex h-full flex-col">
-      <div className="border-b border-[var(--color-line)] px-5 pb-3 pt-5">
-        <div className="mb-1 flex items-center gap-2">
+  const header = (
+    <div className="flex items-start justify-between gap-2">
+      <div className="flex flex-1 flex-col gap-1">
+        <div className="flex items-center gap-2">
           <span
             className="grid h-6 w-6 place-items-center rounded-md text-[14px] font-extrabold text-white"
             style={{ background: "var(--color-t-red)" }}
@@ -140,79 +150,162 @@ export function AccelerantsRail({
           Trigger mechanics on a pair (or all pairs) to nudge them past stuck
           moments.
         </p>
-        <div
-          className="mt-2.5 flex gap-0.5 rounded-[14px] bg-[var(--color-paper-2)] p-1"
-          role="radiogroup"
-        >
-          {segmentOptions.map((o) => {
-            const active = scope === o.value;
-            const disabled = o.value === "pair" && !focusedPair;
-            return (
-              <button
-                key={o.value}
-                type="button"
-                role="radio"
-                aria-checked={active}
-                disabled={disabled}
-                onClick={() => setScope(o.value)}
-                className="flex-1 cursor-pointer border-none px-3 py-2 text-[12px] font-semibold transition-colors disabled:opacity-50"
-                style={{
-                  background: active ? "#fff" : "transparent",
-                  borderRadius: "calc(var(--radius-md) - 4px)",
-                  color: active ? "var(--color-ink)" : "var(--color-ink-3)",
-                  boxShadow: active ? "0 1px 3px rgba(0,0,0,.10)" : "none",
-                }}
-              >
-                {o.label}
-              </button>
-            );
-          })}
-        </div>
+      </div>
+      <button
+        type="button"
+        onClick={() => setExpanded(true)}
+        className="grid h-7 w-7 flex-shrink-0 place-items-center rounded-md text-[var(--color-ink-2)] hover:bg-[var(--color-paper-2)]"
+        title="Open full-screen super powers"
+        aria-label="Open full-screen super powers"
+      >
+        <span aria-hidden="true" style={{ fontSize: 13, lineHeight: 1 }}>
+          ⤢
+        </span>
+      </button>
+    </div>
+  );
+
+  const scopeSegment = (
+    <div
+      className="mt-2.5 flex gap-0.5 rounded-[14px] bg-[var(--color-paper-2)] p-1"
+      role="radiogroup"
+    >
+      {segmentOptions.map((o) => {
+        const active = scope === o.value;
+        const disabled = o.value === "pair" && !focusedPair;
+        return (
+          <button
+            key={o.value}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            disabled={disabled}
+            onClick={() => setScope(o.value)}
+            className="flex-1 cursor-pointer border-none px-3 py-2 text-[12px] font-semibold transition-colors disabled:opacity-50"
+            style={{
+              background: active ? "#fff" : "transparent",
+              borderRadius: "calc(var(--radius-md) - 4px)",
+              color: active ? "var(--color-ink)" : "var(--color-ink-3)",
+              boxShadow: active ? "0 1px 3px rgba(0,0,0,.10)" : "none",
+            }}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  const scoringPanel = (
+    <ScoringPanel
+      correctPts={scoring.correct_pts}
+      wrongPts={scoring.wrong_pts}
+      busy={busy}
+      onChange={onScoring}
+    />
+  );
+
+  const renderButton = (b: RailButtonSpec) => (
+    <RailButton
+      key={b.kind}
+      spec={b}
+      events={events}
+      scope={scope}
+      focusedPairId={focusedPair?.id ?? null}
+      disabled={
+        !roundRunning ||
+        busy ||
+        (scope === "pair" && !focusedPair) ||
+        !POLICIES[b.kind].implemented
+      }
+      payload={
+        b.kind === "prototype" ? { duration_seconds: prototypeSec } : undefined
+      }
+      extra={
+        b.kind === "prototype" ? (
+          <PrototypeDurationControl
+            seconds={prototypeSec}
+            onChange={setPrototypeSec}
+          />
+        ) : null
+      }
+      onTrigger={onTrigger}
+    />
+  );
+
+  return (
+    <div className="flex h-full flex-col">
+      <div className="border-b border-[var(--color-line)] px-5 pb-3 pt-5">
+        {header}
+        {scopeSegment}
       </div>
 
       <div className="flex flex-1 flex-col gap-2.5 overflow-y-auto p-3.5">
-        <ScoringPanel
-          correctPts={scoring.correct_pts}
-          wrongPts={scoring.wrong_pts}
-          busy={busy}
-          onChange={onScoring}
-        />
+        {scoringPanel}
         {!roundRunning && (
           <p className="px-2 py-2 text-[12px] text-[var(--color-ink-3)]">
-            {/* Copy adapts to lifecycle: pre-round vs post-round. */}
             Super powers light up while a round is in flight.
           </p>
         )}
-        {BUTTONS.map((b) => (
-          <RailButton
-            key={b.kind}
-            spec={b}
-            events={events}
-            scope={scope}
-            focusedPairId={focusedPair?.id ?? null}
-            disabled={
-              !roundRunning ||
-              busy ||
-              (scope === "pair" && !focusedPair) ||
-              !POLICIES[b.kind].implemented
-            }
-            payload={
-              b.kind === "prototype"
-                ? { duration_seconds: prototypeSec }
-                : undefined
-            }
-            extra={
-              b.kind === "prototype" ? (
-                <PrototypeDurationControl
-                  seconds={prototypeSec}
-                  onChange={setPrototypeSec}
-                />
-              ) : null
-            }
-            onTrigger={onTrigger}
-          />
-        ))}
+        {BUTTONS.map(renderButton)}
       </div>
+
+      {expanded && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Super powers — full screen"
+          className="fixed inset-0 z-50 flex items-stretch justify-center p-6"
+          style={{ background: "rgba(31,26,20,0.62)" }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setExpanded(false);
+          }}
+        >
+          <div
+            className="t-card flex w-full max-w-[1100px] flex-col gap-4 overflow-hidden p-6"
+            style={{ background: "#fff" }}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1">{header}</div>
+              <button
+                type="button"
+                onClick={() => setExpanded(false)}
+                aria-label="Close"
+                className="grid h-9 w-9 place-items-center rounded-md text-[20px] text-[var(--color-ink-2)] hover:bg-[var(--color-paper-2)]"
+              >
+                ×
+              </button>
+            </div>
+            <div className="flex flex-col gap-3 md:flex-row md:items-start">
+              <div className="flex-shrink-0 md:w-[300px]">
+                {scopeSegment}
+                <div className="mt-3">{scoringPanel}</div>
+              </div>
+              <div className="flex-1">
+                {!roundRunning && (
+                  <p className="mb-3 px-2 py-2 text-[12px] text-[var(--color-ink-3)]">
+                    Super powers light up while a round is in flight.
+                  </p>
+                )}
+                <div
+                  className="grid gap-3 overflow-y-auto pr-1"
+                  style={{
+                    gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+                    maxHeight: "calc(90vh - 200px)",
+                  }}
+                >
+                  {BUTTONS.map(renderButton)}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center justify-end">
+              <span className="t-mono text-[10px] text-[var(--color-ink-3)]">
+                Esc or click outside to close
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -225,7 +318,6 @@ export function AccelerantsRail({
 function ScoringPanel({
   correctPts,
   wrongPts,
-  busy,
   onChange,
 }: {
   correctPts: number;
@@ -237,6 +329,8 @@ function ScoringPanel({
     const next = Math.max(1, Math.min(100, correctPts + delta));
     if (next !== correctPts) onChange({ correct_pts: next });
   };
+  // Bounds: -10..0. With per-wrong scoring (score = correct*correctPts +
+  // wrong*wrongPts), -10 is brutal but still useful as a punishing knob.
   const bumpWrong = (delta: number) => {
     const next = Math.max(-10, Math.min(0, wrongPts + delta));
     if (next !== wrongPts) onChange({ wrong_pts: next });
@@ -280,7 +374,7 @@ function ScoringPanel({
           <button
             type="button"
             onClick={() => bumpCorrect(-1)}
-            disabled={busy || correctPts <= 1}
+            disabled={correctPts <= 1}
             className="t-mono grid h-6 w-6 place-items-center rounded-md border-[1.5px] border-[var(--color-line)] bg-white text-[12px] font-bold disabled:opacity-50"
             aria-label="Decrease points per correct"
           >
@@ -295,7 +389,7 @@ function ScoringPanel({
           <button
             type="button"
             onClick={() => bumpCorrect(+1)}
-            disabled={busy || correctPts >= 100}
+            disabled={correctPts >= 100}
             className="t-mono grid h-6 w-6 place-items-center rounded-md border-[1.5px] border-[var(--color-line)] bg-white text-[12px] font-bold disabled:opacity-50"
             aria-label="Increase points per correct"
           >
@@ -314,7 +408,7 @@ function ScoringPanel({
           <button
             type="button"
             onClick={() => bumpWrong(-1)}
-            disabled={busy || wrongPts <= -10}
+            disabled={wrongPts <= -10}
             className="t-mono grid h-6 w-6 place-items-center rounded-md border-[1.5px] border-[var(--color-line)] bg-white text-[12px] font-bold disabled:opacity-50"
             aria-label="Increase penalty (more negative)"
           >
@@ -331,7 +425,7 @@ function ScoringPanel({
           <button
             type="button"
             onClick={() => bumpWrong(+1)}
-            disabled={busy || wrongPts >= 0}
+            disabled={wrongPts >= 0}
             className="t-mono grid h-6 w-6 place-items-center rounded-md border-[1.5px] border-[var(--color-line)] bg-white text-[12px] font-bold disabled:opacity-50"
             aria-label="Decrease penalty (toward 0)"
           >

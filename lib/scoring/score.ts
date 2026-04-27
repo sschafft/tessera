@@ -28,15 +28,29 @@ export interface ScoreBreakdown {
 }
 
 /**
+ * Rotational symmetry per shape: how many distinct visual orientations
+ * a piece has out of the four 90° steps the canvas permits. Squares
+ * (and hexagons) look the same at every rotation, so any rot value
+ * collapses to 0. Rhombus has 2-fold symmetry: rot 0/2 are visually
+ * the same, as are 1/3. Triangles, trapezoids, and pentagons orient
+ * meaningfully at every step.
+ */
+function normalizeRot(shape: string, rot: number): number {
+  if (shape === "sq" || shape === "hex") return 0;
+  if (shape === "rhomb") return ((rot % 2) + 2) % 2;
+  return ((rot % 4) + 4) % 4;
+}
+
+/**
  * Compute the per-pair-round score:
- *   score = correctPts * correct
- *           + (wrong > 0 ? wrongPts : 0)
+ *   score = correctPts * correct + wrongPts * wrong
  *
- * Note that the wrong-penalty is FLAT — one application no matter how
- * many wrong placements there are. The GM-tunable `wrongPts` defaults
- * to 0; flipping it to -1 via the scoring super-power makes attempting
- * carry a small cost while still letting a single correct placement
- * net positive (10 + -1 = 9).
+ * Wrong placements scale linearly so a builder who blankets the canvas
+ * doesn't get a free ride. `wrongPts` is the per-wrong penalty (0 to
+ * disable, negative to punish). With correctPts=10 and wrongPts=-1, a
+ * 4-correct / 6-wrong attempt nets 40 - 6 = 34. Scores are intentionally
+ * NOT clamped at 0 — the GM can tune wrongPts down to push aggressive
+ * guessers into negative territory.
  */
 export function scorePlacements(
   placements: Array<{
@@ -56,7 +70,8 @@ export function scorePlacements(
     q: number;
     r: number;
     rot: number;
-  }) => `${g.shape}|${g.color}|${g.q},${g.r}|${g.rot}`;
+  }) =>
+    `${g.shape}|${g.color}|${g.q},${g.r}|${normalizeRot(g.shape, g.rot)}`;
   const goalSet = new Set(goal.map(goalKey));
 
   let correct = 0;
@@ -76,9 +91,8 @@ export function scorePlacements(
     };
   });
 
-  const base = config.correctPts * correct;
+  const score = config.correctPts * correct + config.wrongPts * wrong;
   const penaltyApplied = wrong > 0 && config.wrongPts !== 0;
-  const score = penaltyApplied ? base + config.wrongPts : base;
 
   return {
     correct,

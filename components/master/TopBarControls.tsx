@@ -22,8 +22,8 @@ export interface TopBarControlsProps {
   actionError: string | null;
   /** Whether at least one pair exists — used to explain a disabled Start. */
   pairsCount: number;
-  /** Start the next round with the chosen complexity (1..8). */
-  onStart: (complexity?: number) => void;
+  /** Start the next round with the chosen complexity (1..8) and duration in seconds. */
+  onStart: (complexity?: number, durationSeconds?: number) => void;
   onEnd: () => void;
   onEndGame: () => void;
   /** Add seconds to the running round timer. */
@@ -70,6 +70,34 @@ export function TopBarControls({
   }, [startComplexityDefault]);
   const bumpComplexity = (delta: number) =>
     setStartComplexity((c) => Math.max(1, Math.min(8, c + delta)));
+
+  // Free-text round duration. The text input accepts plain minutes
+  // ("5", "2.5") or m:ss ("5:30"); we parse to seconds at submit time
+  // and let the server clamp anything < 60s back to the configured
+  // default.
+  const defaultMinutes = Math.max(1, Math.round(durationSeconds / 60));
+  const [durationText, setDurationText] = useState<string>(
+    String(defaultMinutes),
+  );
+  useEffect(() => {
+    setDurationText(String(Math.max(1, Math.round(durationSeconds / 60))));
+  }, [durationSeconds]);
+  function parseDurationSeconds(input: string): number | null {
+    const trimmed = input.trim();
+    if (!trimmed) return null;
+    const colon = trimmed.match(/^(\d+):(\d{1,2})$/);
+    if (colon) {
+      const m = parseInt(colon[1]!, 10);
+      const s = parseInt(colon[2]!, 10);
+      if (Number.isFinite(m) && Number.isFinite(s) && s < 60) {
+        return m * 60 + s;
+      }
+      return null;
+    }
+    const num = parseFloat(trimmed);
+    if (!Number.isFinite(num) || num <= 0) return null;
+    return Math.round(num * 60);
+  }
 
   // Auto-fire end-round when timer hits 0 while running. The endpoint
   // is idempotent so multiple clients firing is harmless.
@@ -205,10 +233,45 @@ export function TopBarControls({
                 +
               </button>
             </div>
+            <label
+              className="t-mono flex items-center gap-1 rounded-full bg-[var(--color-paper-2)] px-2 py-1 text-[11px] font-bold"
+              title="Round duration — minutes, or m:ss (e.g. 2:30). Server enforces a 60s minimum."
+            >
+              <span style={{ color: "var(--color-ink-3)" }}>duration</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={durationText}
+                onChange={(e) => setDurationText(e.target.value)}
+                onBlur={(e) => {
+                  const parsed = parseDurationSeconds(e.target.value);
+                  if (parsed === null) {
+                    setDurationText(
+                      String(Math.max(1, Math.round(durationSeconds / 60))),
+                    );
+                  }
+                }}
+                disabled={busy}
+                className="t-mono rounded-md bg-white px-2 py-0.5 text-[11px] font-bold text-[var(--color-ink)] outline-none disabled:opacity-50"
+                style={{
+                  border: "1.5px solid var(--color-line)",
+                  width: 56,
+                  textAlign: "center",
+                }}
+                aria-label="Round duration in minutes"
+              />
+              <span style={{ color: "var(--color-ink-3)" }}>min</span>
+            </label>
             <button
               type="button"
               className="t-btn t-btn--primary t-btn--sm disabled:opacity-50"
-              onClick={() => onStart(startComplexity)}
+              onClick={() => {
+                const parsed = parseDurationSeconds(durationText);
+                onStart(
+                  startComplexity,
+                  parsed !== null ? parsed : undefined,
+                );
+              }}
               disabled={!canStart || busy}
               title={canStart ? undefined : "Allocate at least one pair first."}
             >
