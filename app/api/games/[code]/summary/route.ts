@@ -140,6 +140,10 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       const extras = Math.max(0, placed - correct);
       return {
         pair_id: pair.id,
+        // Self-chosen pair name surfaces on the leaderboard when set;
+        // null when the pair never named themselves (UI falls back to
+        // the participant pair label).
+        display_name: pair.display_name,
         builder: builder?.display_name ?? null,
         guider: guider?.display_name ?? null,
         correct,

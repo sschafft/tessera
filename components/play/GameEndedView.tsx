@@ -12,6 +12,8 @@ export interface GameEndedViewProps {
 
 interface PairSummary {
   pair_id: string;
+  /** Self-chosen pair name (e.g. "The Pelicans"); null when unnamed. */
+  display_name: string | null;
   builder: string | null;
   guider: string | null;
   correct: number;
@@ -109,7 +111,9 @@ export function GameEndedView({ code, workshopName }: GameEndedViewProps) {
                       {i + 1}
                     </span>
                     <span className="flex-1 text-[14px] font-bold">
-                      {p.builder ?? "?"} ↔ {p.guider ?? "?"}
+                      {p.display_name && p.display_name.length > 0
+                        ? p.display_name
+                        : `${p.builder ?? "?"} ↔ ${p.guider ?? "?"}`}
                     </span>
                     <span
                       className="t-display text-[20px] font-bold"
