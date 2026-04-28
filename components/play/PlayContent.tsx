@@ -12,6 +12,7 @@ import {
   playTimePressure,
 } from "@/lib/sound";
 import { useGameEvents } from "@/lib/realtime/useGameEvents";
+import { SuperPowerToast } from "./SuperPowerToast";
 
 export interface PlacedPiece {
   id: string;
@@ -284,6 +285,7 @@ export function PlayContent({ code, initial }: PlayContentProps) {
       <main className="relative flex flex-1 overflow-hidden">
         {renderBody(state)}
       </main>
+      <SuperPowerToast gameId={state.game_id} />
       {sessionLost && (
         <SessionLostBanner code={code} />
       )}

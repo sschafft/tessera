@@ -534,7 +534,18 @@ export function MasterContent({
         roundCount={roundCount}
         complexity={round?.complexity ?? defaultComplexity}
         round={round}
-        durationSeconds={round?.duration_seconds ?? initialDurationSeconds}
+        // While a round is running, surface its current duration (incl.
+        // any +30s/+1m extensions) so the GM sees the live timer truth.
+        // BETWEEN rounds, fall back to the game's configured default —
+        // playtest 2026-04-28 caught a bug where extending round 1 by
+        // +1m bumped the round-2 duration default from 8 to 9 min,
+        // which read as the extension silently sticking past the round
+        // it was scoped to.
+        durationSeconds={
+          round && round.status === "running"
+            ? round.duration_seconds
+            : initialDurationSeconds
+        }
         canStart={
           pairs.length > 0 &&
           (round === null ||
