@@ -71,15 +71,19 @@ export async function pickBrief(input: OrchestrateInput): Promise<PickedBrief> {
       });
       if (reservation.ok) {
         try {
-          return await generateBriefViaGemini({
+          const brief = await generateBriefViaGemini({
             role: input.role,
             complexity: input.complexity,
             exclude_titles: input.exclude_titles,
           });
+          console.info(
+            `[briefs] gemini ok role=${input.role} title="${brief.title.slice(0, 40)}"`,
+          );
+          return brief;
         } catch (err) {
           geminiFailReason = err instanceof Error ? err.message : String(err);
           console.warn(
-            `[briefs] gemini call failed: ${geminiFailReason}`,
+            `[briefs] gemini call failed role=${input.role}: ${geminiFailReason}`,
           );
         }
       } else {

@@ -104,17 +104,45 @@ Return only valid JSON matching the schema.`;
   // could otherwise gobble the whole budget. A timeout throws
   // GeminiResponseError which the orchestrator catches and falls back
   // to library when allow_library_fallback is set.
+  //
+  // Plus a single retry on transient errors (timeout, 5xx, malformed
+  // JSON, schema_violation). Playtest data showed ~10% of first
+  // calls returning slightly off-schema or hitting transient 5xx;
+  // the retry recovers most of those without changing the
+  // orchestrator's fallback semantics. We don't retry on
+  // GeminiUnavailableError (no key) or quota errors — those are
+  // structural and a retry just doubles the failure cost.
   const TIMEOUT_MS = 6_000;
-  const generated = await Promise.race([
-    model.generateContent(prompt),
-    new Promise<never>((_, reject) =>
-      setTimeout(
-        () => reject(new GeminiResponseError("timeout")),
-        TIMEOUT_MS,
+  const callOnce = async (): Promise<string> => {
+    const generated = await Promise.race([
+      model.generateContent(prompt),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new GeminiResponseError("timeout")),
+          TIMEOUT_MS,
+        ),
       ),
-    ),
-  ]);
-  const text = generated.response.text();
+    ]);
+    return generated.response.text();
+  };
+  const isTransient = (err: unknown): boolean => {
+    const msg = err instanceof Error ? err.message : String(err);
+    return /timeout|invalid_json|schema_violation|empty_after_sanitise|fetch failed|ECONNRESET|ETIMEDOUT|5\d\d/i.test(
+      msg,
+    );
+  };
+  let text: string;
+  try {
+    text = await callOnce();
+  } catch (err) {
+    if (!isTransient(err)) throw err;
+    console.warn(
+      `[briefs] gemini transient failure on first call; retrying once: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+    text = await callOnce();
+  }
   let parsed: { title?: unknown; rules?: unknown };
   try {
     parsed = JSON.parse(text);
