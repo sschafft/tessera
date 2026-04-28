@@ -4,6 +4,8 @@ import { readSessionForGame } from "@/lib/auth/session";
 import { getRepository } from "@/lib/game/getRepository";
 import { scorePlacements } from "@/lib/scoring/score";
 import type { GoalPattern } from "@/lib/pattern/types";
+import { isGoogleConfigured } from "@/lib/google/oauth";
+import { getSession as getGoogleSession } from "@/lib/google/tokenStore";
 
 export const runtime = "nodejs";
 
@@ -150,6 +152,17 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       builder: game.builder_brief_on,
       guider: game.guider_brief_on,
     },
+    // Per-pair breakouts feature state. `configured` reflects whether
+    // GOOGLE_OAUTH_CLIENT_ID is set on the deployment; `enabled`
+    // reflects the host-form toggle; `google_connected` says whether
+    // we have valid OAuth tokens stored for this game.
+    breakouts: {
+      configured: isGoogleConfigured(),
+      enabled: game.breakouts_enabled,
+      google_connected: game.breakouts_enabled
+        ? (await getGoogleSession(game.id)) !== null
+        : false,
+    },
     participants,
     pairs: pairs.map((p) => ({
       id: p.id,
@@ -158,6 +171,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       created_at: p.created_at,
       briefs: briefsByPair.get(p.id) ?? { builder: null, guider: null },
       progress: progressByPair.get(p.id) ?? null,
+      breakout_call_url: p.breakout_call_url,
     })),
     round: round
       ? {

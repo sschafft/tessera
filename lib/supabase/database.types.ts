@@ -144,6 +144,7 @@ export type Database = {
       }
       games: {
         Row: {
+          breakouts_enabled: boolean
           builder_brief_custom: Json | null
           builder_brief_on: boolean
           builder_brief_source: Database["public"]["Enums"]["brief_source_t"]
@@ -172,6 +173,7 @@ export type Database = {
           workshop_name: string
         }
         Insert: {
+          breakouts_enabled?: boolean
           builder_brief_custom?: Json | null
           builder_brief_on?: boolean
           builder_brief_source?: Database["public"]["Enums"]["brief_source_t"]
@@ -200,6 +202,7 @@ export type Database = {
           workshop_name: string
         }
         Update: {
+          breakouts_enabled?: boolean
           builder_brief_custom?: Json | null
           builder_brief_on?: boolean
           builder_brief_source?: Database["public"]["Enums"]["brief_source_t"]
@@ -243,6 +246,44 @@ export type Database = {
           day?: string
         }
         Relationships: []
+      }
+      gm_google_tokens: {
+        Row: {
+          access_token_enc: string
+          created_at: string
+          expires_at: string
+          game_id: string
+          refresh_token_enc: string | null
+          refreshed_at: string | null
+          scope: string
+        }
+        Insert: {
+          access_token_enc: string
+          created_at?: string
+          expires_at: string
+          game_id: string
+          refresh_token_enc?: string | null
+          refreshed_at?: string | null
+          scope: string
+        }
+        Update: {
+          access_token_enc?: string
+          created_at?: string
+          expires_at?: string
+          game_id?: string
+          refresh_token_enc?: string | null
+          refreshed_at?: string | null
+          scope?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gm_google_tokens_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: true
+            referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pair_rounds: {
         Row: {
@@ -300,6 +341,8 @@ export type Database = {
       }
       pairs: {
         Row: {
+          breakout_call_url: string | null
+          breakout_event_id: string | null
           builder_id: string | null
           created_at: string
           display_name: string | null
@@ -308,6 +351,8 @@ export type Database = {
           id: string
         }
         Insert: {
+          breakout_call_url?: string | null
+          breakout_event_id?: string | null
           builder_id?: string | null
           created_at?: string
           display_name?: string | null
@@ -316,6 +361,8 @@ export type Database = {
           id?: string
         }
         Update: {
+          breakout_call_url?: string | null
+          breakout_event_id?: string | null
           builder_id?: string | null
           created_at?: string
           display_name?: string | null

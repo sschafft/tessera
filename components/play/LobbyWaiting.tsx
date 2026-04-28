@@ -4,6 +4,8 @@ export interface LobbyWaitingProps {
   workshopName: string;
   videoCallUrl: string | null;
   whiteboardUrl: string | null;
+  /** Per-pair breakout link, when one has been minted. */
+  breakoutCallUrl?: string | null;
   /** Whether a round is currently in flight without this player. */
   roundInFlight?: boolean;
 }
@@ -12,9 +14,10 @@ export function LobbyWaiting({
   workshopName,
   videoCallUrl,
   whiteboardUrl,
+  breakoutCallUrl,
   roundInFlight = false,
 }: LobbyWaitingProps) {
-  const hasCall = Boolean(videoCallUrl);
+  const hasCall = Boolean(breakoutCallUrl || videoCallUrl);
   return (
     <section className="m-auto flex max-w-[480px] flex-col items-center gap-5 px-6 text-center">
       <div className="t-mono text-[11px] tracking-widest text-[var(--color-ink-3)]">
@@ -47,6 +50,7 @@ export function LobbyWaiting({
       <JoinCallCta
         videoCallUrl={videoCallUrl}
         whiteboardUrl={whiteboardUrl}
+        breakoutCallUrl={breakoutCallUrl ?? null}
       />
     </section>
   );

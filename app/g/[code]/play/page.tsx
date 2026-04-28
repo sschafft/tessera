@@ -100,7 +100,11 @@ export default async function PlayPage({ params }: PageProps) {
         }
       : null,
     pair: pair
-      ? { id: pair.id, display_name: pair.display_name ?? null }
+      ? {
+          id: pair.id,
+          display_name: pair.display_name ?? null,
+          breakout_call_url: pair.breakout_call_url ?? null,
+        }
       : null,
     round: round
       ? {
