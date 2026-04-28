@@ -903,6 +903,14 @@ In dependency order (17 total as of 2026-04-28):
     only when the game's provider is `google_meet`). Backs the
     in-person/remote toggle and the Jitsi provider option in the
     host form.
+19. `brief_library_v2` — adds 8 briefs in the styles surfaced by
+    the 2026-04-28 playtest (silly invented vocabularies, acronym
+    shorthand, themed jargon — pirate's log, star captain, cooking
+    show host, telegraph operator, plus compass swap + diagonal
+    logic builder briefs) and softens two over-stacked existing
+    briefs (`Three-step delay` and `Reverse perspective`) from four
+    simultaneous transformations to two. The library now has ~35
+    entries spanning the three complexity buckets.
 
 ### 15.5 New routes shipped beyond §10
 
