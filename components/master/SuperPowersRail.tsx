@@ -37,12 +37,17 @@ const TRIGGER_LABELS: Partial<Record<SuperPowerKind, string>> = {
 };
 
 const BUTTONS: RailButtonSpec[] = [
+  // Inline top-5 first, in the order the GM dashboard shows them.
+  // Picked from playtest 2026-04-28 + UX-study read: these are the
+  // mechanics that actually nudge a stuck pair without paving over
+  // the lesson. The remaining mechanics live behind "More super
+  // powers" → fullscreen modal so the rail stays scannable.
   {
     kind: "prototype",
     icon: "🔮",
     color: "blue",
     title: "Prototype unlock",
-    sub: "Show builder a 5-second glimpse of the goal.",
+    sub: "Show builder a 3–15 s glimpse of the goal.",
   },
   {
     kind: "reveal_briefs",
@@ -52,11 +57,11 @@ const BUTTONS: RailButtonSpec[] = [
     sub: "Both players see each other's hidden brief.",
   },
   {
-    kind: "agile_share",
-    icon: "↻",
-    color: "orange",
-    title: "Agile share",
-    sub: "Surface 3 builder previews to the guider.",
+    kind: "requirement_change",
+    icon: "✎",
+    color: "blue",
+    title: "Requirement change",
+    sub: "Mutate one element in the goal pattern.",
   },
   {
     kind: "time_pressure",
@@ -64,6 +69,29 @@ const BUTTONS: RailButtonSpec[] = [
     color: "red",
     title: "Time pressure",
     sub: "−3:00 from the round timer.",
+  },
+  {
+    kind: "randomizer",
+    icon: "🎲",
+    color: "orange",
+    title: "Randomizer",
+    sub: "Reset the pair's goal pattern.",
+  },
+  // Below the fold — only rendered in the fullscreen "More super
+  // powers" modal.
+  {
+    kind: "agile_share",
+    icon: "↻",
+    color: "orange",
+    title: "Agile share",
+    sub: "Unlock a builder snapshot for the guider (one per fire).",
+  },
+  {
+    kind: "test_build",
+    icon: "✓",
+    color: "green",
+    title: "Test build",
+    sub: "Flip per-piece correctness on for the builder + observers.",
   },
   {
     kind: "change_builder_brief",
@@ -80,20 +108,6 @@ const BUTTONS: RailButtonSpec[] = [
     sub: "Re-roll the guider's hidden constraint.",
   },
   {
-    kind: "randomizer",
-    icon: "🎲",
-    color: "orange",
-    title: "Randomizer",
-    sub: "Reset the pair's goal pattern.",
-  },
-  {
-    kind: "requirement_change",
-    icon: "✎",
-    color: "blue",
-    title: "Requirement change",
-    sub: "Mutate one element in the goal pattern.",
-  },
-  {
     kind: "harder",
     icon: "▲",
     color: "red",
@@ -108,6 +122,17 @@ const BUTTONS: RailButtonSpec[] = [
     sub: "Re-roll the goal at −1 complexity.",
   },
 ];
+
+// Inline rail surfaces only the top-5; the rest live behind a
+// "More super powers" button that opens the fullscreen modal.
+const TOP_KINDS = new Set<SuperPowerKind>([
+  "prototype",
+  "reveal_briefs",
+  "requirement_change",
+  "time_pressure",
+  "randomizer",
+]);
+const TOP_BUTTONS = BUTTONS.filter((b) => TOP_KINDS.has(b.kind));
 
 export interface SuperPowersRailProps {
   events: SuperPowerEvent[];
@@ -333,7 +358,18 @@ export function SuperPowersRail({
             Super powers light up while a round is in flight.
           </p>
         )}
-        {BUTTONS.map(renderButton)}
+        {TOP_BUTTONS.map(renderButton)}
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="t-mono mt-1 flex w-full items-center justify-center gap-2 rounded-[12px] border-[1.5px] border-dashed border-[var(--color-line)] bg-white px-3 py-3 text-[12px] font-bold uppercase tracking-wide text-[var(--color-ink-2)] transition-colors hover:border-[var(--color-ink-3)]"
+          aria-label="Open all super powers"
+        >
+          <span aria-hidden style={{ fontSize: 14 }}>
+            ⤢
+          </span>
+          More super powers ({BUTTONS.length - TOP_BUTTONS.length}) →
+        </button>
       </div>
 
       {expanded && (

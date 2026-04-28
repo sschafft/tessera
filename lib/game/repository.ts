@@ -460,6 +460,15 @@ export interface GameRepository {
 
   setBriefsRevealed(pair_round_id: string): Promise<void>;
 
+  /**
+   * Grant the builder one more agile-share unlock. Fired by the
+   * Agile share super-power on each trigger — the builder's
+   * "Share progress" button is gated by `shares_remaining > 0`,
+   * which now starts at 0 by default. Atomic increment so two
+   * back-to-back trigger requests don't race.
+   */
+  incrementSharesRemaining(pair_round_id: string): Promise<number>;
+
   setTestEnabled(pair_round_id: string, enabled: boolean): Promise<void>;
 
   updateGoalPattern(
