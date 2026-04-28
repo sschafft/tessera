@@ -9,19 +9,35 @@ const REPO_URL = "https://github.com/sschafft/tessera";
 export function OssFooter() {
   return (
     <footer className="relative z-10 mx-auto mt-12 max-w-[680px] border-t border-[var(--color-line)] px-6 py-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <p className="text-[12px] text-[var(--color-ink-3)]">
           Open source · runs on free-tier infra · fork to self-host.
         </p>
-        <Link
-          href={REPO_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[var(--color-ink-2)] underline-offset-2 hover:underline"
-        >
-          <GithubIcon />
-          GitHub
-        </Link>
+        <nav className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <Link
+            href="/privacy"
+            className="text-[12px] font-medium text-[var(--color-ink-3)] underline-offset-2 hover:text-[var(--color-ink-2)] hover:underline"
+          >
+            Privacy
+          </Link>
+          <span className="text-[10px] text-[var(--color-ink-3)]">·</span>
+          <Link
+            href="/terms"
+            className="text-[12px] font-medium text-[var(--color-ink-3)] underline-offset-2 hover:text-[var(--color-ink-2)] hover:underline"
+          >
+            Terms
+          </Link>
+          <span className="text-[10px] text-[var(--color-ink-3)]">·</span>
+          <Link
+            href={REPO_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[var(--color-ink-2)] underline-offset-2 hover:underline"
+          >
+            <GithubIcon />
+            GitHub
+          </Link>
+        </nav>
       </div>
     </footer>
   );
