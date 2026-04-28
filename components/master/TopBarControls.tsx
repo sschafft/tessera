@@ -204,26 +204,26 @@ export function TopBarControls({
           >
             {busy ? "Ending…" : "End round"}
           </button>
-        ) : allRoundsDone ? (
-          <div className="flex items-center gap-2">
-            <span
-              className="t-mono rounded-full bg-[var(--color-tint-yellow)] px-3 py-1.5 text-[11px] font-bold"
-              style={{ color: "#7a5b00" }}
-              title={`All ${roundCount} planned round${roundCount === 1 ? "" : "s"} have finished.`}
-            >
-              all rounds done
-            </span>
-            <button
-              type="button"
-              className="t-btn t-btn--primary t-btn--sm disabled:opacity-50"
-              onClick={onEndGame}
-              disabled={busy}
-            >
-              {busy ? "Ending…" : "End game →"}
-            </button>
-          </div>
         ) : (
-          <div className="flex items-center gap-1.5">
+          // Single between-rounds cluster covering both "more rounds
+          // planned" and "all rounds done" states. The original layout
+          // had two separate End-game CTAs (a prominent button when
+          // allRoundsDone + a small underlined link otherwise) and no
+          // way to start a bonus round once the planned count was
+          // reached. Backend has no hard cap on round count — a
+          // facilitator can keep going as long as the room is engaged
+          // — so the UI surfaces a single "Start round N" CTA in
+          // either state and a single quiet "End game" affordance.
+          <div className="flex items-center gap-2">
+            {allRoundsDone && (
+              <span
+                className="t-mono rounded-full bg-[var(--color-tint-yellow)] px-3 py-1.5 text-[11px] font-bold"
+                style={{ color: "#7a5b00" }}
+                title={`All ${roundCount} planned round${roundCount === 1 ? "" : "s"} have finished — bonus rounds are still allowed.`}
+              >
+                all planned rounds done
+              </span>
+            )}
             <div
               className="t-mono flex items-center gap-1 rounded-full bg-[var(--color-paper-2)] px-2 py-1 text-[11px] font-bold"
               title="Round complexity"
@@ -297,21 +297,21 @@ export function TopBarControls({
             >
               {busy
                 ? "Starting…"
-                : isRoundEnded
-                  ? `Start round ${nextIdx}`
-                  : `Start round ${nextIdx}`}
+                : allRoundsDone
+                  ? `Start bonus round ${nextIdx} →`
+                  : `Start round ${nextIdx} →`}
+            </button>
+            <button
+              type="button"
+              onClick={onEndGame}
+              disabled={busy}
+              className="t-mono rounded-full bg-white px-3 py-1.5 text-[11px] font-bold text-[var(--color-ink-2)] disabled:opacity-50"
+              style={{ border: "1.5px solid var(--color-line)" }}
+              title="Close the game out — final leaderboard + debrief view."
+            >
+              End game
             </button>
           </div>
-        )}
-
-        {!gameEnded && !isRunning && (
-          <button
-            type="button"
-            onClick={onEndGame}
-            className="t-mono text-[10px] text-[var(--color-ink-3)] underline"
-          >
-            end game
-          </button>
         )}
       </div>
     </header>
