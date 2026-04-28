@@ -18,6 +18,7 @@ export function GuiderView({ state }: GuiderViewProps) {
     state.brief?.title ?? (state.brief ? "(present)" : null);
   const [briefOpened, setBriefOpened] = useState(briefSignature === null);
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- re-arms the brief gate when a super-power swaps the brief mid-round (mirrors BuilderView).
     setBriefOpened(briefSignature === null);
   }, [briefSignature]);
 

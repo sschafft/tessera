@@ -35,20 +35,21 @@ export function PairNameBadge({
   // Optimistic value: shown instead of `displayName` from props until
   // the next snapshot refetch echoes the new name back. Without this,
   // the PATCH succeeds but the badge keeps rendering the old name
-  // until the realtime broadcast (or the 30s poll) carries the new
+  // until the realtime broadcast (or the 10s poll) carries the new
   // value through.
   const [optimisticName, setOptimisticName] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Optimistic GC — drop the local value once props echo it back, OR
+  // when the server returns a different name (e.g. another player
+  // renamed the pair concurrently; server wins). This is the
+  // optimistic-UI-with-server-reconciliation canon from
+  // design_patterns.md > "Optimistic UI with server reconciliation":
+  // GC by content match, not by request id.
   useEffect(() => {
-    setDraft(displayName ?? "");
-  }, [displayName]);
-
-  // GC: drop the optimistic value once the server-side state carries
-  // it back (or carries something different through, in which case
-  // server wins).
-  useEffect(() => {
-    if (optimisticName !== null && displayName === optimisticName) {
+    if (optimisticName === null) return;
+    if (displayName === optimisticName) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- canonical optimistic-GC; clears the local override once the server echoes it back.
       setOptimisticName(null);
     }
   }, [displayName, optimisticName]);
@@ -56,6 +57,11 @@ export function PairNameBadge({
   useEffect(() => {
     if (editing) inputRef.current?.focus();
   }, [editing]);
+
+  const enterEdit = () => {
+    setDraft(displayName ?? "");
+    setEditing(true);
+  };
 
   const save = async () => {
     if (busy) return;
@@ -148,7 +154,7 @@ export function PairNameBadge({
   return (
     <button
       type="button"
-      onClick={() => setEditing(true)}
+      onClick={enterEdit}
       className="flex items-center gap-2 rounded-full px-3 py-1.5 transition-colors hover:bg-white"
       style={{
         background: named ? "var(--color-paper-2)" : "var(--color-tint-yellow)",

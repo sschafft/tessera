@@ -66,6 +66,7 @@ export function TopBarControls({
   const [startComplexity, setStartComplexity] = useState(startComplexityDefault);
   // Re-seed when the underlying default changes (new round, replay).
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncs the local "starting complexity" stepper when the GM starts a new round and the default shifts.
     setStartComplexity(startComplexityDefault);
   }, [startComplexityDefault]);
   const bumpComplexity = (delta: number) =>
@@ -80,6 +81,7 @@ export function TopBarControls({
     String(defaultMinutes),
   );
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- same shape: re-seeds the duration text input when the GM-tunable default changes.
     setDurationText(String(Math.max(1, Math.round(durationSeconds / 60))));
   }, [durationSeconds]);
   function parseDurationSeconds(input: string): number | null {
