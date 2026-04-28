@@ -27,10 +27,6 @@ export async function enableAudio(): Promise<void> {
   }
 }
 
-export function isAudioEnabled(): boolean {
-  return enabled;
-}
-
 export function playRoundEnd(): void {
   if (!enabled || !synth) return;
   const now = Tone.now();

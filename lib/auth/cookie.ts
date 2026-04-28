@@ -1,5 +1,4 @@
 import type { ResponseCookies } from "next/dist/compiled/@edge-runtime/cookies";
-import type { ReadonlyRequestCookies } from "next/dist/server/web/spec-extension/adapters/request-cookies";
 
 /**
  * Cookie strategy (per TDD §5.1):
@@ -21,7 +20,7 @@ export interface SetCookieOptions {
 
 const FOUR_HOURS = 60 * 60 * 4;
 
-export function sessionCookieAttributes(opts: SetCookieOptions = {}) {
+function sessionCookieAttributes(opts: SetCookieOptions = {}) {
   return {
     httpOnly: true,
     secure: opts.secure ?? process.env.NODE_ENV === "production",
@@ -38,21 +37,4 @@ export function setSessionCookie(
   opts: SetCookieOptions = {},
 ): void {
   cookies.set(cookieName(code), token, sessionCookieAttributes(opts));
-}
-
-export function readSessionCookie(
-  cookies: ReadonlyRequestCookies | ResponseCookies,
-  code: string,
-): string | undefined {
-  return cookies.get(cookieName(code))?.value;
-}
-
-export function clearSessionCookie(
-  cookies: ResponseCookies,
-  code: string,
-): void {
-  cookies.set(cookieName(code), "", {
-    ...sessionCookieAttributes(),
-    maxAge: 0,
-  });
 }

@@ -19,7 +19,7 @@ export type TileColor =
   | "pink"
   | "teal";
 
-export const PALETTE: Record<TileColor, string> = {
+const PALETTE: Record<TileColor, string> = {
   red: "var(--color-t-red)",
   orange: "var(--color-t-orange)",
   yellow: "var(--color-t-yellow)",

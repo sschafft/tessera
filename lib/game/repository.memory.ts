@@ -47,7 +47,7 @@ export class SnapshotShareCapError extends Error {
  * In-memory GameRepository. Used during early local dev before Supabase
  * env vars are set. Per-process, no persistence across server restarts.
  */
-export class MemoryGameRepository implements GameRepository {
+class MemoryGameRepository implements GameRepository {
   private games = new Map<string, GameRecord>();
   private participants = new Map<string, ParticipantRecord>();
   private pairs = new Map<string, PairRecord>();
@@ -55,7 +55,7 @@ export class MemoryGameRepository implements GameRepository {
   private pairRounds = new Map<string, PairRoundRecord>();
   private placements = new Map<string, PlacementRecord>();
   private briefs = new Map<string, BriefRecord>();
-  private accelerantEvents = new Map<
+  private superPowerEvents = new Map<
     string,
     {
       id: string;
@@ -273,8 +273,8 @@ export class MemoryGameRepository implements GameRepository {
     for (const [id, p] of this.placements.entries()) {
       if (pairRoundIds.has(p.pair_round_id)) this.placements.delete(id);
     }
-    for (const [id, e] of this.accelerantEvents.entries()) {
-      if (e.round_id === round_id) this.accelerantEvents.delete(id);
+    for (const [id, e] of this.superPowerEvents.entries()) {
+      if (e.round_id === round_id) this.superPowerEvents.delete(id);
     }
     this.rounds.delete(round_id);
   }
@@ -509,18 +509,19 @@ export class MemoryGameRepository implements GameRepository {
     );
   }
 
-  async listLibraryBriefs(_input: {
+  // The in-memory backend has no library — Supabase is authoritative.
+  // Returning [] forces the orchestrator to fall back to a built-in
+  // emergency brief if it ever runs against the in-memory store.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async listLibraryBriefs(_: {
     role: BriefRole;
     complexity: number;
     exclude_titles?: string[];
   }): Promise<LibraryBriefRecord[]> {
-    // The in-memory backend has no library — Supabase is authoritative.
-    // Returning [] forces the orchestrator to fall back to a built-in
-    // emergency brief if it ever runs against the in-memory store.
     return [];
   }
 
-  async createAccelerantEvent(input: {
+  async createSuperPowerEvent(input: {
     round_id: string;
     scope: "pair" | "all";
     pair_id: string | null;
@@ -536,11 +537,11 @@ export class MemoryGameRepository implements GameRepository {
       pair_id: input.pair_id,
       triggered_at: new Date().toISOString(),
     };
-    this.accelerantEvents.set(event.id, event);
+    this.superPowerEvents.set(event.id, event);
     return { id: event.id, triggered_at: event.triggered_at };
   }
 
-  async listAccelerantEvents(round_id: string): Promise<
+  async listSuperPowerEvents(round_id: string): Promise<
     Array<{
       id: string;
       kind: string;
@@ -549,7 +550,7 @@ export class MemoryGameRepository implements GameRepository {
       triggered_at: string;
     }>
   > {
-    return [...this.accelerantEvents.values()].filter(
+    return [...this.superPowerEvents.values()].filter(
       (e) => e.round_id === round_id,
     );
   }

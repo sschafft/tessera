@@ -7,7 +7,7 @@ import {
 } from "@/lib/realtime/useGameEvents";
 
 /**
- * Tiny transient toast that surfaces every accelerant + round
+ * Tiny transient toast that surfaces every super-power + round
  * trigger as it fires. Playtest #6 found that observers (and the
  * pair players themselves) often couldn't tell when a super-power
  * had been triggered on their pair — the GM clicked, something
@@ -19,7 +19,7 @@ import {
  */
 const KIND_COPY: Record<string, { icon: string; label: string; tint: string }> =
   {
-    accelerant_triggered: { icon: "⚡", label: "Super-power fired", tint: "purple" },
+    superpower_triggered: { icon: "⚡", label: "Super-power fired", tint: "purple" },
     round_started: { icon: "▶", label: "Round started", tint: "green" },
     round_extended: { icon: "+", label: "Time added", tint: "blue" },
     snapshot_shared: { icon: "↻", label: "Builder shared progress", tint: "orange" },
@@ -59,7 +59,7 @@ export function SuperPowerToast({ gameId }: SuperPowerToastProps) {
     const meta = KIND_COPY[detail.kind];
     if (!meta) return;
     let label = meta.label;
-    if (detail.kind === "accelerant_triggered") {
+    if (detail.kind === "superpower_triggered") {
       const kind = (detail.payload.kind as string | undefined) ?? "";
       const sub = SUPER_POWER_KINDS[kind];
       if (sub) label = sub;

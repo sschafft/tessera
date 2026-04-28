@@ -17,7 +17,7 @@ interface ScoringPayload {
 
 /**
  * GM-only patch for the game's scoring config. Driven by the scoring
- * super-power tile in AccelerantsRail. Bounds:
+ * tile in SuperPowersRail. Bounds:
  *   correct_pts: 1..100
  *   wrong_pts:   -10..0  (negative is the penalty; 0 turns it off)
  */

@@ -6,7 +6,7 @@ import type { TileColor } from "@/components/canvas/Tile";
 import { MasterLobby } from "./MasterLobby";
 import { PairsPanel } from "./PairsPanel";
 import { TopBarControls } from "./TopBarControls";
-import { AccelerantsRail, ScoringPanel } from "./AccelerantsRail";
+import { SuperPowersRail, ScoringPanel } from "./SuperPowersRail";
 import { EndGameModal } from "./EndGameModal";
 import { GeminiFallbackModal } from "./GeminiFallbackModal";
 import { GameEndedView } from "@/components/play/GameEndedView";
@@ -56,7 +56,7 @@ export interface LobbyRound {
   ended_at: string | null;
 }
 
-export interface AccelerantEvent {
+export interface SuperPowerEvent {
   kind: string;
   scope: "pair" | "all";
   pair_id: string | null;
@@ -82,7 +82,7 @@ interface LobbyResponse {
   participants: LobbyParticipant[];
   pairs: LobbyPair[];
   round: LobbyRound | null;
-  accelerant_events: AccelerantEvent[];
+  superpower_events: SuperPowerEvent[];
 }
 
 // Realtime broadcasts drive the freshness; this poll is a safety net
@@ -214,7 +214,7 @@ export function MasterContent({
       setBusy(true);
       setActionError(null);
       try {
-        const res = await fetch(`/api/games/${code}/accelerants`, {
+        const res = await fetch(`/api/games/${code}/superpowers`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ kind, scope, pair_id: pairId, payload }),
@@ -766,8 +766,8 @@ export function MasterContent({
             </main>
 
             <aside className="flex flex-col border-l border-[var(--color-line)] bg-white">
-              <AccelerantsRail
-                events={data?.accelerant_events ?? []}
+              <SuperPowersRail
+                events={data?.superpower_events ?? []}
                 roundRunning={round?.status === "running"}
                 focusedPair={focusedPair}
                 busy={busy}
