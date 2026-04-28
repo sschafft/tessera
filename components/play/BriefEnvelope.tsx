@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export interface BriefEnvelopeProps {
   role: "builder" | "guider";
@@ -58,7 +58,9 @@ export function BriefEnvelope({
   // Minimise: collapses to seal circle. Does NOT trigger onClose —
   // playtests showed the pair-name nudge popping when players just
   // wanted to get the brief out of the way, which felt unrelated.
-  // onClose only fires on the explicit × re-seal action.
+  // onClose only fires on the explicit × re-seal action OR an outside
+  // click on the open card (treated as the same gesture — see effect
+  // below).
   const handleMinimize = () => {
     setView("minimized");
     onMinimize?.();
@@ -67,6 +69,42 @@ export function BriefEnvelope({
     setView("sealed");
     onClose?.();
   };
+
+  // Outside-click sealing: when the open card is up AND this envelope
+  // owns an onClose callback (i.e. it's the player's own brief, not a
+  // partner brief revealed by the accelerant), treat a click anywhere
+  // outside it as a re-seal. Mirrors the × button so the pair-name
+  // nudge that GuiderView/BuilderView wire onto onClose fires on
+  // either gesture. Playtest 2026-04-27 surfaced the gap — players
+  // closed by clicking the canvas behind the envelope and never saw
+  // the naming prompt. Partner briefs intentionally don't get this
+  // behaviour (no onClose to fire) so glancing at the canvas while
+  // a partner brief is up doesn't snap it shut.
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (view !== "open") return;
+    if (!onClose) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const card = cardRef.current;
+      if (!card) return;
+      if (e.target instanceof Node && card.contains(e.target)) return;
+      handleSeal();
+    };
+    // Microtask delay so the click that opened the envelope (if it
+    // happened in the same tick) doesn't immediately fire the
+    // outside-click and re-seal it.
+    const id = window.setTimeout(() => {
+      window.addEventListener("pointerdown", onPointerDown);
+    }, 0);
+    return () => {
+      window.clearTimeout(id);
+      window.removeEventListener("pointerdown", onPointerDown);
+    };
+    // handleSeal closes over view + onClose; since we only attach the
+    // listener while view==='open', re-running on view change is the
+    // correct semantic.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, onClose]);
 
   if (view === "minimized") {
     return (
@@ -167,7 +205,11 @@ export function BriefEnvelope({
   }
 
   return (
-    <div className="t-card relative" style={{ width: 320, padding: 18 }}>
+    <div
+      ref={cardRef}
+      className="t-card relative"
+      style={{ width: 320, padding: 18 }}
+    >
       <div className="mb-2.5 flex items-center justify-between">
         <span
           className="t-mono"
