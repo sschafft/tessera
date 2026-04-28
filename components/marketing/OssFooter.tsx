@@ -8,23 +8,20 @@ const REPO_URL = "https://github.com/sschafft/tessera";
  */
 export function OssFooter() {
   return (
-    <footer className="relative z-10 mx-auto mt-12 max-w-[680px] border-t border-[var(--color-line)] px-6 py-10">
+    <footer className="relative z-10 mx-auto mt-12 max-w-[680px] border-t border-[var(--color-line)] px-6 py-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <p className="text-[13px] text-[var(--color-ink-3)]">
-          <b>Tessera is open source</b> · runs on the Vercel + Supabase free
-          tier · for production use, fork and self-host.
+        <p className="text-[12px] text-[var(--color-ink-3)]">
+          Open source · runs on free-tier infra · fork to self-host.
         </p>
-        <div className="flex items-center gap-3">
-          <Link
-            href={REPO_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[var(--color-ink)] underline-offset-2 hover:underline"
-          >
-            <GithubIcon />
-            GitHub
-          </Link>
-        </div>
+        <Link
+          href={REPO_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[var(--color-ink-2)] underline-offset-2 hover:underline"
+        >
+          <GithubIcon />
+          GitHub
+        </Link>
       </div>
     </footer>
   );

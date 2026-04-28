@@ -40,9 +40,7 @@ export default function HowItWorksPage() {
         describes the picture. The builder taps an empty cell on the grid to
         place the selected shape — taps an existing piece to enter Edit mode
         (move with another tap, rotate, delete). Neither side sees the
-        other&apos;s screen, but every placement reflects across the room
-        within ~200ms via realtime broadcast, with a 10-second polling loop
-        as the safety net.
+        other&apos;s screen.
       </p>
 
       <h2 className="t-display mt-6 text-[28px] font-bold tracking-tight">
@@ -61,12 +59,11 @@ export default function HowItWorksPage() {
       </p>
       <p>
         Briefs come from one of three sources, picked per side by the
-        facilitator at game-create time: a curated <b>library</b> (~33
-        hand-written entries bucketed by complexity), <b>custom</b> free-text
-        briefs the GM authors themselves to point the lesson at a specific
-        theme, or <b>AI-generated</b> via a provider router that tries OpenAI
-        first and falls back to Google&apos;s Gemini, then to the library.
-        Every option produces the same envelope on the player&apos;s screen.
+        facilitator at game-create time: a curated <b>library</b> of
+        hand-written entries, <b>custom</b> free-text briefs the GM
+        authors to point the lesson at a specific theme, or{" "}
+        <b>AI-generated</b> for fresh constraints every game. Every option
+        produces the same envelope on the player&apos;s screen.
       </p>
 
       <h2 className="t-display mt-6 text-[28px] font-bold tracking-tight">

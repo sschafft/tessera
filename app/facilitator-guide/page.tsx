@@ -19,39 +19,27 @@ export default function FacilitatorGuidePage() {
         <li>
           Pick a <b>complexity</b> from 1–8. Start at 3 if your team
           hasn&apos;t played before; bump to 5–6 once they get the rhythm.
-          The slider also drives the grid size (3×3 at c=1 up to 9×9 at
-          c=8) and the colour palette.
         </li>
         <li>
-          Pick a <b>round count</b> (1–5). Multi-round games are the
-          easiest way to teach the rules in round 1 then crank the
-          difficulty for round 2; the GM can override complexity per round
-          on the Start button.
+          Pick a <b>round count</b> (1–5). Multi-round is the easiest way
+          to teach the rules in round 1 and crank the difficulty for
+          round 2.
         </li>
         <li>
-          Decide on briefs <i>per side</i>. <b>Library</b> is the safe
-          default — ~33 hand-written entries shipped with the app. Pick{" "}
-          <b>Custom</b> when you want to point the lesson at a specific
-          theme (e.g. swap east/west to talk about how engineering and
-          design see the same thing differently). <b>AI-generated</b> is
-          unpredictable in a good way; the AI router tries OpenAI first
-          and falls back to Gemini, then library, so it works even if one
-          provider is rate-limited.
+          Decide on briefs per side. <b>Library</b> is the safe default.
+          Pick <b>Custom</b> when you want to point the lesson at a
+          specific theme. <b>AI-generated</b> is unpredictable in a good
+          way.
         </li>
         <li>
-          Set a video call link and (optionally) a Miro / FigJam board for
-          notes. Tessera doesn&apos;t do voice itself — pairs need an
-          external channel.
+          Set a video call link (Meet, Zoom, etc). Tessera doesn&apos;t
+          do voice — pairs need an external channel.
         </li>
         <li>
           <b>Save your host recovery URL.</b> The create modal shows it
-          once. If you close the tab without saving, that bookmark is your
-          only way back to the dashboard. The same goes for player
-          recovery URLs — every join shows one in a &ldquo;save this&rdquo;
-          modal so a participant whose cookie gets clobbered (multi-tab,
-          mobile foreground swap, browser crash) can paste it on{" "}
-          <span className="t-mono">/recover/&lt;code&gt;</span> to
-          reclaim their seat.
+          once. If you close the tab without saving, it&apos;s the only
+          way back to the dashboard. Players see the same kind of URL
+          when they join.
         </li>
       </ul>
 
