@@ -6,8 +6,8 @@
     "step_configs": {
       "play": {
         "activity": "runbook",
-        "agent": "claude-code",
-        "model": "claude-sonnet-4-6",
+        "agent": "codex",
+        "model": "gpt-5.4",
         "instruction_path": "init_params.instruction",
         "snapshot": "prism-playwright",
         "timeout_sec": 1800,

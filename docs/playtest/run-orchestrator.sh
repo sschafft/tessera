@@ -119,7 +119,7 @@ with open(f"{out_dir}/trajs.txt") as fh:
 api_key = os.environ["JETTY_API_KEY"]
 results = []
 for name, traj in trajs.items():
-    log_path = f"jettyio/tessera-playtest-scenario/0000/{traj}.runbook.0000.agent_claude-code.txt"
+    log_path = f"jettyio/tessera-playtest-scenario/0000/{traj}.runbook.0000.agent_codex.txt"
     log = subprocess.run(
         ["curl", "-sS", "-H", f"Authorization: Bearer {api_key}",
          f"https://flows-api.jetty.io/api/v1/file/{log_path}"],

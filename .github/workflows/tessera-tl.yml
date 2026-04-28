@@ -137,10 +137,13 @@ jobs:
             "https://flows-api.jetty.io/api/v1/db/trajectory/jettyio/tessera-tl/$TRAJ" \
             > /tmp/traj.json
 
-          # The agent's full claude-code log lives under /file/...
+          # The agent's full codex log lives under /file/... The runbook
+          # activity names the log by the configured agent, so the
+          # filename is "agent_codex.txt" since we standardised on Codex
+          # 2026-04-27 (was "agent_claude-code.txt" before that).
           curl --fail-with-body -sS \
             -H "Authorization: Bearer $JETTY_API_TOKEN" \
-            "https://flows-api.jetty.io/api/v1/file/jettyio/tessera-tl/0000/$TRAJ.runbook.0000.agent_claude-code.txt" \
+            "https://flows-api.jetty.io/api/v1/file/jettyio/tessera-tl/0000/$TRAJ.runbook.0000.agent_codex.txt" \
             > /tmp/agent.log || true
 
           python3 <<'PY' > /tmp/findings.json
@@ -184,7 +187,7 @@ jobs:
                           depth = 0
               return None
 
-          # 1) Agent log: line-delimited claude-code stream events. The
+          # 1) Agent log: line-delimited codex stream events. The
           #    LAST `result` event holds the agent's final markdown
           #    output, and inside that string is the JSON object we want
           #    (the agent prints scratch above + JSON below).
