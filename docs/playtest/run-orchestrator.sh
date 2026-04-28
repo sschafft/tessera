@@ -117,41 +117,106 @@ with open(f"{out_dir}/trajs.txt") as fh:
         trajs[name] = traj
 
 api_key = os.environ["JETTY_API_KEY"]
-results = []
-for name, traj in trajs.items():
-    log_path = f"jettyio/tessera-playtest-scenario/0000/{traj}.runbook.0000.agent_codex.txt"
-    log = subprocess.run(
+
+
+def fetch_codex_log(traj):
+    """Codex's log file index isn't fixed — sometimes .0000., sometimes
+    .0001., depending on whether other artifacts (sqlite, jsonl)
+    happened to write first. The trajectory record lists the exact
+    paths under steps.play.outputs.files; pick whichever ends in
+    `.agent_codex.txt`."""
+    meta = subprocess.run(
+        ["curl", "-sS", "-H", f"Authorization: Bearer {api_key}",
+         f"https://flows-api.jetty.io/api/v1/db/trajectory/jettyio/tessera-playtest-scenario/{traj}"],
+        capture_output=True, text=True,
+    ).stdout
+    try:
+        files = json.loads(meta)["steps"]["play"]["outputs"]["files"]
+    except Exception:
+        files = []
+    log_path = next(
+        (f["path"] for f in files if f.get("path", "").endswith("agent_codex.txt")),
+        None,
+    )
+    if not log_path:
+        return ""
+    return subprocess.run(
         ["curl", "-sS", "-H", f"Authorization: Bearer {api_key}",
          f"https://flows-api.jetty.io/api/v1/file/{log_path}"],
         capture_output=True, text=True,
     ).stdout
-    parsed = None
+
+
+def find_last_agent_message_json(log):
+    """Walk the line-delimited codex log from the END looking for the
+    final `item.completed` event of type `agent_message`. Its
+    `item.text` field IS the report (a JSON object string) — no
+    further fence stripping needed because the playbook tells the
+    agent to print bare JSON."""
     for line in reversed(log.splitlines()):
-        if not line.strip(): continue
+        line = line.strip()
+        if not line:
+            continue
         try:
             ev = json.loads(line)
-        except Exception: continue
-        if ev.get("type") == "result":
-            text = ev.get("result") or ""
-            depth = 0; end = -1; in_str = False; esc = False
-            for i in range(len(text) - 1, -1, -1):
-                c = text[i]
-                if esc: esc = False; continue
-                if c == "\\" and i + 1 < len(text): esc = True; continue
-                if c == '"' and not esc: in_str = not in_str; continue
-                if in_str: continue
-                if c == "}":
-                    if depth == 0: end = i
-                    depth += 1
-                elif c == "{":
-                    depth -= 1
-                    if depth == 0 and end != -1:
-                        try:
-                            parsed = json.loads(text[i:end + 1])
-                            break
-                        except Exception:
-                            end = -1; depth = 0
-            break
+        except Exception:
+            continue
+        if ev.get("type") != "item.completed":
+            continue
+        item = ev.get("item") or {}
+        if item.get("type") != "agent_message":
+            continue
+        text = (item.get("text") or "").strip()
+        # The text might be the bare JSON, or might have surrounding
+        # commentary. Walk it the same way we used to walk the
+        # claude-code result string: balanced-brace scan from the end
+        # for the last parseable {…}.
+        depth = 0
+        end = -1
+        in_str = False
+        esc = False
+        for i in range(len(text) - 1, -1, -1):
+            c = text[i]
+            if esc:
+                esc = False
+                continue
+            if c == "\\" and i + 1 < len(text):
+                esc = True
+                continue
+            if c == '"' and not esc:
+                in_str = not in_str
+                continue
+            if in_str:
+                continue
+            if c == "}":
+                if depth == 0:
+                    end = i
+                depth += 1
+            elif c == "{":
+                depth -= 1
+                if depth == 0 and end != -1:
+                    candidate = text[i:end + 1]
+                    try:
+                        obj = json.loads(candidate)
+                        if isinstance(obj, dict) and (
+                            "experience" in obj or "findings" in obj
+                        ):
+                            return obj
+                    except Exception:
+                        pass
+                    end = -1
+                    depth = 0
+        # Last agent_message reached without a parseable JSON — bail
+        # without scanning earlier messages (those would be
+        # mid-session reasoning, not the final report).
+        return None
+    return None
+
+
+results = []
+for name, traj in trajs.items():
+    log = fetch_codex_log(traj)
+    parsed = find_last_agent_message_json(log)
     results.append({"name": name, "trajectory_id": traj, "report": parsed})
 
 with open(f"{out_dir}/aggregate.json", "w") as fh:
