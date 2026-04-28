@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { BriefSource, TeamMode } from "@/lib/game/repository";
 import type { TileColor } from "@/components/canvas/Tile";
 import { MasterLobby } from "./MasterLobby";
@@ -10,6 +11,10 @@ import { SuperPowersRail } from "./SuperPowersRail";
 import { ScoringPanel } from "./ScoringPanel";
 import { EndGameModal } from "./EndGameModal";
 import { GeminiFallbackModal } from "./GeminiFallbackModal";
+import {
+  BreakoutsPanel,
+  BreakoutsCleanupModal,
+} from "./BreakoutsPanel";
 import { GameEndedView } from "@/components/play/GameEndedView";
 import { MasterPairView } from "./MasterPairView";
 import { useGameEvents } from "@/lib/realtime/useGameEvents";
@@ -28,6 +33,8 @@ export interface LobbyPair {
   builder_id: string | null;
   guider_id: string | null;
   created_at: string;
+  /** Per-pair breakout Meet URL. Null until the GM mints one. */
+  breakout_call_url?: string | null;
   briefs: {
     builder: { title: string; rules: string[] } | null;
     guider: { title: string; rules: string[] } | null;
@@ -79,6 +86,11 @@ interface LobbyResponse {
   briefs_enabled: {
     builder: boolean;
     guider: boolean;
+  };
+  breakouts: {
+    configured: boolean;
+    enabled: boolean;
+    google_connected: boolean;
   };
   participants: LobbyParticipant[];
   pairs: LobbyPair[];
@@ -346,6 +358,17 @@ export function MasterContent({
   }, [code, fetchSnapshot]);
 
   const [endGameModalOpen, setEndGameModalOpen] = useState(false);
+  // End-game cleanup observability — populated by /end's response.
+  // While `cleanupActive` is true, the cleanup modal blocks the
+  // dashboard so the GM sees the calendar wipe happening; once /end
+  // resolves we keep the modal up briefly to surface the final
+  // count + any warning.
+  const [cleanup, setCleanup] = useState<{
+    active: boolean;
+    total: number;
+    deleted: number;
+    warning: string | null;
+  }>({ active: false, total: 0, deleted: 0, warning: null });
 
   const requestEndGame = useCallback(() => setEndGameModalOpen(true), []);
   const cancelEndGame = useCallback(() => setEndGameModalOpen(false), []);
@@ -353,6 +376,19 @@ export function MasterContent({
   const confirmEndGame = useCallback(async () => {
     setBusy(true);
     setActionError(null);
+    // If breakouts exist locally, light up the cleanup modal eagerly
+    // so the GM sees "deleting N events" the moment they confirm —
+    // before /end's network roundtrip lands. The total flips to the
+    // server's authoritative count when the response comes back.
+    const localBreakoutCount =
+      data?.pairs.filter((p) => p.breakout_call_url).length ?? 0;
+    setCleanup({
+      active: localBreakoutCount > 0,
+      total: localBreakoutCount,
+      deleted: 0,
+      warning: null,
+    });
+    setEndGameModalOpen(false);
     try {
       const res = await fetch(`/api/games/${code}/end`, {
         method: "POST",
@@ -363,10 +399,103 @@ export function MasterContent({
         const j = await res.json().catch(() => ({}));
         throw new Error(j.error || `status ${res.status}`);
       }
-      setEndGameModalOpen(false);
+      const j = (await res.json().catch(() => ({}))) as {
+        cleanup?: { total: number; deleted: number; warning: string | null };
+      };
+      const final = j.cleanup ?? {
+        total: localBreakoutCount,
+        deleted: localBreakoutCount,
+        warning: null,
+      };
+      setCleanup({
+        active: false,
+        total: final.total,
+        deleted: final.deleted,
+        warning: final.warning,
+      });
+      // Hide the cleanup modal after a moment so the leaderboard
+      // can take over. If there was a warning we keep it up a bit
+      // longer so the GM can read the "leftovers in calendar" hint.
+      const dismissAfter = final.warning ? 5500 : 1800;
+      window.setTimeout(
+        () =>
+          setCleanup((c) => ({
+            ...c,
+            total: c.warning ? c.total : 0,
+          })),
+        dismissAfter,
+      );
       await fetchSnapshot();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "end failed");
+      setCleanup({ active: false, total: 0, deleted: 0, warning: null });
+    } finally {
+      setBusy(false);
+    }
+  }, [code, fetchSnapshot, data]);
+
+  // Breakouts: generate / clear handlers + post-OAuth banner state.
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [oauthBanner, setOauthBanner] = useState<{
+    connected: boolean;
+    error: string | null;
+  }>({ connected: false, error: null });
+  useEffect(() => {
+    const connected = searchParams.get("google_connected") === "1";
+    const error = searchParams.get("google_error");
+    if (!connected && !error) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot banner toggle keyed off the OAuth callback's query params; we strip them on the same tick to prevent re-fire.
+    setOauthBanner({ connected, error });
+    router.replace(`/g/${code}/master`, { scroll: false });
+    void fetchSnapshot();
+  }, [searchParams, router, code, fetchSnapshot]);
+  const dismissOauthBanner = useCallback(
+    () => setOauthBanner({ connected: false, error: null }),
+    [],
+  );
+
+  const generateBreakouts = useCallback(async () => {
+    setBusy(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/games/${code}/breakouts/generate`, {
+        method: "POST",
+      });
+      if (res.status === 412) {
+        setActionError(
+          "Google session expired — sign in again from the breakouts panel.",
+        );
+        return;
+      }
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || `status ${res.status}`);
+      }
+      await fetchSnapshot();
+    } catch (err) {
+      setActionError(
+        err instanceof Error ? err.message : "breakouts_failed",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }, [code, fetchSnapshot]);
+
+  const clearBreakouts = useCallback(async () => {
+    setBusy(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/games/${code}/breakouts/clear`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || `status ${res.status}`);
+      }
+      await fetchSnapshot();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "clear_failed");
     } finally {
       setBusy(false);
     }
@@ -697,6 +826,32 @@ export function MasterContent({
                     onChange={updateScoring}
                   />
                 </SetupStep>
+                {data?.breakouts.enabled && (
+                  <SetupStep
+                    step={4}
+                    title="Per-pair breakout calls"
+                    hint={
+                      data.breakouts.google_connected
+                        ? "Google connected — generate when pairs are ready."
+                        : "Sign in with Google to mint Meet links per pair."
+                    }
+                  >
+                    <BreakoutsPanel
+                      code={code}
+                      pairCount={pairs.length}
+                      withBreakouts={
+                        pairs.filter((p) => p.breakout_call_url).length
+                      }
+                      googleConnected={data.breakouts.google_connected}
+                      busy={busy}
+                      recentlyConnected={oauthBanner.connected}
+                      oauthError={oauthBanner.error}
+                      onGenerate={generateBreakouts}
+                      onClear={clearBreakouts}
+                      onDismissBanner={dismissOauthBanner}
+                    />
+                  </SetupStep>
+                )}
               </div>
             </main>
           );
@@ -798,6 +953,12 @@ export function MasterContent({
         failedRole={geminiFallback?.failedRole ?? null}
         onUseLibrary={startWithLibrary}
         onCancel={dismissGeminiFallback}
+      />
+      <BreakoutsCleanupModal
+        active={cleanup.active}
+        total={cleanup.total}
+        deleted={cleanup.deleted}
+        warning={cleanup.warning}
       />
     </>
   );

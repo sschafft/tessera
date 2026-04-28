@@ -286,7 +286,15 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
         }
       : null,
     pair: pair
-      ? { id: pair.id, display_name: pair.display_name ?? null }
+      ? {
+          id: pair.id,
+          display_name: pair.display_name ?? null,
+          // Per-pair breakout Meet URL when the GM has minted one.
+          // Becomes the primary "Join your pair's call" CTA on the
+          // player views; the workshop-level video_call_url
+          // demotes to a small "main room" secondary link.
+          breakout_call_url: pair.breakout_call_url ?? null,
+        }
       : null,
     round: roundSummary(round),
     pair_round: pairRound

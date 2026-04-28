@@ -22,6 +22,12 @@ export interface PlayTopBarProps {
   } | null;
   videoCallUrl: string | null;
   whiteboardUrl: string | null;
+  /**
+   * Per-pair breakout Meet URL when the GM has minted one. Becomes
+   * the primary "Join breakout" pill in the top bar; the workshop
+   * `videoCallUrl` demotes to a small "main room ↗" secondary link.
+   */
+  breakoutCallUrl?: string | null;
 }
 
 export function PlayTopBar({
@@ -31,6 +37,7 @@ export function PlayTopBar({
   round,
   videoCallUrl,
   whiteboardUrl,
+  breakoutCallUrl,
 }: PlayTopBarProps) {
   const remaining = useTimer(round);
   const isLastTwoMinutes =
@@ -76,6 +83,7 @@ export function PlayTopBar({
         <LinksBar
           videoCallUrl={videoCallUrl}
           whiteboardUrl={whiteboardUrl}
+          breakoutCallUrl={breakoutCallUrl ?? null}
         />
         {partner && (
           <div className="flex items-center gap-1.5 rounded-full bg-[var(--color-paper-2)] py-1 pl-1 pr-3">
@@ -94,37 +102,73 @@ export function PlayTopBar({
 function LinksBar({
   videoCallUrl,
   whiteboardUrl,
+  breakoutCallUrl,
 }: {
   videoCallUrl: string | null;
   whiteboardUrl: string | null;
+  breakoutCallUrl: string | null;
 }) {
-  // Drop the LinksBar entirely when neither link exists — the top bar
-  // looks cleaner without an empty card slot.
-  if (!videoCallUrl && !whiteboardUrl) return null;
+  if (!videoCallUrl && !whiteboardUrl && !breakoutCallUrl) return null;
+  // Show the breakout button as the primary call-to-action when set
+  // (purple Meet badge with "Breakout" copy). The workshop main-room
+  // demotes to a smaller chip beside it. Whiteboard always sits at
+  // the end as a quiet accent.
+  const showMainAsPrimary = !breakoutCallUrl && Boolean(videoCallUrl);
   return (
     <div className="t-card flex items-center gap-1 p-1.5">
+      {breakoutCallUrl && (
+        <a
+          href={breakoutCallUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-[var(--color-paper-2)]"
+          title="Open your pair's breakout call"
+        >
+          <span
+            className="grid h-[22px] w-[22px] place-items-center rounded-md text-[12px] font-bold text-white"
+            style={{ background: "var(--color-t-purple)" }}
+          >
+            ▶
+          </span>
+          <span className="flex flex-col text-[12px] font-bold leading-tight">
+            Breakout
+            <span className="t-mono text-[10px] font-normal text-[var(--color-ink-3)]">
+              just you + your partner
+            </span>
+          </span>
+        </a>
+      )}
+      {breakoutCallUrl && videoCallUrl && (
+        <span className="h-7 w-px bg-[var(--color-line)]" />
+      )}
       {videoCallUrl && (
         <a
           href={videoCallUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-[var(--color-paper-2)]"
+          title="Open the workshop main room"
         >
           <span
             className="grid h-[22px] w-[22px] place-items-center rounded-md text-[12px] font-bold text-white"
-            style={{ background: "var(--color-t-blue)" }}
+            style={{
+              background: showMainAsPrimary
+                ? "var(--color-t-blue)"
+                : "var(--color-paper-2)",
+              color: showMainAsPrimary ? "#fff" : "var(--color-ink-3)",
+            }}
           >
             ▶
           </span>
           <span className="flex flex-col text-[12px] font-bold leading-tight">
-            Video call
+            {showMainAsPrimary ? "Video call" : "Main room"}
             <span className="t-mono text-[10px] font-normal text-[var(--color-ink-3)]">
               {hostnameOf(videoCallUrl)}
             </span>
           </span>
         </a>
       )}
-      {videoCallUrl && whiteboardUrl && (
+      {(videoCallUrl || breakoutCallUrl) && whiteboardUrl && (
         <span className="h-7 w-px bg-[var(--color-line)]" />
       )}
       {whiteboardUrl && (

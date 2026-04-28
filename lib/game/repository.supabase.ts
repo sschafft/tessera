@@ -76,6 +76,7 @@ function toGameRecord(row: DbGame): GameRecord {
     gm_participant_id: row.gm_participant_id,
     scoring_correct_pts: row.scoring_correct_pts,
     scoring_wrong_pts: row.scoring_wrong_pts,
+    breakouts_enabled: row.breakouts_enabled,
   };
 }
 
@@ -122,6 +123,7 @@ export class SupabaseGameRepository implements GameRepository {
         round_duration_seconds: input.round_duration_seconds,
         participant_cap: input.participant_cap,
         sound_on: input.sound_on,
+        breakouts_enabled: input.breakouts_enabled ?? false,
         host_token_hash: input.host_token_hash,
         gm_participant_id: input.gm_participant_id,
       })
@@ -465,6 +467,64 @@ export class SupabaseGameRepository implements GameRepository {
       .update(update)
       .eq("id", game_id);
     if (error) throw new Error(`setBriefOn: ${error.message}`);
+  }
+
+  async setBreakoutsEnabled(
+    game_id: string,
+    enabled: boolean,
+  ): Promise<void> {
+    const supabase = getServiceClient();
+    const { error } = await supabase
+      .from("games")
+      .update({ breakouts_enabled: enabled })
+      .eq("id", game_id);
+    if (error) throw new Error(`setBreakoutsEnabled: ${error.message}`);
+  }
+
+  async setPairBreakout(
+    pair_id: string,
+    breakout: { call_url: string; event_id: string },
+  ): Promise<void> {
+    const supabase = getServiceClient();
+    const { error } = await supabase
+      .from("pairs")
+      .update({
+        breakout_call_url: breakout.call_url,
+        breakout_event_id: breakout.event_id,
+      })
+      .eq("id", pair_id);
+    if (error) throw new Error(`setPairBreakout: ${error.message}`);
+  }
+
+  async clearPairBreakout(pair_id: string): Promise<void> {
+    const supabase = getServiceClient();
+    const { error } = await supabase
+      .from("pairs")
+      .update({ breakout_call_url: null, breakout_event_id: null })
+      .eq("id", pair_id);
+    if (error) throw new Error(`clearPairBreakout: ${error.message}`);
+  }
+
+  async listPairsWithBreakouts(
+    game_id: string,
+  ): Promise<Array<{ id: string; event_id: string; call_url: string }>> {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase
+      .from("pairs")
+      .select("id, breakout_event_id, breakout_call_url")
+      .eq("game_id", game_id)
+      .not("breakout_event_id", "is", null);
+    if (error) throw new Error(`listPairsWithBreakouts: ${error.message}`);
+    return (data ?? [])
+      .filter(
+        (p): p is { id: string; breakout_event_id: string; breakout_call_url: string } =>
+          p.breakout_event_id != null && p.breakout_call_url != null,
+      )
+      .map((p) => ({
+        id: p.id,
+        event_id: p.breakout_event_id,
+        call_url: p.breakout_call_url,
+      }));
   }
 
   async createPlacement(input: {
@@ -904,6 +964,8 @@ function toPairRecord(row: DbPair): PairRecord {
     guider_id: row.guider_id,
     display_name: row.display_name,
     created_at: row.created_at,
+    breakout_call_url: row.breakout_call_url ?? null,
+    breakout_event_id: row.breakout_event_id ?? null,
   };
 }
 

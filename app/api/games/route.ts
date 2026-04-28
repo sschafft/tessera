@@ -38,6 +38,7 @@ interface CreateGamePayload {
   round_duration_seconds?: number;
   participant_cap?: number;
   sound_on?: boolean;
+  breakouts_enabled?: boolean;
 }
 
 const CUSTOM_TITLE_MAX = 80;
@@ -153,6 +154,7 @@ function validate(payload: CreateGamePayload): CreateGameInput | { error: string
     round_duration_seconds: dur,
     participant_cap: cap,
     sound_on: payload.sound_on ?? true,
+    breakouts_enabled: Boolean(payload.breakouts_enabled),
   };
 }
 

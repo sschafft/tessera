@@ -35,6 +35,12 @@ export interface CreateGameInput {
    */
   video_call_url?: string | null;
   whiteboard_url?: string | null;
+  /**
+   * When true, the GM can sign in with Google and mint per-pair Meet
+   * links via the Calendar API. The toggle is hidden in the host
+   * form on deployments without GOOGLE_OAUTH_CLIENT_ID.
+   */
+  breakouts_enabled?: boolean;
   team_mode: TeamMode;
   default_complexity: number;
   builder_brief_on: boolean;
@@ -113,6 +119,17 @@ export interface PairRecord {
   guider_id: string | null;
   display_name: string | null;
   created_at: string;
+  /**
+   * Per-pair Google Meet URL minted via Calendar API when the GM
+   * enables breakouts and clicks Generate. Null until generated;
+   * cleared by the breakouts/clear route or when the game ends.
+   */
+  breakout_call_url: string | null;
+  /**
+   * Calendar event ID we created for this pair — kept so we can
+   * issue a DELETE on game-end. Always paired with breakout_call_url.
+   */
+  breakout_event_id: string | null;
 }
 
 export type RoundStatus = "pending" | "running" | "ended";
@@ -433,6 +450,35 @@ export interface GameRepository {
     role: "builder" | "guider",
     on: boolean,
   ): Promise<void>;
+
+  /**
+   * Toggle the per-pair breakouts feature. Hidden in the host form
+   * on deployments without GOOGLE_OAUTH_CLIENT_ID; flipped on via the
+   * host form or the GM dashboard when configured.
+   */
+  setBreakoutsEnabled(game_id: string, enabled: boolean): Promise<void>;
+
+  /**
+   * Persist the per-pair breakout link + originating calendar event.
+   * Called by /breakouts/generate after a successful Calendar API
+   * mint. Both fields move together so end-game cleanup never lacks
+   * an event ID.
+   */
+  setPairBreakout(
+    pair_id: string,
+    breakout: { call_url: string; event_id: string },
+  ): Promise<void>;
+
+  /** Clear breakout state on a single pair (used after deletion). */
+  clearPairBreakout(pair_id: string): Promise<void>;
+
+  /**
+   * List all pairs in a game with breakout state set — drives the
+   * end-game cleanup loop and the GM dashboard's "N of M ready" copy.
+   */
+  listPairsWithBreakouts(game_id: string): Promise<
+    Array<{ id: string; event_id: string; call_url: string }>
+  >;
 
   // ─── Super-power events ───────────────────────────────────────────
   // Persisted in the historic `accelerant_events` table; the repo

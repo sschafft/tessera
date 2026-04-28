@@ -87,6 +87,7 @@ class MemoryGameRepository implements GameRepository {
       guider_brief_custom: input.guider_brief_custom ?? null,
       scoring_correct_pts: 10,
       scoring_wrong_pts: 0,
+      breakouts_enabled: input.breakouts_enabled ?? false,
     };
     this.games.set(record.code, record);
     return record;
@@ -174,6 +175,8 @@ class MemoryGameRepository implements GameRepository {
       guider_id,
       display_name: null,
       created_at: new Date().toISOString(),
+      breakout_call_url: null,
+      breakout_event_id: null,
     };
     this.pairs.set(pair.id, pair);
     builder.role = "builder";
@@ -370,6 +373,46 @@ class MemoryGameRepository implements GameRepository {
         else g.guider_brief_on = on;
       }
     }
+  }
+
+  async setBreakoutsEnabled(game_id: string, enabled: boolean): Promise<void> {
+    for (const g of this.games.values()) {
+      if (g.id === game_id) g.breakouts_enabled = enabled;
+    }
+  }
+
+  async setPairBreakout(
+    pair_id: string,
+    breakout: { call_url: string; event_id: string },
+  ): Promise<void> {
+    const p = this.pairs.get(pair_id);
+    if (!p) return;
+    p.breakout_call_url = breakout.call_url;
+    p.breakout_event_id = breakout.event_id;
+  }
+
+  async clearPairBreakout(pair_id: string): Promise<void> {
+    const p = this.pairs.get(pair_id);
+    if (!p) return;
+    p.breakout_call_url = null;
+    p.breakout_event_id = null;
+  }
+
+  async listPairsWithBreakouts(
+    game_id: string,
+  ): Promise<Array<{ id: string; event_id: string; call_url: string }>> {
+    return [...this.pairs.values()]
+      .filter(
+        (p) =>
+          p.game_id === game_id &&
+          p.breakout_event_id != null &&
+          p.breakout_call_url != null,
+      )
+      .map((p) => ({
+        id: p.id,
+        event_id: p.breakout_event_id!,
+        call_url: p.breakout_call_url!,
+      }));
   }
 
   async createPlacement(input: {

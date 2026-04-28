@@ -56,7 +56,17 @@ export interface PlayState {
     role: PlayRole;
     color: TileColor;
   } | null;
-  pair: { id: string; display_name: string | null } | null;
+  pair: {
+    id: string;
+    display_name: string | null;
+    /**
+     * Per-pair breakout Meet URL. When set, this is the primary
+     * "Join your pair's call" CTA on the lobby + play views; the
+     * workshop-level `video_call_url` demotes to a small "main
+     * room ↗" secondary link.
+     */
+    breakout_call_url: string | null;
+  } | null;
   round: {
     id: string;
     index: number;
@@ -289,6 +299,7 @@ export function PlayContent({ code, initial }: PlayContentProps) {
         round={state.round}
         videoCallUrl={state.video_call_url}
         whiteboardUrl={state.whiteboard_url}
+        breakoutCallUrl={state.pair?.breakout_call_url ?? null}
       />
       <main className="relative flex flex-1 overflow-hidden">
         {renderBody(state)}
@@ -323,6 +334,7 @@ function renderBody(state: PlayState) {
         workshopName={state.workshop_name}
         videoCallUrl={state.video_call_url}
         whiteboardUrl={state.whiteboard_url}
+        breakoutCallUrl={state.pair?.breakout_call_url ?? null}
         roundInFlight={state.round?.status === "running"}
       />
     );
