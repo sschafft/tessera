@@ -99,21 +99,48 @@ export function PlayTopBar({
   );
 }
 
+// Mirror lib's placeholder filter — example.com / localhost shouldn't
+// surface to players. JoinCallCta already does this; the top-bar
+// LinksBar got missed and players (per playtest) flagged the raw
+// "meet.example.com" pill as undermining trust.
+const PLACEHOLDER_HOSTS = new Set([
+  "example.com",
+  "example.org",
+  "example.net",
+  "localhost",
+  "127.0.0.1",
+]);
+function isPlaceholderUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return [...PLACEHOLDER_HOSTS].some(
+      (h) => u.hostname === h || u.hostname.endsWith(`.${h}`),
+    );
+  } catch {
+    return true;
+  }
+}
+function usableUrl(url: string | null): string | null {
+  if (!url) return null;
+  return isPlaceholderUrl(url) ? null : url;
+}
+
 function LinksBar({
-  videoCallUrl,
-  whiteboardUrl,
-  breakoutCallUrl,
+  videoCallUrl: rawVideoCallUrl,
+  whiteboardUrl: rawWhiteboardUrl,
+  breakoutCallUrl: rawBreakoutCallUrl,
 }: {
   videoCallUrl: string | null;
   whiteboardUrl: string | null;
   breakoutCallUrl: string | null;
 }) {
+  const videoCallUrl = usableUrl(rawVideoCallUrl);
+  const whiteboardUrl = usableUrl(rawWhiteboardUrl);
+  const breakoutCallUrl = usableUrl(rawBreakoutCallUrl);
   if (!videoCallUrl && !whiteboardUrl && !breakoutCallUrl) return null;
-  // Show the breakout button as the primary call-to-action when set
-  // (purple Meet badge with "Breakout" copy). The workshop main-room
-  // demotes to a smaller chip beside it. Whiteboard always sits at
-  // the end as a quiet accent.
-  const showMainAsPrimary = !breakoutCallUrl && Boolean(videoCallUrl);
+  // The "Main room" label is consistent across the breakout-on / off
+  // state — stable terminology beats two slightly different chips
+  // appearing on consecutive screens.
   return (
     <div className="t-card flex items-center gap-1 p-1.5">
       {breakoutCallUrl && (
@@ -152,16 +179,16 @@ function LinksBar({
           <span
             className="grid h-[22px] w-[22px] place-items-center rounded-md text-[12px] font-bold text-white"
             style={{
-              background: showMainAsPrimary
+              background: !breakoutCallUrl
                 ? "var(--color-t-blue)"
                 : "var(--color-paper-2)",
-              color: showMainAsPrimary ? "#fff" : "var(--color-ink-3)",
+              color: !breakoutCallUrl ? "#fff" : "var(--color-ink-3)",
             }}
           >
             ▶
           </span>
           <span className="flex flex-col text-[12px] font-bold leading-tight">
-            {showMainAsPrimary ? "Video call" : "Main room"}
+            Main room
             <span className="t-mono text-[10px] font-normal text-[var(--color-ink-3)]">
               {hostnameOf(videoCallUrl)}
             </span>

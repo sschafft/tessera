@@ -303,10 +303,11 @@ function RecoverySaveModal({
           Save your recovery URL
         </span>
         <h2 className="t-display text-[20px] leading-tight">
-          One-shot — keep this safe.
+          Save this URL — it&apos;s your way back if your tab closes.
         </h2>
         <p className="text-[13px] text-[var(--color-ink-2)]">
-          If this tab closes, this URL is the only way back to your seat.
+          Tessera shows it once. If your browser session is wiped, paste it
+          to reclaim the same seat with the same name.
         </p>
       </div>
 
