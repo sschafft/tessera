@@ -5,6 +5,13 @@
  */
 
 export type TeamMode = "gm_picks" | "players_pick";
+// Brief source as persisted to the DB. "gemini" is the umbrella
+// label for any AI-generated brief; the runtime router (lib/briefs/
+// router.ts) may try Gemini OR OpenAI under that label. We don't
+// store the actual provider on the row — telemetry lives in the
+// orchestrator's console.info call. If we ever need per-provider
+// analytics we can add a brief.provider column without touching
+// the storage enum.
 export type BriefSource = "library" | "gm" | "gemini";
 export type ParticipantRole =
   | "gm"
