@@ -113,6 +113,15 @@ export interface AccelerantsRailProps {
   roundRunning: boolean;
   focusedPair: LobbyPair | null;
   busy: boolean;
+  /**
+   * Whether scoring changes will retroactively recompute existing
+   * pair scores (true while a round is active and at least one pair
+   * has placements). Drives the mid-round confirmation in
+   * ScoringPanel — playtest 2026-04-28 caught a GM dropping a
+   * Light penalty on a pair sitting at 0 correct, watching them
+   * snap to -4. The product warning was there but easy to miss.
+   */
+  scoreRetuneIsRetroactive: boolean;
   scoring: { correct_pts: number; wrong_pts: number };
   onTrigger: (
     kind: string,
@@ -128,6 +137,7 @@ export function AccelerantsRail({
   roundRunning,
   focusedPair,
   busy,
+  scoreRetuneIsRetroactive,
   scoring,
   onTrigger,
   onScoring,
@@ -218,6 +228,7 @@ export function AccelerantsRail({
       correctPts={scoring.correct_pts}
       wrongPts={scoring.wrong_pts}
       busy={busy}
+      retroactive={scoreRetuneIsRetroactive}
       onChange={onScoring}
     />
   );
@@ -344,17 +355,26 @@ function ScoringPanel({
   correctPts,
   wrongPts,
   busy,
+  retroactive,
   onChange,
 }: {
   correctPts: number;
   wrongPts: number;
   busy: boolean;
+  /**
+   * When true, a wrong-pts change will recompute existing pair
+   * scores in place (round is running and pairs have placements).
+   * Drives a confirm modal so a tap on Hard during a live round
+   * doesn't silently slam scores into the negatives.
+   */
+  retroactive: boolean;
   onChange: (patch: { correct_pts?: number; wrong_pts?: number }) => void;
 }) {
   const [optCorrect, setOptCorrect] = useState<number | null>(null);
   const [optWrong, setOptWrong] = useState<number | null>(null);
   const [savedAt, setSavedAt] = useState(0);
   const [savedVisible, setSavedVisible] = useState(false);
+  const [pendingWrong, setPendingWrong] = useState<number | null>(null);
 
   // Drop optimistic overrides once the server-side state catches up.
   useEffect(() => {
@@ -393,14 +413,29 @@ function ScoringPanel({
     },
     [visibleCorrect, onChange],
   );
-  const setWrong = useCallback(
+  const commitWrong = useCallback(
     (next: number) => {
-      if (next === visibleWrong) return;
       setOptWrong(next);
       setSavedAt(Date.now());
       onChange({ wrong_pts: next });
     },
-    [visibleWrong, onChange],
+    [onChange],
+  );
+  const setWrong = useCallback(
+    (next: number) => {
+      if (next === visibleWrong) return;
+      // Mid-round penalty changes recompute every pair's existing
+      // score the next time /play, /test-solution, or /summary fires
+      // — so a tap on Hard while pairs are mid-build can drop them
+      // from 0 pts to −Nx pts in one click. Confirm before
+      // committing when the change is retroactive.
+      if (retroactive) {
+        setPendingWrong(next);
+        return;
+      }
+      commitWrong(next);
+    },
+    [visibleWrong, retroactive, commitWrong],
   );
 
   const PENALTY_PRESETS: Array<{ value: number; label: string; sub: string }> =
@@ -412,6 +447,10 @@ function ScoringPanel({
     ];
 
   const showSaved = savedVisible;
+  const pendingPreset =
+    pendingWrong !== null
+      ? PENALTY_PRESETS.find((p) => p.value === pendingWrong)
+      : null;
 
   return (
     <div
@@ -421,6 +460,71 @@ function ScoringPanel({
         boxShadow: "0 3px 0 rgba(0,0,0,.06)",
       }}
     >
+      {pendingPreset && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Confirm scoring change"
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          style={{ background: "rgba(31,26,20,0.55)" }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setPendingWrong(null);
+          }}
+        >
+          <div
+            className="t-card flex flex-col gap-3 p-5"
+            style={{
+              background: "var(--color-tint-yellow)",
+              border: "2px solid var(--color-t-yellow)",
+              maxWidth: 440,
+            }}
+          >
+            <div
+              className="t-mono text-[11px] font-bold uppercase tracking-widest"
+              style={{ color: "#7a5b00", letterSpacing: ".15em" }}
+            >
+              ⚠ Mid-round scoring change
+            </div>
+            <h3
+              className="t-display text-[20px] leading-tight"
+              style={{ color: "var(--color-ink)" }}
+            >
+              Apply <b>{pendingPreset.label}</b> ({pendingPreset.sub}) penalty
+              now?
+            </h3>
+            <p
+              className="text-[13px] leading-relaxed"
+              style={{ color: "#7a5b00" }}
+            >
+              This recomputes every pair&apos;s score in place — pairs with
+              wrong placements right now will drop immediately, before they
+              get another chance to test. Generally safer to tune scoring
+              between rounds.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  commitWrong(pendingPreset.value);
+                  setPendingWrong(null);
+                }}
+                className="t-btn t-btn--primary"
+                disabled={busy}
+              >
+                Apply now →
+              </button>
+              <button
+                type="button"
+                onClick={() => setPendingWrong(null)}
+                className="t-btn t-btn--ghost"
+                disabled={busy}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="flex items-start gap-3">
         <span
           aria-hidden="true"
