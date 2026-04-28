@@ -452,6 +452,21 @@ export class SupabaseGameRepository implements GameRepository {
     if (error) throw new Error(`updateScoring: ${error.message}`);
   }
 
+  async setBriefOn(
+    game_id: string,
+    role: "builder" | "guider",
+    on: boolean,
+  ): Promise<void> {
+    const supabase = getServiceClient();
+    const update: Database["public"]["Tables"]["games"]["Update"] =
+      role === "builder" ? { builder_brief_on: on } : { guider_brief_on: on };
+    const { error } = await supabase
+      .from("games")
+      .update(update)
+      .eq("id", game_id);
+    if (error) throw new Error(`setBriefOn: ${error.message}`);
+  }
+
   async createPlacement(input: {
     pair_round_id: string;
     shape: string;

@@ -415,6 +415,19 @@ export interface GameRepository {
     patch: { scoring_correct_pts?: number; scoring_wrong_pts?: number },
   ): Promise<void>;
 
+  /**
+   * Flip a brief-on flag for a side after game-create. The "Change
+   * builder/guider brief" super-powers double as "Add brief" when the
+   * GM created the game with that side off — flipping the flag here
+   * makes the new brief show up via the normal envelope flow on the
+   * current round AND keeps it on for subsequent rounds.
+   */
+  setBriefOn(
+    game_id: string,
+    role: "builder" | "guider",
+    on: boolean,
+  ): Promise<void>;
+
   // ─── Accelerants ───────────────────────────────────────────────────
   createAccelerantEvent(input: {
     round_id: string;

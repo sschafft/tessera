@@ -139,6 +139,14 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       correct_pts: game.scoring_correct_pts,
       wrong_pts: game.scoring_wrong_pts,
     },
+    // Drives the "Add vs Change brief" relabel + the
+    // reveal-briefs disable on the GM dashboard's super-power rail.
+    // The flags are mutated by the change-brief super-power when
+    // either side was originally off — see the accelerants route.
+    briefs_enabled: {
+      builder: game.builder_brief_on,
+      guider: game.guider_brief_on,
+    },
     participants,
     pairs: pairs.map((p) => ({
       id: p.id,
