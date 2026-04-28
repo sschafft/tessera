@@ -73,6 +73,14 @@ export interface PlayState {
   goal: GoalPattern | null;
   /** Goal piece count — exposed to all roles for the builder progress counter. */
   goal_count: number;
+  /**
+   * How many pieces the builder has placed *right now*. Exposed to
+   * every role (no layout leak); drives the guider's live progress
+   * chip so they're not staring at a static board between Test/Share
+   * events. Builder + observer also get the full layout via
+   * `placements` below.
+   */
+  builder_placements_count: number;
   placements: PlacedPiece[];
   /** Server-computed accuracy gauge when test_enabled is true. */
   accuracy: { correct: number; total: number } | null;

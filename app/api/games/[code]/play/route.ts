@@ -115,12 +115,18 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     me.role === "builder" || me.role === "observer" || roundEnded;
   const briefsOpen = pairRound && (pairRound.briefs_revealed || roundEnded);
 
-  const placementsPromise =
-    showPlacements && pairRound
-      ? repo.listPlacements(pairRound.id)
-      : Promise.resolve(
-          [] as Awaited<ReturnType<typeof repo.listPlacements>>,
-        );
+  // Always fetch the placements when a pair_round exists; the role
+  // gating below decides whether to expose the *layout* to this
+  // role. Even when we hide the layout (guider, default), we still
+  // surface the *count* via builder_placements_count so the guider
+  // gets a live "your builder is building" pulse without leaking
+  // where pieces are. Playtest 2026-04-28 surfaced the gap — guiders
+  // sat watching a static board for minutes between Test events.
+  const placementsPromise = pairRound
+    ? repo.listPlacements(pairRound.id)
+    : Promise.resolve(
+        [] as Awaited<ReturnType<typeof repo.listPlacements>>,
+      );
   const myBriefPromise =
     pairRound && (me.role === "builder" || me.role === "guider")
       ? repo.findBrief(pairRound.id, me.role)
@@ -189,6 +195,16 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       ? (pairRound.goal_pattern as GoalPattern)
       : null;
 
+  // Builder placement count is exposed to every role (no layout
+  // leak — just a number). Used by GuiderView to render a live
+  // progress chip alongside the goal canvas.
+  const builderPlacementsCount = placements.length;
+
+  // Apply role-gating on the actual placement layout: guider gets
+  // [] (no layout leak); builder + observer + post-round get the
+  // full array for rendering on their canvas.
+  const visiblePlacements = showPlacements ? placements : [];
+
   // Test-build accelerant: builder + observer get per-placement
   // correctness flags computed against the goal. After the round ends,
   // we surface correctness to everyone for the debrief regardless of
@@ -202,7 +218,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     r: number;
     rot: number;
     correct?: boolean;
-  }> = placements.map((p) => ({
+  }> = visiblePlacements.map((p) => ({
     id: p.id,
     shape: p.shape,
     color: p.color,
@@ -281,6 +297,13 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     goal_count: pairRound
       ? ((pairRound.goal_pattern as GoalPattern) ?? []).length
       : 0,
+    /**
+     * How many pieces the builder has placed right now. Exposed to
+     * every role (no layout leak — just an integer). Drives the
+     * guider's live "your builder is building" progress chip so they
+     * stop sitting on a static board between Test/Share events.
+     */
+    builder_placements_count: builderPlacementsCount,
     placements: placementsWithCorrect,
     accuracy,
     live_score: liveScore,

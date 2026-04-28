@@ -118,6 +118,25 @@ export function GuiderView({ state }: GuiderViewProps) {
         >
           ● THE GOAL · only you see this
         </span>
+        {/* Live builder-progress chip — visible to the guider always,
+            so they have a continuous "your builder is building" pulse
+            instead of staring at a static board between Test/Share
+            events. We deliberately surface only the count, never the
+            layout, so the asymmetry is preserved. Hidden when the
+            score chip below is showing the same info more richly. */}
+        {!state.live_score && state.goal_count > 0 && (
+          <span
+            className="t-mono absolute -right-2 -top-4 z-10 rounded-full px-3.5 py-1.5 text-[12px] font-bold"
+            style={{
+              background: "var(--color-paper-2)",
+              color: "var(--color-ink-2)",
+              boxShadow: "inset 0 0 0 1.5px var(--color-line)",
+            }}
+            aria-label={`Builder has placed ${state.builder_placements_count} of ${state.goal_count} pieces`}
+          >
+            ◉ {state.builder_placements_count} / {state.goal_count} placed
+          </span>
+        )}
         {state.live_score && (
           <div
             className="absolute -right-2 -top-4 z-10 flex items-center"
@@ -198,6 +217,7 @@ export function GuiderView({ state }: GuiderViewProps) {
             title={state.partner_brief.title}
             rules={state.partner_brief.rules}
             defaultOpen
+            revealedPartner
           />
         )}
         {/* Builder shared progress lives in the right-hand aside,
