@@ -357,7 +357,7 @@ export function AccelerantsRail({
  * meant the value flickered through the polling round-trip — GMs
  * tapped twice thinking the first didn't take.
  */
-function ScoringPanel({
+export function ScoringPanel({
   correctPts,
   wrongPts,
   busy,
