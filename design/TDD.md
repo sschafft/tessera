@@ -887,14 +887,22 @@ In dependency order (17 total as of 2026-04-28):
     form; the player views skip the "Join the video call" CTA when
     null.
 16. `breakouts_and_google_tokens` — adds `games.breakouts_enabled`
-    (vestigial — current code paths gate on env-var presence, not
-    this flag), `pairs.{breakout_call_url, breakout_event_id}`, and
-    a new `gm_google_tokens` table (encrypted access + refresh
-    tokens, expiry, scope) for the per-pair Meet breakouts feature.
+    (vestigial — superseded by `breakout_provider` in migration 18;
+    current code paths gate on `provider !== 'none'`),
+    `pairs.{breakout_call_url, breakout_event_id}`, and a new
+    `gm_google_tokens` table (encrypted access + refresh tokens,
+    expiry, scope) for the per-pair Meet breakouts feature.
 17. `agile_share_default_off` — flips
     `pair_rounds.shares_remaining` default from 3 → 0. The Agile
     share super-power now grants +1 share per fire instead of
     starting at 3 unconditionally.
+18. `meeting_mode_and_breakout_provider` — adds
+    `games.meeting_mode` (`remote`|`in_person`, default `remote`)
+    and `games.breakout_provider` (`none`|`google_meet`|`jitsi`,
+    default `none`), plus `participants.email` (nullable, populated
+    only when the game's provider is `google_meet`). Backs the
+    in-person/remote toggle and the Jitsi provider option in the
+    host form.
 
 ### 15.5 New routes shipped beyond §10
 
@@ -955,14 +963,44 @@ Not in the original spec but shipped:
 - Game-over screen now renders a per-pair leaderboard with final
   accuracy + a CTA back to the home page.
 
-### 15.8 Per-pair Google Meet breakouts (optional feature)
+### 15.8 Meeting mode + per-pair breakouts (optional feature)
 
-Only lights up when `GOOGLE_OAUTH_CLIENT_ID` + `_CLIENT_SECRET` are
-configured on the deployment. Feature is invisible (Step 4 setup card
-hidden, no API surface) when those env vars are absent.
+Two related game-create knobs control how the workshop conducts its
+audio:
 
-Architecture:
+- `games.meeting_mode` — `remote` (default) or `in_person`. In-person
+  drops video / whiteboard / breakout UI from the host form and the
+  player views entirely; the URLs are stored as null.
+- `games.breakout_provider` — `none` (default), `google_meet`, or
+  `jitsi`. Picked at game-create from a radio inside the host form's
+  remote-only block. Each pair gets one breakout link; `pairs.{breakout_call_url, breakout_event_id}` carry the pair-side state.
 
+Provider behaviour:
+
+#### `none`
+Players use the workshop-level `video_call_url` only (or no video at
+all if that's null). No Step 4 panel on the dashboard.
+
+#### `jitsi`
+- **No OAuth, no API call, no email collection.** The
+  `/api/games/[code]/breakouts/generate` route computes
+  `https://meet.jit.si/tessera-<gameCode>-<pairId>` for each pair via
+  `lib/breakouts/jitsi.ts:jitsiUrlForPair`. Idempotent — already-set
+  pairs are skipped.
+- `pairs.breakout_event_id` is stored as a sentinel (`jitsi:<pairId>`)
+  so the cleanup loops can identify these rows and skip the Calendar
+  API. Rooms on `meet.jit.si` are stateless, so there's nothing to
+  delete server-side.
+- `/breakouts/clear` and `/end` clear the local pair URLs only.
+  `/end` also skips the OAuth-token revocation step.
+- Available on every deployment with no extra config.
+
+#### `google_meet`
+- Only lights up when `GOOGLE_OAUTH_CLIENT_ID` + `_CLIENT_SECRET` are
+  configured on the deployment. The host-form picker renders the
+  Google Meet option in a disabled state ("Not configured on this
+  deployment") when those env vars are absent — the GM falls back to
+  Jitsi or None by picking one of the other rows.
 - **OAuth via [`arctic`](https://arcticjs.dev)** — small, audited
   library that wraps Google's authorization code + PKCE flow. We
   ship a thin layer around `arctic.Google` in `lib/google/oauth.ts`
@@ -974,9 +1012,7 @@ Architecture:
 - **Routes:**
   - `GET /api/auth/google/start?code=<game-code>` — GM-session-gated.
     Redirects to Google's consent screen with `scope=calendar.events`
-    + `access_type=offline` + `prompt=consent` (the last two are
-    required to consistently get a refresh token on first
-    authorization).
+    + `access_type=offline` + `prompt=consent`.
   - `GET /api/auth/google/callback` — verifies state JWT, exchanges
     code for tokens via arctic, persists encrypted tokens, redirects
     back to `/g/<code>/master?google_connected=1`.
@@ -985,7 +1021,7 @@ Architecture:
   `TESSERA_JWT_SECRET` via HKDF with a "tokens" info string so the
   JWT-signing path and the encryption path use independent material.
   `lib/google/tokenStore.ts` exposes `upsertTokens`,
-  `getValidAccessToken` (auto-refreshes when within 60s of expiry),
+  `getValidAccessToken` (auto-refreshes within 60s of expiry),
   `getSession` (presence check for the dashboard), and
   `revokeAndDelete` (game-end cleanup).
 - **Per-pair link minting** — `POST /api/games/[code]/breakouts/generate`
@@ -993,32 +1029,46 @@ Architecture:
   rate limits), calling `createBreakoutEvent` per pair. Each event is
   set to private visibility, anchored 1 hour in the past, 5 minutes
   long, with `conferenceData.createRequest` to attach a Meet link.
-  Persists `breakout_call_url` + `breakout_event_id` on the pair row.
-  Idempotent: pairs that already have a link are skipped.
+  Pair participants are added as Calendar event attendees (built
+  from `participants.email`) so signed-in joiners bypass Meet's
+  knock screen — that's the reason the join form requires email
+  when this provider is selected. Persists `breakout_call_url` +
+  `breakout_event_id` on the pair row. Idempotent: pairs that
+  already have a link are skipped.
 - **Cleanup** — `/end` calls `deleteBreakoutEvent` per pair, then
   `revokeAndDelete` to invalidate the OAuth grant. Best-effort:
   failures don't block game-end (orphaned events are GM-visible only
   and easy to bulk-delete by searching "Tessera breakout").
+
+Cross-provider:
+
+- **Email at join time** — `participants.email` is nullable. The join
+  API requires + lowercases + length-limits it only when
+  `game.breakout_provider === 'google_meet'`. Stored only for the
+  duration of the game (the row is dropped along with everything
+  else at game-end purge). Never used outside Calendar attendee
+  attachment.
 - **Player surface** — `JoinCallCta` accepts an optional
-  `breakoutCallUrl` prop. When set, primary CTA = breakout (purple
-  badge, "Join your pair's call · breakout"); workshop-level
-  `video_call_url` demotes to a small `↗ Main room` secondary link.
-  `PlayTopBar`'s LinksBar mirrors the same hierarchy.
+  `breakoutCallUrl` prop, regardless of provider. When set, primary
+  CTA = breakout (purple badge, "Join your pair's call · breakout");
+  workshop-level `video_call_url` demotes to a small `↗ Main room`
+  secondary link. `PlayTopBar`'s LinksBar mirrors the same hierarchy.
 - **Diagnostic** — `GET /api/diag/clerk` (path kept from a brief
   Clerk pivot) returns env-var presence (not values) so a maintainer
   can verify Vercel scope settings without exposing secrets.
 
-Free-tier impact: zero. Calendar API has 1M queries/day; Tessera
-generates ≤2 per pair (create + delete) so workshop scale (~25
-pairs/game) sits at 0.005% of quota. OAuth itself isn't metered.
+Free-tier impact: zero. Google Meet path: Calendar API has 1M
+queries/day; Tessera generates ≤2 per pair (create + delete) so
+workshop scale (~25 pairs/game) sits at 0.005% of quota. Jitsi path:
+no metered API at all.
 
-Known caveat: Google Meet's join flow asks non-signed-in joiners
-for a name + sometimes a knock-to-join confirmation from the host.
-That's Meet's behaviour, not ours — we can't bypass it on consumer
-Gmail accounts via the Calendar API. Workspace + the Meet REST API
+Known caveat (Google Meet only): Meet's join flow can still gate
+non-signed-in joiners on a knock-to-join confirmation despite the
+attendee attachment — when the joiner isn't signed in to Google at
+all, attendee status doesn't help. Workspace + the Meet REST API
 (`spaces.create` with `accessType: OPEN`) is the only path to a
-fully no-account join experience, and it's a follow-up if/when
-Workspace-only deployments are an acceptable narrowing.
+fully no-account join experience on Google's side. The Jitsi
+provider sidesteps this entirely.
 
 ---
 

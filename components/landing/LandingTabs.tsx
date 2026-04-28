@@ -20,7 +20,12 @@ const teamLabelToMode: Record<TeamLabel, TeamMode> = {
   "Players pick": "players_pick",
 };
 
-export function LandingTabs() {
+export interface LandingTabsProps {
+  /** Server-resolved: are Google OAuth env vars configured on this deployment? */
+  googleMeetAvailable: boolean;
+}
+
+export function LandingTabs({ googleMeetAvailable }: LandingTabsProps) {
   const [tab, setTab] = useState<Tab>("host");
 
   return (
@@ -55,7 +60,11 @@ export function LandingTabs() {
         ))}
       </div>
 
-      {tab === "host" ? <HostForm /> : <JoinForm />}
+      {tab === "host" ? (
+        <HostForm googleMeetAvailable={googleMeetAvailable} />
+      ) : (
+        <JoinForm />
+      )}
     </div>
   );
 }
@@ -87,7 +96,7 @@ type BriefSource = "library" | "gm" | "gemini";
 type MeetingMode = "remote" | "in_person";
 type BreakoutProvider = "none" | "google_meet" | "jitsi";
 
-function HostForm() {
+function HostForm({ googleMeetAvailable }: { googleMeetAvailable: boolean }) {
   const router = useRouter();
   const [workshopName, setWorkshopName] = useState("");
   const [meetingMode, setMeetingMode] = useState<MeetingMode>("remote");
@@ -331,6 +340,7 @@ function HostForm() {
           <BreakoutProviderPicker
             provider={breakoutProvider}
             onChange={setBreakoutProvider}
+            googleMeetAvailable={googleMeetAvailable}
           />
         </>
       )}
@@ -558,9 +568,11 @@ const BREAKOUT_PROVIDER_OPTIONS = [
 function BreakoutProviderPicker({
   provider,
   onChange,
+  googleMeetAvailable,
 }: {
   provider: BreakoutProvider;
   onChange: (p: BreakoutProvider) => void;
+  googleMeetAvailable: boolean;
 }) {
   return (
     <Field
@@ -570,19 +582,28 @@ function BreakoutProviderPicker({
       <div className="flex flex-col gap-1.5">
         {BREAKOUT_PROVIDER_OPTIONS.map((opt) => {
           const active = provider === opt.value;
+          const disabled =
+            opt.value === "google_meet" && !googleMeetAvailable;
           return (
             <button
               key={opt.value}
               type="button"
-              onClick={() => onChange(opt.value)}
-              className="flex cursor-pointer items-start gap-3 rounded-[12px] px-3 py-2.5 text-left transition-colors"
+              onClick={() => {
+                if (disabled) return;
+                onChange(opt.value);
+              }}
+              disabled={disabled}
+              className="flex items-start gap-3 rounded-[12px] px-3 py-2.5 text-left transition-colors"
               style={{
                 background: active ? "var(--color-tint-blue)" : "var(--color-paper-2)",
                 border: active
                   ? "1.5px solid var(--color-t-blue)"
                   : "1.5px solid var(--color-line)",
+                opacity: disabled ? 0.5 : 1,
+                cursor: disabled ? "not-allowed" : "pointer",
               }}
               aria-pressed={active}
+              aria-disabled={disabled}
             >
               <span
                 className="mt-0.5 inline-block h-3.5 w-3.5 flex-shrink-0 rounded-full"
@@ -602,7 +623,9 @@ function BreakoutProviderPicker({
                   {opt.label}
                 </span>
                 <span className="text-[11px] text-[var(--color-ink-3)]">
-                  {opt.sub}
+                  {disabled
+                    ? "Not configured on this deployment"
+                    : opt.sub}
                 </span>
               </span>
             </button>

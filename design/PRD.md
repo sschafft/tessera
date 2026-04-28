@@ -370,36 +370,78 @@ on the Start button each round.
   "Debrief prompts" card containing three suggested retro questions
   to seed the conversation on the call.
 
-### 6.13 Optional per-pair Google Meet breakouts
+### 6.13 Meeting mode (in-person vs remote)
+- The host form's first decision is `meeting_mode`: **remote** (default)
+  or **in-person**. It's a one-question gate that reshapes the rest of
+  the form:
+  - **Remote** — surfaces the workshop-level video / whiteboard URL
+    fields and the breakout-provider picker (§6.14). Player views show
+    the video / whiteboard CTAs and per-pair breakout links if the GM
+    enabled them.
+  - **In-person** — drops video / whiteboard / breakout UI from the
+    host form and the player views entirely. Everyone is in the same
+    room, so off-platform call links would just be noise. The DB
+    columns are stored as `null`.
+- The toggle defaults to remote because that's the broader Tessera use
+  case (and the only one that exercises the per-pair breakout
+  superpower). It's a single radio-pair, two clicks total.
+
+### 6.14 Optional per-pair breakouts (Google Meet OR Jitsi)
 - Workshops at workshop-scale (3+ pairs) often want each pair on
-  their own audio channel. Tessera offers an opt-in breakouts feature
-  that mints **one Google Meet link per pair** via the Google Calendar
-  API, surfaces it as the player's primary "Join your pair's call"
-  CTA, and demotes the workshop-level `video_call_url` to a small
-  "Main room ↗" secondary link.
-- **Auth model:** the GM signs in with Google once per game from the
-  master setup screen (Step 4 card, hidden when
-  `GOOGLE_OAUTH_CLIENT_ID` isn't configured on the deployment). The
-  consent screen asks only for the `calendar.events` scope. Tokens
-  are stored encrypted server-side, scoped to that game, and revoked
-  on game-end. **Players never sign in to Google** — they just click
-  the Meet link the GM minted for their pair. (Note: Google Meet's
-  own join flow may still ask non-signed-in joiners for a display
-  name; that's a Google Meet behaviour we don't control.)
-- **Side effect on the GM's calendar:** each pair gets a calendar
-  event on the GM's primary calendar, anchored 1 hour in the past,
-  5 minutes long, marked private. Auto-deleted when the GM ends the
-  game (a cleanup modal makes the wipe visible). The pre-creation
-  flow surfaces a confirmation modal explaining all of this before
-  any event is touched.
-- **Failure modes**: if the OAuth grant lapses mid-game (token
-  expired and refresh failed), the panel surfaces a re-auth CTA and
-  in-flight breakout links keep working until the cleanup pass —
-  events that can't be deleted on game-end leave a hint pointing the
-  GM at "search 'Tessera breakout'" to clean up manually.
-- **Hidden when unconfigured.** Deployments without Google OAuth env
-  vars never show the Step 4 card. Existing games are unaffected by
-  the feature toggle being off.
+  their own audio channel. Remote games offer an opt-in breakouts
+  feature with **two providers**, picked at game-create:
+  - **Google Meet** — Tessera mints one private calendar event per
+    pair via the Google Calendar API (`conferenceData.createRequest`)
+    and surfaces the auto-attached Meet link as that pair's primary
+    "Join your pair's call" CTA. Pair participants are added as
+    Calendar event attendees so signed-in players bypass Meet's knock
+    screen — which is why the join form requires an email when this
+    provider is selected.
+  - **Jitsi** — Tessera computes a deterministic
+    `meet.jit.si/tessera-<game-code>-<pair-id>` URL per pair. No API
+    call, no OAuth, no calendar pollution, no email collection. Rooms
+    are stateless on the public Jitsi server; the long randomised
+    slug makes them unguessable in practice.
+  - **None** — players use the workshop-level call only.
+  Whichever provider is selected, the workshop-level `video_call_url`
+  demotes to a small "Main room ↗" secondary link once a pair has a
+  breakout link.
+- **Why two providers.** Google Meet integrates with the GM's
+  calendar and is familiar to corporate workshops, but it requires
+  OAuth + email collection and many users still hit the knock
+  screen. Jitsi removes every friction point — no sign-in, no email,
+  no consent screen — at the cost of an unfamiliar host. Offering
+  both lets the GM trade off familiarity vs. friction for their
+  audience.
+- **Email at join time** is the price of the Google Meet path. The
+  PII surface is intentionally minimal: email is only collected when
+  `breakout_provider='google_meet'`, only used as a Calendar event
+  attendee, never sent any other email by Tessera. Jitsi + in-person
+  + no-breakouts games never collect email.
+- **Auth model (Google Meet only):** the GM signs in with Google
+  once per game from the master setup screen (Step 4 card, only
+  shown when the game's provider is `google_meet`). Consent screen
+  asks only for the `calendar.events` scope. Tokens are stored
+  encrypted server-side, scoped to that game, and revoked on
+  game-end. The Jitsi path needs no auth.
+- **Side effect on the GM's calendar (Google Meet only):** each pair
+  gets a calendar event on the GM's primary calendar, anchored 1
+  hour in the past, 5 minutes long, marked private. Auto-deleted
+  when the GM ends the game (a cleanup modal makes the wipe
+  visible). The pre-creation flow surfaces a confirmation modal
+  explaining all of this before any event is touched. Jitsi has no
+  side effect — generating links is instant and end-game cleanup
+  just clears the local pair URLs.
+- **Failure modes (Google Meet):** if the OAuth grant lapses mid-game
+  (token expired and refresh failed), the panel surfaces a re-auth
+  CTA and in-flight breakout links keep working until the cleanup
+  pass — events that can't be deleted on game-end leave a hint
+  pointing the GM at "search 'Tessera breakout'" to clean up
+  manually. Jitsi has no equivalent failure mode.
+- **Provider availability.** Deployments without Google OAuth env
+  vars can still offer Jitsi; the host form's picker just lists
+  Google Meet as unavailable if env vars are missing. Existing games
+  carry their original provider for the life of the game.
 
 ---
 
