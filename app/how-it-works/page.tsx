@@ -83,9 +83,10 @@ export default function HowItWorksPage() {
         Facilitator super powers
       </h2>
       <p>
-        The game master has a rail of ten in-game mechanics they can trigger
-        on a single pair or globally, plus an inline scoring tile. Each
-        super power maps to a real workshop dynamic:
+        The game master has a curated rail of mechanics they can trigger on
+        a single pair or globally, plus an inline scoring tile. The five most
+        useful sit inline; a <b>More super powers</b> CTA opens the rest in a
+        fullscreen grid. Each maps to a real workshop dynamic:
       </p>
       <ul className="ml-6 list-disc pl-2">
         <li>
@@ -131,6 +132,20 @@ export default function HowItWorksPage() {
         isn&apos;t to use them all — it&apos;s to reach for the right one
         when the room gets stuck. A short toast pops on the affected
         pair&apos;s screen each time one fires, so the change registers.
+      </p>
+
+      <h2 className="t-display mt-6 text-[28px] font-bold tracking-tight">
+        Remote, in-person, or hybrid
+      </h2>
+      <p>
+        At game-create, the GM picks <b>remote</b> (default) or
+        <b> in-person</b>. Remote workshops can also opt into per-pair{" "}
+        <b>breakout calls</b> via Google Meet (with participant emails as
+        attendees) or Jitsi (free, no sign-in for anyone). Each pair gets a
+        private call link to talk on while they build, and the workshop&apos;s
+        main video link demotes to a small &ldquo;Main room ↗&rdquo;
+        secondary chip. In-person mode hides video and breakouts entirely —
+        everyone&apos;s already in the room.
       </p>
 
       <h2 className="t-display mt-6 text-[28px] font-bold tracking-tight">

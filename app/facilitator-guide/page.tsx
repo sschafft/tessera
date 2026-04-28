@@ -32,8 +32,24 @@ export default function FacilitatorGuidePage() {
           way.
         </li>
         <li>
-          Set a video call link (Meet, Zoom, etc). Tessera doesn&apos;t
-          do voice — pairs need an external channel.
+          Pick <b>remote</b> or <b>in-person</b> at the top of the host
+          form. Remote shows fields for a workshop video call link and
+          (optional) per-pair <b>breakout calls</b> — Google Meet or
+          Jitsi. In-person hides all the call/whiteboard fields; everyone
+          is already together.
+        </li>
+        <li>
+          Per-pair breakouts are most useful for 3+ pairs. <b>Jitsi</b>{" "}
+          is the friction-free option (no accounts, no sign-in) and works
+          on every deployment. <b>Google Meet</b> requires the GM to sign
+          in once with Google, and asks players for an email at join time
+          so they can be added as Calendar event attendees and bypass the
+          Meet knock screen.
+        </li>
+        <li>
+          Tessera doesn&apos;t carry voice. Pairs talk through whichever
+          call link you set up — the workshop main room for everyone,
+          plus the pair&apos;s breakout link if you minted them.
         </li>
         <li>
           <b>Save your host recovery URL.</b> The create modal shows it
@@ -121,6 +137,15 @@ export default function FacilitatorGuidePage() {
         correct piece (1–100, default 10) and toggle a per-wrong penalty
         (−1 per misplaced piece). Mid-round changes pop a confirm modal
         because they retroactively recompute every score.
+      </p>
+      <p>
+        If you enabled per-pair breakouts at game-create, each pair row
+        on the dashboard surfaces the pair&apos;s call link with a copy
+        button so you can drop it into chat or open it to drop into a
+        room mid-round. Players see the link in their top bar as <b>Pair
+        call</b> alongside the workshop&apos;s <b>Main room</b>; the
+        breakout takes precedence as the primary CTA on their lobby +
+        play screens.
       </p>
 
       <h2 className="t-display mt-6 text-[28px] font-bold tracking-tight">
