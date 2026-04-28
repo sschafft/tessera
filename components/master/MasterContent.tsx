@@ -668,6 +668,17 @@ export function MasterContent({
             roundRunning={round?.status === "running"}
             focusedPair={focusedPair}
             busy={busy}
+            // Scoring retune is "retroactive" only when a round is
+            // running AND something to retune exists. We don't have
+            // a per-pair placement count in the lobby payload, so
+            // we approximate via roundRunning + any pair existing.
+            // Trade-off: a confirmation flashes on the very first
+            // change of a round before any pieces are placed (safe);
+            // skipping confirm pre-round when no scores exist yet
+            // (also safe — nothing to recompute).
+            scoreRetuneIsRetroactive={
+              round?.status === "running" && pairs.length > 0
+            }
             scoring={data?.scoring ?? { correct_pts: 10, wrong_pts: 0 }}
             onTrigger={triggerAccelerant}
             onScoring={updateScoring}
