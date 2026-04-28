@@ -5,6 +5,7 @@ import type { Database } from "@/lib/supabase/database.types";
 import {
   DuplicateNameError,
   PlacementCellTakenError,
+  SnapshotShareCapError,
 } from "./repository.memory";
 import type {
   BriefRecord,
@@ -731,30 +732,34 @@ export class SupabaseGameRepository implements GameRepository {
     round_id: string,
     delta: number,
   ): Promise<void> {
+    // Atomic adjust via RPC. Two parallel Time-Pressure triggers
+    // before this used to each read the same duration_seconds and
+    // each write a single decrement, so the second trigger no-op'd.
+    // The RPC takes a row lock + recomputes remaining inside the
+    // transaction. See 20260427000002_atomic_counter_rpcs.sql.
     const supabase = getServiceClient();
-    const { data, error } = await supabase
-      .from("rounds")
-      .select("started_at, duration_seconds")
-      .eq("id", round_id)
-      .single();
-    if (error || !data) {
-      throw new Error(
-        `decrementRoundDuration read: ${error?.message ?? "unknown"}`,
-      );
+    // Cast: database.types.ts is regenerated out-of-band and lags
+    // newly-added RPCs. The shape is what 20260427000002_atomic_counter_rpcs.sql
+    // returns. Re-run `supabase gen types` to drop these casts.
+    const { data, error } = await (
+      supabase.rpc as unknown as (
+        fn: string,
+        args: Record<string, unknown>,
+      ) => Promise<{ data: unknown; error: { message: string } | null }>
+    )("adjust_round_duration", {
+      p_round_id: round_id,
+      p_delta_seconds: delta,
+    });
+    if (error) {
+      throw new Error(`decrementRoundDuration: ${error.message}`);
     }
-    const startedMs = data.started_at
-      ? new Date(data.started_at).getTime()
-      : Date.now();
-    const elapsed = Math.floor((Date.now() - startedMs) / 1000);
-    const remaining = data.duration_seconds - elapsed;
-    const newRemaining = Math.max(30, remaining - delta);
-    const newDuration = elapsed + newRemaining;
-    const { error: updErr } = await supabase
-      .from("rounds")
-      .update({ duration_seconds: newDuration })
-      .eq("id", round_id);
-    if (updErr) {
-      throw new Error(`decrementRoundDuration write: ${updErr.message}`);
+    const j = data as
+      | { ok: boolean; reason?: string }
+      | null;
+    if (!j || !j.ok) {
+      throw new Error(
+        `decrementRoundDuration: ${j?.reason ?? "unknown"}`,
+      );
     }
   }
 
@@ -774,29 +779,41 @@ export class SupabaseGameRepository implements GameRepository {
     pair_round_id: string,
     snapshot: unknown,
   ): Promise<number> {
+    // Atomic capture via RPC: row lock + decrement-if-positive +
+    // write the snapshot in a single transaction. Was a read-then-
+    // write split, which let two parallel /agile-share POSTs both
+    // observe shares_remaining=3 and both write 2 — captured twice
+    // but the counter only dropped by 1. Returns 0 throws when the
+    // bucket was already empty so the route can surface a typed 409.
     const supabase = getServiceClient();
-    // Read current value, then update; PostgREST doesn't support
-    // arithmetic in a single UPDATE without an RPC.
-    const { data: cur, error: readErr } = await supabase
-      .from("pair_rounds")
-      .select("shares_remaining")
-      .eq("id", pair_round_id)
-      .single();
-    if (readErr || !cur) {
-      throw new Error(`captureBuilderSnapshot read: ${readErr?.message}`);
+    // Same cast as adjust_round_duration above — database.types.ts
+    // hasn't been regenerated for the new RPC yet.
+    const { data, error } = await (
+      supabase.rpc as unknown as (
+        fn: string,
+        args: Record<string, unknown>,
+      ) => Promise<{ data: unknown; error: { message: string } | null }>
+    )("capture_builder_snapshot", {
+      p_pair_round_id: pair_round_id,
+      p_snapshot: snapshot,
+    });
+    if (error) {
+      throw new Error(`captureBuilderSnapshot: ${error.message}`);
     }
-    const next = Math.max(0, cur.shares_remaining - 1);
-    const { error: updErr } = await supabase
-      .from("pair_rounds")
-      .update({
-        builder_snapshot: snapshot as never,
-        shares_remaining: next,
-      })
-      .eq("id", pair_round_id);
-    if (updErr) {
-      throw new Error(`captureBuilderSnapshot write: ${updErr.message}`);
+    const j = data as
+      | {
+          captured: boolean;
+          reason?: string;
+          shares_remaining?: number;
+        }
+      | null;
+    if (!j) {
+      throw new Error("captureBuilderSnapshot: empty response");
     }
-    return next;
+    if (!j.captured) {
+      throw new SnapshotShareCapError(j.reason);
+    }
+    return j.shares_remaining ?? 0;
   }
 
   async listLibraryBriefs(input: {

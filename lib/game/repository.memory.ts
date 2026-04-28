@@ -29,6 +29,21 @@ export class PlacementCellTakenError extends Error {
 }
 
 /**
+ * Thrown by captureBuilderSnapshot when the pair has already used all
+ * its shares. Lets the agile-share route surface a typed 409 instead
+ * of leaking "no_shares_remaining" through a generic 500. The
+ * supabase impl raises this off the atomic capture_builder_snapshot
+ * RPC's `captured: false` branch; the in-memory impl mirrors it for
+ * dev parity.
+ */
+export class SnapshotShareCapError extends Error {
+  constructor(public reason: string = "no_shares_remaining") {
+    super(`captureBuilderSnapshot: ${reason}`);
+    this.name = "SnapshotShareCapError";
+  }
+}
+
+/**
  * In-memory GameRepository. Used during early local dev before Supabase
  * env vars are set. Per-process, no persistence across server restarts.
  */
@@ -606,9 +621,12 @@ export class MemoryGameRepository implements GameRepository {
     snapshot: unknown,
   ): Promise<number> {
     const pr = this.pairRounds.get(pair_round_id);
-    if (!pr) return 0;
+    if (!pr) throw new SnapshotShareCapError("pair_round_not_found");
+    if (pr.shares_remaining <= 0) {
+      throw new SnapshotShareCapError("no_shares_remaining");
+    }
     pr.builder_snapshot = snapshot;
-    pr.shares_remaining = Math.max(0, pr.shares_remaining - 1);
+    pr.shares_remaining = pr.shares_remaining - 1;
     return pr.shares_remaining;
   }
 }
