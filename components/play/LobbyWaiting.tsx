@@ -10,6 +10,29 @@ export interface LobbyWaitingProps {
   roundInFlight?: boolean;
 }
 
+// Mirror JoinCallCta's placeholder-URL filter so the body copy and the
+// CTA make the same decision about whether a usable call link exists.
+// Without this, the lobby copy can say "hop on the call below" while
+// the CTA renders nothing because the URL is meet.example.com.
+const PLACEHOLDER_HOSTS = new Set([
+  "example.com",
+  "example.org",
+  "example.net",
+  "localhost",
+  "127.0.0.1",
+]);
+function isUsableCallUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  try {
+    const u = new URL(url);
+    return ![...PLACEHOLDER_HOSTS].some(
+      (h) => u.hostname === h || u.hostname.endsWith(`.${h}`),
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function LobbyWaiting({
   workshopName,
   videoCallUrl,
@@ -17,7 +40,8 @@ export function LobbyWaiting({
   breakoutCallUrl,
   roundInFlight = false,
 }: LobbyWaitingProps) {
-  const hasCall = Boolean(breakoutCallUrl || videoCallUrl);
+  const hasCall =
+    isUsableCallUrl(breakoutCallUrl) || isUsableCallUrl(videoCallUrl);
   return (
     <section className="m-auto flex max-w-[480px] flex-col items-center gap-5 px-6 text-center">
       <LiveStatusBadge
@@ -43,7 +67,7 @@ export function LobbyWaiting({
             screen will flip into your role on its own — no need to refresh.
             <br />
             <b>While you wait:</b> hop on the call below and introduce
-            yourself — your partner is probably joining too.
+            yourself — everyone else is probably joining too.
           </>
         ) : (
           <>
