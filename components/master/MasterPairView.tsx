@@ -320,20 +320,22 @@ function BriefCard({
         >
           ● {role.toUpperCase()}
         </span>
-        <button
-          type="button"
-          onClick={onReroll}
-          disabled={busy}
-          className="t-mono text-[10px] text-[var(--color-ink-3)] underline disabled:opacity-50"
-        >
-          re-roll
-        </button>
+        {brief && (
+          <button
+            type="button"
+            onClick={onReroll}
+            disabled={busy}
+            className="t-mono text-[10px] text-[var(--color-ink-3)] underline disabled:opacity-50"
+          >
+            re-roll
+          </button>
+        )}
       </div>
       <div
         className="t-display mb-2 text-[15px] font-bold"
         style={{ color: "var(--color-ink)" }}
       >
-        {brief?.title ?? "(off — toggle in game settings)"}
+        {brief?.title ?? `(off — fire "Add ${role} brief" from Super powers to add one)`}
       </div>
       {brief && (
         <ul className="m-0 flex list-none flex-col gap-1 p-0 text-[12px] text-[var(--color-ink-2)]">

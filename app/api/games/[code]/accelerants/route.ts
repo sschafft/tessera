@@ -143,6 +143,16 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     case "change_builder_brief": {
       const role: "builder" | "guider" =
         body.kind === "change_builder_brief" ? "builder" : "guider";
+      // The "Change brief" super-powers double as "Add brief" when the
+      // GM created the game with that side off — flip the flag now so
+      // the new brief shows up on the current round (existing brief
+      // envelope flow keys off the persisted brief row, not this flag)
+      // AND so subsequent rounds keep generating briefs for this side.
+      const wasOff =
+        role === "builder" ? !game.builder_brief_on : !game.guider_brief_on;
+      if (wasOff) {
+        await repo.setBriefOn(game.id, role, true);
+      }
       const source =
         role === "builder" ? game.builder_brief_source : game.guider_brief_source;
       const custom =

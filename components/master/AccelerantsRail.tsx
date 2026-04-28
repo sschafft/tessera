@@ -123,6 +123,15 @@ export interface AccelerantsRailProps {
    */
   scoreRetuneIsRetroactive: boolean;
   scoring: { correct_pts: number; wrong_pts: number };
+  /**
+   * Per-side brief enablement read from the game row. When a side is
+   * disabled (GM created the game without that brief), the
+   * corresponding "Change brief" super-power relabels itself to
+   * "Add brief" — the route handler flips the flag the first time
+   * it's triggered. When BOTH sides are disabled, "Reveal briefs"
+   * has nothing to reveal and is disabled with an explanatory note.
+   */
+  briefsEnabled: { builder: boolean; guider: boolean };
   onTrigger: (
     kind: string,
     scope: "pair" | "all",
@@ -139,12 +148,14 @@ export function AccelerantsRail({
   busy,
   scoreRetuneIsRetroactive,
   scoring,
+  briefsEnabled,
   onTrigger,
   onScoring,
 }: AccelerantsRailProps) {
   const [scope, setScope] = useState<"pair" | "all">("pair");
   const [prototypeSec, setPrototypeSec] = useState(5);
   const [expanded, setExpanded] = useState(false);
+  const noBriefsAtAll = !briefsEnabled.builder && !briefsEnabled.guider;
 
   useEffect(() => {
     if (!expanded) return;
@@ -233,34 +244,73 @@ export function AccelerantsRail({
     />
   );
 
-  const renderButton = (b: RailButtonSpec) => (
-    <RailButton
-      key={b.kind}
-      spec={b}
-      events={events}
-      scope={scope}
-      focusedPairId={focusedPair?.id ?? null}
-      disabled={
-        !roundRunning ||
-        busy ||
-        (scope === "pair" && !focusedPair) ||
-        !POLICIES[b.kind].implemented
-      }
-      payload={
-        b.kind === "prototype" ? { duration_seconds: prototypeSec } : undefined
-      }
-      extra={
-        b.kind === "prototype" ? (
-          <PrototypeDurationControl
-            seconds={prototypeSec}
-            onChange={setPrototypeSec}
-          />
-        ) : null
-      }
-      triggerLabel={TRIGGER_LABELS[b.kind]}
-      onTrigger={onTrigger}
-    />
-  );
+  const renderButton = (b: RailButtonSpec) => {
+    // Brief on/off conditionals.
+    //   - change_builder_brief / vocab_swap (Change guider brief)
+    //     relabel to "Add ... brief" when that side is currently off.
+    //     The route handler flips the flag on first trigger so future
+    //     rounds keep the brief on.
+    //   - reveal_briefs disables when BOTH sides are off — there's
+    //     nothing to reveal.
+    let spec: RailButtonSpec = b;
+    let triggerLabel: string | undefined = TRIGGER_LABELS[b.kind];
+    let extraDisabledReason: string | null = null;
+
+    if (b.kind === "change_builder_brief" && !briefsEnabled.builder) {
+      spec = {
+        ...b,
+        title: "Add builder brief",
+        sub: "Builder brief was off at game-create. Trigger to roll one in for this round and keep it on for future rounds.",
+      };
+      triggerLabel = "Add brief";
+    } else if (b.kind === "vocab_swap" && !briefsEnabled.guider) {
+      spec = {
+        ...b,
+        title: "Add guider brief",
+        sub: "Guider brief was off at game-create. Trigger to roll one in for this round and keep it on for future rounds.",
+      };
+      triggerLabel = "Add brief";
+    } else if (b.kind === "reveal_briefs" && noBriefsAtAll) {
+      extraDisabledReason = "no_briefs";
+    }
+
+    return (
+      <RailButton
+        key={b.kind}
+        spec={spec}
+        events={events}
+        scope={scope}
+        focusedPairId={focusedPair?.id ?? null}
+        disabled={
+          !roundRunning ||
+          busy ||
+          (scope === "pair" && !focusedPair) ||
+          !POLICIES[b.kind].implemented ||
+          extraDisabledReason !== null
+        }
+        disabledNote={
+          extraDisabledReason === "no_briefs"
+            ? "No briefs to reveal — turn on a brief from the Add brief super-powers below."
+            : null
+        }
+        payload={
+          b.kind === "prototype"
+            ? { duration_seconds: prototypeSec }
+            : undefined
+        }
+        extra={
+          b.kind === "prototype" ? (
+            <PrototypeDurationControl
+              seconds={prototypeSec}
+              onChange={setPrototypeSec}
+            />
+          ) : null
+        }
+        triggerLabel={triggerLabel}
+        onTrigger={onTrigger}
+      />
+    );
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -669,6 +719,7 @@ function RailButton({
   scope,
   focusedPairId,
   disabled,
+  disabledNote,
   payload,
   extra,
   triggerLabel,
@@ -679,6 +730,13 @@ function RailButton({
   scope: "pair" | "all";
   focusedPairId: string | null;
   disabled: boolean;
+  /**
+   * Optional copy explaining a context-specific disable (e.g. "No
+   * briefs to reveal" when both sides are off). Renders as a small
+   * inline note next to the disabled CTA so the GM understands why
+   * the button is unresponsive instead of guessing.
+   */
+  disabledNote?: string | null;
   /** Optional payload merged into the trigger call (e.g. duration_seconds). */
   payload?: Record<string, unknown>;
   /** Optional inline control rendered below the spec body (e.g. duration knob). */
@@ -788,6 +846,14 @@ function RailButton({
       >
         {reachedCap ? "Cap reached" : `${verb} →`}
       </button>
+      {disabledNote && finalDisabled && (
+        <p
+          className="text-[11px] leading-snug"
+          style={{ color: "var(--color-ink-3)" }}
+        >
+          {disabledNote}
+        </p>
+      )}
     </div>
   );
 }

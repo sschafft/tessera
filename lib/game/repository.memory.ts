@@ -359,6 +359,19 @@ export class MemoryGameRepository implements GameRepository {
     }
   }
 
+  async setBriefOn(
+    game_id: string,
+    role: "builder" | "guider",
+    on: boolean,
+  ): Promise<void> {
+    for (const g of this.games.values()) {
+      if (g.id === game_id) {
+        if (role === "builder") g.builder_brief_on = on;
+        else g.guider_brief_on = on;
+      }
+    }
+  }
+
   async createPlacement(input: {
     pair_round_id: string;
     shape: string;

@@ -75,6 +75,10 @@ interface LobbyResponse {
     correct_pts: number;
     wrong_pts: number;
   };
+  briefs_enabled: {
+    builder: boolean;
+    guider: boolean;
+  };
   participants: LobbyParticipant[];
   pairs: LobbyPair[];
   round: LobbyRound | null;
@@ -771,6 +775,9 @@ export function MasterContent({
                   round?.status === "running" && pairs.length > 0
                 }
                 scoring={data?.scoring ?? { correct_pts: 10, wrong_pts: 0 }}
+                briefsEnabled={
+                  data?.briefs_enabled ?? { builder: true, guider: true }
+                }
                 onTrigger={triggerAccelerant}
                 onScoring={updateScoring}
               />
