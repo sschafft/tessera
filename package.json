@@ -12,6 +12,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@clerk/nextjs": "^7.2.7",
     "@google/generative-ai": "^0.24.1",
     "@supabase/supabase-js": "^2.104.1",
     "@vercel/analytics": "^2.0.1",

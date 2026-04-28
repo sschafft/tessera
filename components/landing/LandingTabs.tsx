@@ -95,12 +95,6 @@ function HostForm() {
   const [complexity, setComplexity] = useState(5);
   const [builderBrief, setBuilderBrief] = useState(true);
   const [guiderBrief, setGuiderBrief] = useState(true);
-  // Hidden when NEXT_PUBLIC_BREAKOUTS_AVAILABLE isn't set on the
-  // deployment — paired with GOOGLE_OAUTH_CLIENT_ID server-side, so
-  // the toggle only appears where the OAuth flow is wired up.
-  const breakoutsAvailable =
-    process.env.NEXT_PUBLIC_BREAKOUTS_AVAILABLE === "1";
-  const [breakoutsEnabled, setBreakoutsEnabled] = useState(false);
   const [builderBriefSource, setBuilderBriefSource] = useState<BriefSource>("library");
   const [guiderBriefSource, setGuiderBriefSource] = useState<BriefSource>("library");
   const [builderCustomTitle, setBuilderCustomTitle] = useState("");
@@ -190,7 +184,6 @@ function HostForm() {
           round_duration_seconds: 900,
           participant_cap: 50,
           sound_on: true,
-          breakouts_enabled: breakoutsAvailable && breakoutsEnabled,
         }),
       });
       if (!res.ok) {
@@ -309,34 +302,6 @@ function HostForm() {
           onChange={setGuiderBrief}
         />
       </div>
-
-      {breakoutsAvailable && (
-        <div
-          className="flex flex-col gap-2 rounded-[14px] px-4 py-3"
-          style={{
-            background: "var(--color-tint-purple)",
-            border: "1.5px solid var(--color-t-purple)",
-          }}
-        >
-          <Toggle
-            label="Per-pair breakout calls"
-            sub="Auto-mint a Google Meet link per pair"
-            on={breakoutsEnabled}
-            onChange={setBreakoutsEnabled}
-          />
-          {breakoutsEnabled && (
-            <p
-              className="text-[12px] leading-snug"
-              style={{ color: "#3a2070" }}
-            >
-              After creating the game, you&apos;ll sign in with Google so
-              Tessera can mint the links via the Calendar API. We&apos;ll
-              walk you through what that creates (and clean up after the
-              game ends) before any calendar event is touched.
-            </p>
-          )}
-        </div>
-      )}
 
       {(builderBrief || guiderBrief) && (
         <div className="grid grid-cols-2 gap-3">

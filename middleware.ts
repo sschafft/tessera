@@ -1,35 +1,25 @@
+import { clerkMiddleware } from "@clerk/nextjs/server";
 import { NextResponse, type NextRequest } from "next/server";
 
 /**
- * Lightweight per-IP rate limit for our public mutation routes.
+ * Composed middleware:
  *
- * The Tessera deployment runs on Vercel's free tier with no KV/Redis,
- * so this implementation uses an in-memory sliding-window counter
- * scoped to the runtime instance. That has known caveats:
+ *   1. Lightweight per-IP rate limit on a few sensitive POST routes
+ *      (game create, host-recover, recover, join — all bcrypt-bound).
+ *   2. Clerk auth context injection. Runs on all non-asset routes so
+ *      `auth()` works in any route handler / server component that
+ *      needs to know who the signed-in GM is. We only actually use it
+ *      under /api/games/[code]/breakouts/* and /api/games/[code]/end,
+ *      but extending the matcher is cheap and avoids "auth() called
+ *      outside Clerk middleware" surprises.
  *
- *   - Counters reset on cold starts.
- *   - A determined attacker can hit different instances to bypass
- *     the per-instance window.
- *
- * Both are acceptable for v1 — this is a defence in depth against
- * accidental client retries / casual abuse, NOT a hardened gate. The
- * upgrade path when traffic warrants it is Vercel KV or Upstash Redis
- * (drop-in replacement for the `hits` Map below).
- *
- * The limits are intentionally generous: a real workshop GM creating
- * a game + one player joining sends ~6 mutating requests in the first
- * 30 seconds. We bound at 60 mutations / minute / IP, which still
- * leaves headroom for racy realtime updates.
+ * The rate-limit logic was previously the entire middleware; it's now
+ * the inner step inside Clerk's wrapper.
  */
 
 const WINDOW_MS = 60_000;
 const MAX_REQUESTS = 60;
 
-// Mutation paths we want to gate. Read-only `/api/games/[code]/play`
-// and `/api/games/[code]/lobby` are excluded — they're polled at high
-// frequency by legitimate clients (2 Hz from the GM dashboard) and
-// gating them would create false positives faster than it stops
-// abuse.
 const GUARDED_PATTERNS: RegExp[] = [
   /^\/api\/games$/, // POST: create game (bcrypt, expensive)
   /^\/api\/games\/[A-Z0-9-]+\/host-recover$/, // POST: bcrypt verify
@@ -38,15 +28,8 @@ const GUARDED_PATTERNS: RegExp[] = [
 ];
 
 interface Bucket {
-  /** Timestamps of recent requests, ms since epoch. */
   hits: number[];
 }
-
-// Per-process in-memory store. Acceptable because:
-//   1. The guarded routes are bcrypt-bound (1 hit ≈ 100ms CPU), so
-//      cross-instance bypass costs the attacker linearly.
-//   2. The hot data is bounded — we trim each bucket on every check.
-//   3. Old IPs eventually fall off when nothing checks their bucket.
 const buckets = new Map<string, Bucket>();
 
 function gated(pathname: string): boolean {
@@ -54,7 +37,6 @@ function gated(pathname: string): boolean {
 }
 
 function getClientIp(req: NextRequest): string {
-  // Prefer x-forwarded-for (Vercel sets this, first hop = client IP)
   const xff = req.headers.get("x-forwarded-for");
   if (xff) return xff.split(",")[0]!.trim();
   const realIp = req.headers.get("x-real-ip");
@@ -62,18 +44,16 @@ function getClientIp(req: NextRequest): string {
   return "unknown";
 }
 
-export function middleware(req: NextRequest) {
-  // Only gate POSTs (the ones that mutate state); GET pollers slip
-  // through. PATCH/PUT/DELETE go through too — they're rare on the
-  // guarded routes (none of the guarded patterns accept them) but
-  // future-proof.
-  if (req.method === "GET" || req.method === "HEAD" || req.method === "OPTIONS") {
-    return NextResponse.next();
+function applyRateLimit(req: NextRequest): NextResponse | null {
+  if (
+    req.method === "GET" ||
+    req.method === "HEAD" ||
+    req.method === "OPTIONS"
+  ) {
+    return null;
   }
   const path = req.nextUrl.pathname;
-  if (!gated(path)) {
-    return NextResponse.next();
-  }
+  if (!gated(path)) return null;
   const ip = getClientIp(req);
   const now = Date.now();
   const cutoff = now - WINDOW_MS;
@@ -82,7 +62,6 @@ export function middleware(req: NextRequest) {
     bucket = { hits: [] };
     buckets.set(ip, bucket);
   }
-  // Drop expired hits.
   while (bucket.hits.length > 0 && bucket.hits[0]! < cutoff) {
     bucket.hits.shift();
   }
@@ -105,27 +84,27 @@ export function middleware(req: NextRequest) {
     );
   }
   bucket.hits.push(now);
-  // Drop fully-empty entries opportunistically so the per-process Map
-  // doesn't grow unbounded across long-lived warm instances (open
-  // wifi / NAT'd attendees flood the IP space). The previous comment
-  // claimed this happened automatically — it didn't; buckets only got
-  // trimmed on a same-IP hit. 1% sweep amortises the work without
-  // blocking the hot path.
   if (Math.random() < 0.01) {
     for (const [k, v] of buckets) {
       if (v.hits.length === 0) buckets.delete(k);
     }
   }
-  const remaining = MAX_REQUESTS - bucket.hits.length;
-  const res = NextResponse.next();
-  res.headers.set("X-RateLimit-Limit", String(MAX_REQUESTS));
-  res.headers.set("X-RateLimit-Remaining", String(remaining));
-  return res;
+  return null;
 }
 
+export default clerkMiddleware((_auth, req) => {
+  const limited = applyRateLimit(req);
+  if (limited) return limited;
+  return NextResponse.next();
+});
+
 export const config = {
-  // Match every route under /api/games (the patterns above further
-  // narrow inside the handler). Other routes (/api/keepalive,
-  // /api/me/active-games) skip the middleware entirely.
-  matcher: ["/api/games/:path*"],
+  // Clerk's recommended matcher — every route except static assets +
+  // the Next.js internals. This is broader than the previous matcher
+  // (`/api/games/:path*`) but cheap because the inner rate-limit logic
+  // bails fast on non-guarded paths.
+  matcher: [
+    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+    "/(api|trpc)(.*)",
+  ],
 };
