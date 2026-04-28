@@ -3,7 +3,7 @@ import "server-only";
 import { getRepository } from "@/lib/game/getRepository";
 import type { BriefRole, BriefSource, CustomBrief } from "@/lib/game/repository";
 import { pickLibraryBrief, type PickedBrief } from "./library";
-import { AIBriefRouterError, generateBriefViaAI } from "./router";
+import { generateBriefViaGemini } from "./gemini";
 
 const PER_GAME_MAX = 30;
 const PER_DAY_MAX = 800;
@@ -61,11 +61,7 @@ export async function pickBrief(input: OrchestrateInput): Promise<PickedBrief> {
   }
 
   if (input.source === "gemini") {
-    // The "gemini" brief source actually flows through the AI router
-    // (lib/briefs/router.ts) which tries Gemini first then OpenAI.
-    // The source field is kept for back-compat with existing rows;
-    // the runtime decides which provider answered.
-    let aiFailReason: string | null = null;
+    let geminiFailReason: string | null = null;
     try {
       const repo = getRepository();
       const reservation = await repo.reserveGeminiCall({
@@ -75,44 +71,32 @@ export async function pickBrief(input: OrchestrateInput): Promise<PickedBrief> {
       });
       if (reservation.ok) {
         try {
-          const result = await generateBriefViaAI({
+          const brief = await generateBriefViaGemini({
             role: input.role,
             complexity: input.complexity,
             exclude_titles: input.exclude_titles,
           });
-          // Telemetry: which providers were tried in what order. The
-          // GM-facing UI reads brief.source to know whether the
-          // brief is gemini / openai / library / gm.
           console.info(
-            `[briefs] ai router attempts ${result.attempts
-              .map((a) => `${a.provider}:${a.ok ? "ok" : a.reason ?? "fail"}`)
-              .join(",")}`,
+            `[briefs] gemini ok role=${input.role} title="${brief.title.slice(0, 40)}"`,
           );
-          return result.brief;
+          return brief;
         } catch (err) {
-          if (err instanceof AIBriefRouterError) {
-            aiFailReason = `router:${err.reason}`;
-            console.warn(
-              `[briefs] ai router exhausted: ${err.attempts
-                .map((a) => `${a.provider}:${a.ok ? "ok" : a.reason ?? "fail"}`)
-                .join(",")}`,
-            );
-          } else {
-            aiFailReason = err instanceof Error ? err.message : String(err);
-            console.warn(`[briefs] ai router unexpected: ${aiFailReason}`);
-          }
+          geminiFailReason = err instanceof Error ? err.message : String(err);
+          console.warn(
+            `[briefs] gemini call failed role=${input.role}: ${geminiFailReason}`,
+          );
         }
       } else {
-        aiFailReason = `budget_${reservation.reason}`;
+        geminiFailReason = `budget_${reservation.reason}`;
         console.info(`[briefs] gemini budget exhausted (${reservation.reason})`);
       }
     } catch (err) {
-      aiFailReason = err instanceof Error ? err.message : String(err);
-      console.warn(`[briefs] ai reservation failed: ${aiFailReason}`);
+      geminiFailReason = err instanceof Error ? err.message : String(err);
+      console.warn(`[briefs] gemini reservation failed: ${geminiFailReason}`);
     }
 
-    if (aiFailReason && !allowFallback) {
-      throw new GeminiBriefFailedError(input.role, aiFailReason);
+    if (geminiFailReason && !allowFallback) {
+      throw new GeminiBriefFailedError(input.role, geminiFailReason);
     }
   }
 
