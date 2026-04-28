@@ -9,6 +9,15 @@ export interface PairsPanelProps {
   participants: LobbyParticipant[];
   focusedPairId: string | null;
   onFocus: (id: string) => void;
+  /** Optional breakouts strip — shows mid-round Generate / Clear when
+   * the game uses jitsi or google_meet. Hidden when provider='none'. */
+  breakouts?: {
+    provider: "none" | "google_meet" | "jitsi";
+    googleConnected: boolean;
+    busy: boolean;
+    onGenerate: () => void;
+    onClear: () => void;
+  };
 }
 
 export function PairsPanel({
@@ -16,6 +25,7 @@ export function PairsPanel({
   participants,
   focusedPairId,
   onFocus,
+  breakouts,
 }: PairsPanelProps) {
   const byId = new Map(participants.map((p) => [p.id, p]));
   const observersByPair = new Map<string, LobbyParticipant[]>();
@@ -59,6 +69,92 @@ export function PairsPanel({
               onFocus={() => onFocus(pair.id)}
             />
           ))
+        )}
+      </div>
+      {breakouts && breakouts.provider !== "none" && pairs.length > 0 && (
+        <BreakoutsStrip
+          provider={breakouts.provider}
+          googleConnected={breakouts.googleConnected}
+          busy={breakouts.busy}
+          missingCount={pairs.filter((p) => !p.breakout_call_url).length}
+          mintedCount={pairs.filter((p) => p.breakout_call_url).length}
+          onGenerate={breakouts.onGenerate}
+          onClear={breakouts.onClear}
+        />
+      )}
+    </div>
+  );
+}
+
+function BreakoutsStrip({
+  provider,
+  googleConnected,
+  busy,
+  missingCount,
+  mintedCount,
+  onGenerate,
+  onClear,
+}: {
+  provider: "google_meet" | "jitsi";
+  googleConnected: boolean;
+  busy: boolean;
+  missingCount: number;
+  mintedCount: number;
+  onGenerate: () => void;
+  onClear: () => void;
+}) {
+  const canGenerate =
+    missingCount > 0 && (provider === "jitsi" || googleConnected);
+  return (
+    <div className="border-t border-[var(--color-line)] px-5 py-3">
+      <div className="flex items-baseline justify-between pb-2">
+        <span className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-ink-2)]">
+          Pair calls · {provider === "jitsi" ? "Jitsi" : "Google Meet"}
+        </span>
+        <span className="t-mono text-[10px] text-[var(--color-ink-3)]">
+          {mintedCount} of {mintedCount + missingCount} ready
+        </span>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {canGenerate && (
+          <button
+            type="button"
+            onClick={onGenerate}
+            disabled={busy}
+            className="t-mono rounded-full px-2.5 py-1 text-[11px] font-bold disabled:opacity-50"
+            style={{
+              background: "var(--color-tint-blue)",
+              color: "var(--color-t-blue)",
+              border: "1.5px solid var(--color-t-blue)",
+            }}
+            title={`Mint ${missingCount} pair-call link${missingCount === 1 ? "" : "s"}`}
+          >
+            ↻ Generate {missingCount === 1 ? "the" : `${missingCount}`} missing
+          </button>
+        )}
+        {mintedCount > 0 && (
+          <button
+            type="button"
+            onClick={onClear}
+            disabled={busy}
+            className="t-mono rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-[var(--color-ink-2)] disabled:opacity-50"
+            style={{ border: "1.5px solid var(--color-line)" }}
+            title={
+              provider === "jitsi"
+                ? "Drop the per-pair links. Jitsi rooms are stateless."
+                : "Delete every breakout calendar event and clear the per-pair links."
+            }
+          >
+            Clear all
+          </button>
+        )}
+        {provider === "google_meet" && !googleConnected && (
+          <span
+            className="t-mono inline-flex items-center px-1 text-[10px] text-[var(--color-ink-3)]"
+            title="Sign in with Google from the Step 4 panel pre-round."
+          >
+            (Google not connected)
+          </span>
         )}
       </div>
     </div>

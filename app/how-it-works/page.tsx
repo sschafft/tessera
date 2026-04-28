@@ -10,7 +10,7 @@ export default function HowItWorksPage() {
     <ContentLayout
       kicker="HOW IT WORKS"
       title="A 30-minute game that surfaces how teams talk."
-      lede="Tessera is a structured exercise for a video call. Two players try to recreate a picture only one of them can see. They almost never get it right — and that's the point."
+      lede="Tessera is a structured exercise for a workshop — over a video call or in the same room. Two players try to recreate a picture only one of them can see. They almost never get it right — and that's the point."
     >
       <h2 className="t-display mt-6 text-[28px] font-bold tracking-tight">
         The basic loop
@@ -36,11 +36,11 @@ export default function HowItWorksPage() {
         </li>
       </ul>
       <p>
-        When the round starts, players talk on their video call. The guider
-        describes the picture. The builder taps an empty cell on the grid to
-        place the selected shape — taps an existing piece to enter Edit mode
-        (move with another tap, rotate, delete). Neither side sees the
-        other&apos;s screen.
+        When the round starts, the pair talks — over the call or across
+        the table. The guider describes the picture. The builder taps an
+        empty cell on the grid to place the selected shape; tapping an
+        existing piece enters Edit mode (move with another tap, rotate,
+        delete). Neither side sees the other&apos;s screen.
       </p>
 
       <h2 className="t-display mt-6 text-[28px] font-bold tracking-tight">
@@ -102,8 +102,9 @@ export default function HowItWorksPage() {
           builder side, GM-fired.
         </li>
         <li>
-          <b>↻ Agile share</b> — builder snapshots their progress for the
-          guider.
+          <b>↻ Agile share</b> — unlocks one snapshot for the builder to
+          push their current canvas to the guider. GM-fired (off by
+          default); each fire grants one more share.
         </li>
         <li>
           <b>⏱ Time pressure</b> — drop a configurable amount off the clock.
@@ -128,10 +129,11 @@ export default function HowItWorksPage() {
         </li>
       </ul>
       <p>
-        Most super powers have per-round caps and short cooldowns. The point
-        isn&apos;t to use them all — it&apos;s to reach for the right one
-        when the room gets stuck. A short toast pops on the affected
-        pair&apos;s screen each time one fires, so the change registers.
+        Prototype unlock and Agile share are uncapped — the rest have small
+        per-round caps and short cooldowns. The point isn&apos;t to use them
+        all; it&apos;s to reach for the right one when the room gets stuck.
+        A short toast pops on the affected pair&apos;s screen each time one
+        fires, so the change registers.
       </p>
 
       <h2 className="t-display mt-6 text-[28px] font-bold tracking-tight">

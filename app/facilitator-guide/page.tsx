@@ -12,8 +12,8 @@ export default function FacilitatorGuidePage() {
       title="How to run a Tessera workshop."
       lede="Tessera is most useful when you treat it as a 30-minute scaffold for a 60-minute conversation. The game produces an artifact; the value lives in what you talk about after."
     >
-      <h2 className="t-display mt-4 text-[28px] font-bold tracking-tight">
-        Before the call
+      <h2 className="t-display mt-6 text-[28px] font-bold tracking-tight">
+        Before the workshop
       </h2>
       <ul className="ml-6 list-disc pl-2">
         <li>

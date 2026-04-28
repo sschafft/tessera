@@ -57,16 +57,17 @@ export function GameEndedView({ code, workshopName }: GameEndedViewProps) {
         <Tile kind="sq" color="green" x={70} y={70} size={40} rotate={6} />
       </div>
       <div className="t-mono text-[11px] tracking-widest text-[var(--color-ink-3)]">
-        GAME OVER
+        WORKSHOP COMPLETE
       </div>
-      <h1 className="t-display text-[36px]">Thanks for playing.</h1>
+      <h1 className="t-display text-[36px]">The game ends; the workshop begins.</h1>
       <p
         className="text-[15px] text-[var(--color-ink-2)]"
         style={{ lineHeight: 1.5 }}
       >
-        <b>{workshopName}</b> is complete. Hop back on the call to debrief —
-        what did the briefs reveal? Where did the picture diverge? What
-        surprised you?
+        <b>{workshopName}</b> is wrapped. The score below is one read on the
+        room — but the real signal is what each pair noticed about how they
+        talked past each other. Stay on the call and walk through the
+        prompts together.
       </p>
 
       <JoinCallCta
@@ -155,16 +156,17 @@ export function GameEndedView({ code, workshopName }: GameEndedViewProps) {
           className="t-mono text-[11px] uppercase tracking-widest text-[var(--color-ink-3)]"
           style={{ letterSpacing: ".15em" }}
         >
-          Debrief prompts
+          Debrief prompts · for the call
         </span>
         <p className="text-[12px] text-[var(--color-ink-3)]">
-          Pick one to start the conversation on the call:
+          Pick one — they go in order from <i>tactical</i> to <i>structural</i>.
+          The last one is the hardest; sit with it.
         </p>
         <ul className="flex flex-col gap-2">
           {[
-            "Which brief was hardest to translate around — and what was the workaround?",
-            "Where did you and your partner first diverge from the goal? How did you notice?",
-            "If you had one more minute, what's the first thing you'd fix or ask?",
+            "Read your brief out loud. What did your partner think they were hearing?",
+            "Where did the picture first diverge from the goal? When did you notice — and what did you stop asking each other after that?",
+            "Which of these constraints — translation, time pressure, hidden rules — actually exist on your team today?",
           ].map((q, i) => (
             <li
               key={i}
