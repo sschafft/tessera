@@ -133,7 +133,15 @@ export function TopBarControls({
         <div className="flex flex-col">
           <span className="text-[14px] font-bold">{workshopName}</span>
           <span className="t-mono text-[11px] text-[var(--color-ink-3)]">
-            {code} · round {idx} of {roundCount} · complexity {complexity}
+            {/* Round-of-N copy collapses correctly when the GM has
+                started a bonus round past the planned count: shows
+                "round 2 · bonus" instead of the nonsensical
+                "round 2 of 1". Complexity reads off the active round
+                (or the game default when no round has started). */}
+            {code} · {idx > roundCount
+              ? `round ${idx} · bonus`
+              : `round ${idx} of ${roundCount}`}
+            {" · "}complexity {complexity}
           </span>
         </div>
         <RoleChip role="Game master" />
