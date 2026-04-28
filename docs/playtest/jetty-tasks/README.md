@@ -2,15 +2,18 @@
 
 Workflow definitions deployed to the `jettyio` Jetty collection. Each `.json` here is the source of truth for a deployed task. To change a task's behaviour, edit the file, commit it, and re-deploy.
 
+## Agent + model standard
+
+Every Tessera Jetty task runs on **Codex (`agent: "codex"`) with `model: "gpt-5.4"`**. We standardised on Codex 2026-04-27 — it's the only agent in use across our flows. If a task definition here uses anything else, the deployed Jetty copy is the wrong source of truth — re-PUT the file.
+
 ## Tasks
 
 | File | Task | Purpose |
 |------|------|---------|
 | `tessera-tl.json` | `tessera-tl` | Adversarial code review on every PR. Wired up via `.github/workflows/tessera-tl.yml`. |
-| `tessera-playtest-role.json` | `tessera-playtest-role` | Single-role child workflow used by the shell-script orchestrator. Empty `init_params` (no defaults) so the rendered instruction passes through cleanly. Don't run directly. |
+| `tessera-playtest-scenario.json` | `tessera-playtest-scenario` | Per-role playtest agent. Accepts a pre-rendered instruction via `init_params.instruction`. The DIY orchestrator (`docs/playtest/run-orchestrator.sh`) fans out to this task once per role. |
+| `tessera-playtest-role.json` | `tessera-playtest-role` | Earlier shape of the per-role child. Empty `init_params` (no defaults) so the rendered instruction passes through cleanly. Kept for `list_emit_await` compatibility but not actively driven. Don't run directly. |
 | `tessera-playtest-orchestrator.json` | `tessera-playtest-orchestrator` | Stub — kept around as a placeholder. Jetty's `list_emit_await` doesn't pass per-item values to children (verified 2026-04-27 across three variants), so the working orchestrator lives in `docs/playtest/run-orchestrator.sh` and shells out to `tessera-playtest-scenario` ten times in parallel. |
-
-`tessera-playtest-scenario` is **kept** (no JSON in this dir; it predates the canon). It accepts an arbitrary instruction via `init_params.instruction` and is what `run-orchestrator.sh` fans out to as the per-role child.
 
 Deleted (no longer in use, removed from Jetty 2026-04-27): `tessera-smoke` (early hello-world), `tessera-playtest-player` (was the per-role child of the original fan-out design — superseded by `tessera-playtest-role`).
 
