@@ -77,8 +77,16 @@ function validate(payload: CreateGamePayload): CreateGameInput | { error: string
   if (!payload.workshop_name || typeof payload.workshop_name !== "string") {
     return { error: "workshop_name is required" };
   }
-  if (!isUrl(payload.video_call_url)) {
-    return { error: "video_call_url must be a valid URL" };
+  // Both URLs are optional. Empty string and undefined are normalised
+  // to null at the column level. When provided, the value still has
+  // to be a real http(s) URL — saves the player views from rendering
+  // a broken CTA on a typoed link.
+  if (
+    payload.video_call_url != null &&
+    payload.video_call_url !== "" &&
+    !isUrl(payload.video_call_url)
+  ) {
+    return { error: "video_call_url must be a valid URL when provided" };
   }
   if (
     payload.whiteboard_url != null &&
@@ -131,7 +139,7 @@ function validate(payload: CreateGamePayload): CreateGameInput | { error: string
 
   return {
     workshop_name: payload.workshop_name.trim().slice(0, 80),
-    video_call_url: payload.video_call_url!,
+    video_call_url: payload.video_call_url || null,
     whiteboard_url: payload.whiteboard_url || null,
     team_mode: payload.team_mode,
     default_complexity: c,

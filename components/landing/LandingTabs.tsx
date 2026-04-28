@@ -108,10 +108,8 @@ function HostForm() {
   function validate(): Record<string, string> {
     const next: Record<string, string> = {};
     if (!workshopName.trim()) next.workshop_name = "Give the workshop a name.";
-    if (!videoCallUrl.trim()) {
-      next.video_call_url = "Paste your Meet/Zoom link.";
-    } else if (!isLikelyUrl(videoCallUrl)) {
-      next.video_call_url = "Use a full URL (https://…).";
+    if (videoCallUrl.trim() && !isLikelyUrl(videoCallUrl)) {
+      next.video_call_url = "Use a full URL (https://…) or leave it blank.";
     }
     if (whiteboardUrl.trim() && !isLikelyUrl(whiteboardUrl)) {
       next.whiteboard_url = "Use a full URL or leave it blank.";
@@ -248,8 +246,7 @@ function HostForm() {
       <div className="grid grid-cols-2 gap-3">
         <Field
           label="Video call link"
-          hint={errors.video_call_url ?? undefined}
-          required
+          hint={errors.video_call_url ?? "optional"}
         >
           <input
             className="t-input"
@@ -259,7 +256,6 @@ function HostForm() {
               clearError("video_call_url");
             }}
             placeholder="https://meet.google.com/…"
-            required
             aria-invalid={Boolean(errors.video_call_url)}
             style={errorStyle(Boolean(errors.video_call_url))}
           />
