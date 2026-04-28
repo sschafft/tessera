@@ -269,7 +269,13 @@ export function AccelerantsRail({
         {scopeSegment}
       </div>
 
-      <div className="flex flex-1 flex-col gap-2.5 overflow-y-auto p-3.5">
+      {/* gap-4 + per-card outline keeps adjacent trigger CTAs
+          visually distinct so an agent (or human) targeting a
+          button by visible-text accessibility name lands on the
+          intended card. Playtest #7 caught a Time pressure click
+          firing Change builder brief — the cards were stacked too
+          tightly with similar bottom-CTA shapes. */}
+      <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-3.5">
         {scoringPanel}
         {!roundRunning && (
           <p className="px-2 py-2 text-[12px] text-[var(--color-ink-3)]">
@@ -465,8 +471,12 @@ function ScoringPanel({
           role="dialog"
           aria-modal="true"
           aria-label="Confirm scoring change"
-          className="fixed inset-0 z-50 flex items-center justify-center px-4"
-          style={{ background: "rgba(31,26,20,0.55)" }}
+          // z-[70] so we sit above the rail's own fullscreen modal
+          // (z-50). Playtest #7 caught the GM clicking Light → no
+          // visible change because this confirm modal opened
+          // *under* the fullscreen rail and stayed unseen.
+          className="fixed inset-0 z-[70] flex items-center justify-center px-4"
+          style={{ background: "rgba(31,26,20,0.62)" }}
           onClick={(e) => {
             if (e.target === e.currentTarget) setPendingWrong(null);
           }}
@@ -477,6 +487,7 @@ function ScoringPanel({
               background: "var(--color-tint-yellow)",
               border: "2px solid var(--color-t-yellow)",
               maxWidth: 440,
+              boxShadow: "0 24px 60px rgba(122,91,0,0.35), 0 6px 0 rgba(0,0,0,.12)",
             }}
           >
             <div
@@ -510,6 +521,7 @@ function ScoringPanel({
                 }}
                 className="t-btn t-btn--primary"
                 disabled={busy}
+                autoFocus
               >
                 Apply now →
               </button>
