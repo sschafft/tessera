@@ -1,12 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { PlayCanvas } from "@/components/canvas/PlayCanvas";
 import { BriefEnvelope } from "./BriefEnvelope";
 import { BriefGate } from "./BriefGate";
+import { Confetti } from "./Confetti";
 import { JoinCallCta } from "./JoinCallCta";
 import { PairNameBadge } from "./PairNameBadge";
 import { PairNameModal } from "./PairNameModal";
+import { SolvedBanner } from "./SolvedBanner";
+import { playSolved } from "@/lib/sound";
 import type { PlayState } from "./PlayContent";
 
 export interface GuiderViewProps {
@@ -49,6 +52,42 @@ export function GuiderView({ state }: GuiderViewProps) {
     setShowNameNudge(false);
   }, [state.pair]);
 
+  // Celebration plumbing — fires off the live_score that's broadcast
+  // to both roles whenever Test Build is on (or the round ends). The
+  // guider used to get zero feedback as the builder progressed; now
+  // each correct piece sprinkles confetti next to the score chip and
+  // the moment correct === total a major SolvedBanner takes the
+  // viewport, mirroring what the builder sees on Test solution.
+  const liveCorrect = state.live_score?.correct ?? 0;
+  const liveTotal = state.live_score?.total ?? 0;
+  const liveScore = state.live_score?.score ?? 0;
+  const prevCorrectRef = useRef(0);
+  const [partialKey, setPartialKey] = useState(0);
+  const [solvedShown, setSolvedShown] = useState(false);
+  const solvedFiredForRoundRef = useRef<string | null>(null);
+  useEffect(() => {
+    const prev = prevCorrectRef.current;
+    if (liveCorrect > prev) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- bumps the confetti key on each rising-edge so the burst replays per new correct piece.
+      setPartialKey((k) => k + 1);
+    }
+    prevCorrectRef.current = liveCorrect;
+  }, [liveCorrect]);
+  useEffect(() => {
+    const roundId = state.round?.id ?? null;
+    if (!roundId) return;
+    if (
+      liveTotal > 0 &&
+      liveCorrect === liveTotal &&
+      solvedFiredForRoundRef.current !== roundId
+    ) {
+      solvedFiredForRoundRef.current = roundId;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot solved banner trigger; gated by the per-round ref so it can't loop.
+      setSolvedShown(true);
+      if (state.sound_on) playSolved();
+    }
+  }, [liveCorrect, liveTotal, state.round?.id, state.sound_on]);
+
   if (!state.round || state.round.status !== "running" || !state.goal) {
     return <WaitingForRound state={state} />;
   }
@@ -80,29 +119,44 @@ export function GuiderView({ state }: GuiderViewProps) {
           ● THE GOAL · only you see this
         </span>
         {state.live_score && (
-          <span
-            className="t-mono absolute -right-2 -top-4 z-10 rounded-full px-3 py-1 text-[11px] font-bold"
-            style={(() => {
-              const s = state.live_score.score;
-              const tint = s > 0 ? "green" : s < 0 ? "red" : null;
-              if (tint === null) {
-                return {
-                  background: "var(--color-paper-2)",
-                  color: "var(--color-ink-2)",
-                  boxShadow: "inset 0 0 0 1.5px var(--color-line)",
-                };
-              }
-              return {
-                background: `var(--color-tint-${tint})`,
-                color: `var(--color-t-${tint})`,
-                boxShadow: `inset 0 0 0 1.5px var(--color-t-${tint})`,
-              };
-            })()}
-            aria-label={`Builder score ${state.live_score.score}, ${state.live_score.correct} of ${state.live_score.total} correct`}
+          <div
+            className="absolute -right-2 -top-4 z-10 flex items-center"
+            aria-label={`Builder score ${liveScore}, ${liveCorrect} of ${liveTotal} correct`}
           >
-            ★ {state.live_score.score} pts · {state.live_score.correct} /{" "}
-            {state.live_score.total}
-          </span>
+            <span
+              className="t-mono rounded-full px-3.5 py-1.5 text-[12px] font-bold transition-transform"
+              style={(() => {
+                const tint =
+                  liveScore > 0 ? "green" : liveScore < 0 ? "red" : null;
+                if (tint === null) {
+                  return {
+                    background: "var(--color-paper-2)",
+                    color: "var(--color-ink-2)",
+                    boxShadow: "inset 0 0 0 1.5px var(--color-line)",
+                  };
+                }
+                return {
+                  background: `var(--color-tint-${tint})`,
+                  color: `var(--color-t-${tint})`,
+                  boxShadow: `inset 0 0 0 1.5px var(--color-t-${tint})`,
+                };
+              })()}
+            >
+              ★ {liveScore} pts · {liveCorrect} / {liveTotal}
+            </span>
+            {/* Per-correct confetti sprinkle anchored to the score
+                chip so each rising edge feels rewarding without
+                needing to draw the eye away from the goal canvas. */}
+            {partialKey > 0 && (
+              <span
+                key={partialKey}
+                className="pointer-events-none absolute"
+                style={{ right: 12, top: 16 }}
+              >
+                <Confetti intensity="small" />
+              </span>
+            )}
+          </div>
         )}
         <PlayCanvas
           pieces={state.goal}
@@ -161,6 +215,17 @@ export function GuiderView({ state }: GuiderViewProps) {
           code={state.code}
           pairId={state.pair.id}
           onClose={dismissNameNudge}
+        />
+      )}
+      {solvedShown && (
+        <SolvedBanner
+          pairName={state.pair?.display_name ?? null}
+          builderName={state.partner?.display_name ?? null}
+          guiderName={state.me.display_name}
+          correct={liveCorrect}
+          score={liveScore}
+          role="guider"
+          onDismiss={() => setSolvedShown(false)}
         />
       )}
     </section>

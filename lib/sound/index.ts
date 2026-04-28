@@ -76,6 +76,30 @@ export function playLastTwoMinutes(): void {
 }
 
 /**
+ * Triumphant fanfare for the moment the pair gets every piece right.
+ * Distinct from playTestSolution (partial credit) and playGameEnd
+ * (the whole game wrapping up) — this is the round-solve "you did
+ * it" celebration that fires for both the builder and the guider.
+ */
+export function playSolved(): void {
+  if (!enabled || !synth) return;
+  const now = Tone.now();
+  // Major chord arpeggio climbing two octaves, then a held resolve.
+  const notes: [string, string, number][] = [
+    ["C5", "16n", 0],
+    ["E5", "16n", 0.08],
+    ["G5", "16n", 0.16],
+    ["C6", "16n", 0.24],
+    ["E6", "16n", 0.32],
+    ["G6", "8n", 0.42],
+    ["C7", "4n", 0.6],
+  ];
+  for (const [note, dur, t] of notes) {
+    synth.triggerAttackRelease(note, dur, now + t);
+  }
+}
+
+/**
  * Builder's "Test solution" celebration — a quick rising arpeggio
  * scaled to how many pieces they got right. More right → louder,
  * higher final note. Zero correct → a single soft bloop, no fanfare.

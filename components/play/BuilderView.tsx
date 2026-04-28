@@ -12,12 +12,14 @@ import { Tile, type TileColor, type TileShape } from "@/components/canvas/Tile";
 import { InteractiveCanvas } from "@/components/canvas/InteractiveCanvas";
 import { PlayCanvas } from "@/components/canvas/PlayCanvas";
 import { BriefEnvelope } from "./BriefEnvelope";
+import { Confetti } from "./Confetti";
 import { JoinCallCta } from "./JoinCallCta";
 import { BUILDER_SHAPES, paletteColorsFor } from "@/lib/pattern/palette";
-import { playTestSolution } from "@/lib/sound";
+import { playSolved, playTestSolution } from "@/lib/sound";
 import { BriefGate } from "./BriefGate";
 import { PairNameBadge } from "./PairNameBadge";
 import { PairNameModal } from "./PairNameModal";
+import { SolvedBanner } from "./SolvedBanner";
 import type { PlacedPiece, PlayState } from "./PlayContent";
 
 interface TestResult {
@@ -537,6 +539,41 @@ function BuilderInteractive({ state }: { state: PlayState }) {
 
   const showCoords = (state.round?.complexity ?? 5) <= 4;
 
+  // Celebration plumbing — small confetti per Test-solution submission
+  // with at least one correct piece, and a major SolvedBanner the
+  // first time correct === total > 0 in the current round. The
+  // SolvedBanner is also driven off `live_score` (not just the
+  // testResult chip) so it fires off realtime updates from the
+  // server-side correctness check too — keeps it in lock-step with
+  // the guider's banner.
+  const [partialCelebrationKey, setPartialCelebrationKey] = useState(0);
+  const [solvedShown, setSolvedShown] = useState(false);
+  const solvedFiredForRoundRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!testResult) return;
+    if (testResult.correct > 0 && testResult.correct < testResult.total) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- re-keys the partial-celebration confetti per Test-solution submission.
+      setPartialCelebrationKey((k) => k + 1);
+    }
+  }, [testResult]);
+  const liveCorrect = state.live_score?.correct ?? 0;
+  const liveTotal = state.live_score?.total ?? 0;
+  const liveScoreVal = state.live_score?.score ?? 0;
+  useEffect(() => {
+    const roundId = state.round?.id ?? null;
+    if (!roundId) return;
+    if (
+      liveTotal > 0 &&
+      liveCorrect === liveTotal &&
+      solvedFiredForRoundRef.current !== roundId
+    ) {
+      solvedFiredForRoundRef.current = roundId;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot solved banner; gated by per-round ref.
+      setSolvedShown(true);
+      if (state.sound_on) playSolved();
+    }
+  }, [liveCorrect, liveTotal, state.round?.id, state.sound_on]);
+
   // Brief-open gate: if the builder has a brief, dim the canvas + tray
   // until they open it. Resets when the brief changes (super-power
   // re-roll, new round, etc).
@@ -637,6 +674,13 @@ function BuilderInteractive({ state }: { state: PlayState }) {
           />
 
           <div className="relative">
+            {/* Per-Test partial-success confetti, anchored over the
+                canvas. Re-keyed via partialCelebrationKey so each
+                Test-solution submission with ≥1 correct fires its
+                own burst. */}
+            {partialCelebrationKey > 0 && (
+              <Confetti key={partialCelebrationKey} intensity="small" />
+            )}
             <InteractiveCanvas
               pieces={visiblePieces}
               complexity={complexity}
@@ -807,6 +851,17 @@ function BuilderInteractive({ state }: { state: PlayState }) {
           code={state.code}
           pairId={state.pair.id}
           onClose={dismissNameNudge}
+        />
+      )}
+      {solvedShown && (
+        <SolvedBanner
+          pairName={state.pair?.display_name ?? null}
+          builderName={state.me.display_name}
+          guiderName={state.partner?.display_name ?? null}
+          correct={liveCorrect}
+          score={liveScoreVal}
+          role="builder"
+          onDismiss={() => setSolvedShown(false)}
         />
       )}
     </div>
