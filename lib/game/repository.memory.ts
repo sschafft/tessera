@@ -305,7 +305,7 @@ class MemoryGameRepository implements GameRepository {
       goal_pattern: input.goal_pattern,
       pattern_seed: input.pattern_seed,
       test_enabled: false,
-      shares_remaining: 3,
+      shares_remaining: 0,
       briefs_revealed: false,
       prototype_until: null,
       builder_snapshot: null,
@@ -558,6 +558,13 @@ class MemoryGameRepository implements GameRepository {
   async setBriefsRevealed(pair_round_id: string): Promise<void> {
     const pr = this.pairRounds.get(pair_round_id);
     if (pr) pr.briefs_revealed = true;
+  }
+
+  async incrementSharesRemaining(pair_round_id: string): Promise<number> {
+    const pr = this.pairRounds.get(pair_round_id);
+    if (!pr) throw new Error("incrementSharesRemaining: not_found");
+    pr.shares_remaining = (pr.shares_remaining ?? 0) + 1;
+    return pr.shares_remaining;
   }
 
   async setTestEnabled(

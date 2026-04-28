@@ -38,10 +38,16 @@ export interface SuperPowerPolicy {
 }
 
 export const POLICIES: Record<SuperPowerKind, SuperPowerPolicy> = {
-  prototype: { maxPerRound: 4, cooldownSeconds: 12, implemented: true },
+  // Prototype + agile_share are intentionally uncapped — playtest
+  // 2026-04-28 surfaced GMs hitting the cap at the wrong moment in a
+  // round and having no escape valve. Cooldown on prototype stays
+  // (back-to-back glimpses give zero learning value).
+  prototype: { maxPerRound: null, cooldownSeconds: 12, implemented: true },
   reveal_briefs: { maxPerRound: 1, cooldownSeconds: 0, implemented: true },
   test_build: { maxPerRound: null, cooldownSeconds: 0, implemented: true },
-  agile_share: { maxPerRound: 3, cooldownSeconds: 0, implemented: true },
+  // Each fire grants the builder one more share unlock; uncapped so
+  // the GM can keep granting them as the round evolves.
+  agile_share: { maxPerRound: null, cooldownSeconds: 0, implemented: true },
   time_pressure: { maxPerRound: 2, cooldownSeconds: 0, implemented: true },
   vocab_swap: { maxPerRound: null, cooldownSeconds: 0, implemented: true },
   change_builder_brief: {

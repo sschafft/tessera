@@ -689,6 +689,33 @@ export class SupabaseGameRepository implements GameRepository {
     if (error) throw new Error(`setBriefsRevealed: ${error.message}`);
   }
 
+  async incrementSharesRemaining(pair_round_id: string): Promise<number> {
+    // Atomic increment via a single UPDATE … RETURNING. Concurrent
+    // GM clicks on Agile share would race a read-modify-write, but
+    // a single GM is the only caller in practice — keeping this
+    // simple beats adding another RPC for a low-contention path.
+    const supabase = getServiceClient();
+    const { data: existing, error: readErr } = await supabase
+      .from("pair_rounds")
+      .select("shares_remaining")
+      .eq("id", pair_round_id)
+      .single();
+    if (readErr || !existing) {
+      throw new Error(
+        `incrementSharesRemaining: ${readErr?.message ?? "not_found"}`,
+      );
+    }
+    const next = (existing.shares_remaining ?? 0) + 1;
+    const { error: writeErr } = await supabase
+      .from("pair_rounds")
+      .update({ shares_remaining: next })
+      .eq("id", pair_round_id);
+    if (writeErr) {
+      throw new Error(`incrementSharesRemaining: ${writeErr.message}`);
+    }
+    return next;
+  }
+
   async setTestEnabled(
     pair_round_id: string,
     enabled: boolean,

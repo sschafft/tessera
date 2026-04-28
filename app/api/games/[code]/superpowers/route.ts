@@ -260,10 +260,19 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
 
     case "agile_share":
-      // No DB side-effect on trigger; the accelerant unlocks the
-      // builder's "Share progress" button. The actual snapshot capture
-      // happens via the dedicated /agile-share endpoint when the
-      // builder clicks. We log the trigger here for the audit.
+      // Each trigger grants the builder one more share unlock. The
+      // builder's "Share progress" button is gated on
+      // pair_round.shares_remaining > 0, which now starts at 0 on
+      // round-start (was 3 — unlocking 3 shares whether or not the GM
+      // ever fired the super-power). The actual snapshot capture
+      // still happens via the dedicated /agile-share endpoint when
+      // the builder clicks, which decrements shares_remaining.
+      await Promise.all(
+        targetedPairs.map(async (pair) => {
+          const pr = await repo.findPairRound(round.id, pair.id);
+          if (pr) await repo.incrementSharesRemaining(pr.id);
+        }),
+      );
       break;
 
     default:

@@ -785,7 +785,9 @@ function BuilderInteractive({ state }: { state: PlayState }) {
               >
                 {sharingProgress
                   ? "Sharing…"
-                  : `↻ Share progress with guider · ${state.shares_remaining} left`}
+                  : state.shares_remaining === 1
+                    ? "↻ Share progress with guider"
+                    : `↻ Share progress with guider · ${state.shares_remaining} available`}
               </button>
             )}
             {visiblePieces.length > 0 && (
