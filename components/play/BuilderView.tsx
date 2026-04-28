@@ -842,6 +842,7 @@ function BuilderInteractive({ state }: { state: PlayState }) {
               title={state.partner_brief.title}
               rules={state.partner_brief.rules}
               defaultOpen
+              revealedPartner
             />
           )}
         </aside>

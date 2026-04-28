@@ -18,6 +18,16 @@ export interface BriefEnvelopeProps {
   onClose?: () => void;
   /** When true, the envelope pulses to draw attention (used by the gate). */
   emphasize?: boolean;
+  /**
+   * Marks this brief as the *partner's* brief, intentionally surfaced
+   * by the Reveal-briefs accelerant. Swaps the "CONFIDENTIAL" header
+   * + the "don't read this aloud" footer for "SHARED · partner's
+   * brief" + a friendlier note. Without this flag, playtest agents
+   * read the partner brief and worried they'd seen a leak (it said
+   * CONFIDENTIAL on a card visible to them, which broke the asymmetry
+   * mental model). Defaults to false (own brief, confidential to me).
+   */
+  revealedPartner?: boolean;
 }
 
 type View = "sealed" | "open" | "minimized";
@@ -45,6 +55,7 @@ export function BriefEnvelope({
   onMinimize,
   onClose,
   emphasize = false,
+  revealedPartner = false,
 }: BriefEnvelopeProps) {
   const [view, setView] = useState<View>(defaultOpen ? "open" : "sealed");
   const roleLabel = role === "builder" ? "Builder" : "Guider";
@@ -220,7 +231,9 @@ export function BriefEnvelope({
             letterSpacing: ".12em",
           }}
         >
-          ● {roleLabel.toUpperCase()} · CONFIDENTIAL
+          {revealedPartner
+            ? `● ${roleLabel.toUpperCase()} · REVEALED`
+            : `● ${roleLabel.toUpperCase()} · CONFIDENTIAL`}
         </span>
         <div className="flex items-center gap-0.5">
           <button
@@ -268,14 +281,32 @@ export function BriefEnvelope({
       </ul>
       <div
         className="mt-3.5 rounded-[10px] px-3 py-2.5 text-[12px]"
-        style={{
-          background: "var(--color-tint-yellow)",
-          color: "#7a5b00",
-        }}
+        style={(() => {
+          if (revealedPartner) {
+            return {
+              background: "var(--color-tint-green)",
+              color: "var(--color-t-green)",
+            };
+          }
+          return {
+            background: "var(--color-tint-yellow)",
+            color: "#7a5b00",
+          };
+        })()}
       >
-        Your partner has a <b>different brief</b>. <b>Don&apos;t read this
-        aloud or paraphrase it.</b> They can ask you yes / no questions about
-        it — answer honestly, like 20 questions.
+        {revealedPartner ? (
+          <>
+            <b>Your partner&apos;s brief</b>, surfaced by the GM&apos;s Reveal
+            briefs super-power. You&apos;re allowed to read it now — talk
+            through it on the call.
+          </>
+        ) : (
+          <>
+            Your partner has a <b>different brief</b>. <b>Don&apos;t read this
+            aloud or paraphrase it.</b> They can ask you yes / no questions
+            about it — answer honestly, like 20 questions.
+          </>
+        )}
       </div>
     </div>
   );
