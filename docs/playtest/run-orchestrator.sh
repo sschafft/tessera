@@ -34,6 +34,13 @@ TESSERA_URL="${TESSERA_URL:-https://tessera.schaffters.com}"
 COMPLEXITY="${COMPLEXITY:-5}"
 DURATION_MIN="${DURATION_MIN:-8}"
 ROUND_COUNT="${ROUND_COUNT:-2}"
+# Meeting mode + breakout provider exercise the v1.3 dual-provider
+# flow. Defaults: remote + jitsi, since jitsi is the most-changed
+# autonomous-friendly code path (no Google OAuth needed, no real
+# Calendar pollution). Override to "in_person" / "none" to test the
+# in-person flow.
+MEETING_MODE="${MEETING_MODE:-remote}"
+BREAKOUT_PROVIDER="${BREAKOUT_PROVIDER:-jitsi}"
 
 if [[ -z "$JETTY_API_KEY" ]]; then
   echo "JETTY_API_KEY not found in .env.local" >&2
@@ -43,11 +50,21 @@ fi
 OUT_DIR="${OUT_DIR:-/tmp/orch-$(date +%s)}"
 mkdir -p "$OUT_DIR"
 
-echo "=== 1. Create a fresh game ==="
+echo "=== 1. Create a fresh game (meeting_mode=$MEETING_MODE, breakout_provider=$BREAKOUT_PROVIDER) ==="
+# In-person workshops null out the video call URL — the host form
+# would; mirror that here so the orchestrator's game state matches
+# the in-person UX path.
+if [[ "$MEETING_MODE" == "in_person" ]]; then
+  VIDEO_URL="null"
+else
+  VIDEO_URL='"https://meet.example.com/orchestrator-playtest"'
+fi
 curl -sS -X POST -H 'Content-Type: application/json' \
   -d '{
     "workshop_name": "Orchestrator playtest",
-    "video_call_url": "https://meet.example.com/orchestrator-playtest",
+    "meeting_mode": "'"$MEETING_MODE"'",
+    "breakout_provider": "'"$BREAKOUT_PROVIDER"'",
+    "video_call_url": '"$VIDEO_URL"',
     "team_mode": "gm_picks",
     "default_complexity": '"$COMPLEXITY"',
     "round_count": '"$ROUND_COUNT"',
@@ -69,6 +86,7 @@ echo "=== 2. Render 10 role instructions ==="
 CODE="$CODE" HOST_TOKEN="$HOST_TOKEN" TESSERA_URL="$TESSERA_URL" \
   COMPLEXITY="$COMPLEXITY" DURATION_MIN="$DURATION_MIN" \
   ROUND_COUNT="$ROUND_COUNT" \
+  MEETING_MODE="$MEETING_MODE" BREAKOUT_PROVIDER="$BREAKOUT_PROVIDER" \
   python3 "$REPO/docs/playtest/render-roster.py"
 
 echo
