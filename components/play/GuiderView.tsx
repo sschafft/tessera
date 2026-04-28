@@ -118,13 +118,6 @@ export function GuiderView({ state }: GuiderViewProps) {
         without seeing this.
       </p>
 
-      {state.builder_snapshot && state.builder_snapshot.length > 0 && (
-        <BuilderSnapshotPanel
-          snapshot={state.builder_snapshot}
-          complexity={state.round.complexity}
-          showCoords={showCoords}
-        />
-      )}
       </div>
       <aside
         className="relative flex flex-shrink-0 flex-col items-end gap-3 pt-4"
@@ -151,6 +144,19 @@ export function GuiderView({ state }: GuiderViewProps) {
             title={state.partner_brief.title}
             rules={state.partner_brief.rules}
             defaultOpen
+          />
+        )}
+        {/* Builder shared progress lives in the right-hand aside,
+            directly below the brief envelope. Was floating
+            absolute-bottom-right which playtest 2026-04-27 flagged as
+            "easy to miss" — the builder's most recent snapshot is
+            actively useful information for the guider mid-round, so
+            it earns the same prime real estate as the brief. */}
+        {state.builder_snapshot && state.builder_snapshot.length > 0 && (
+          <BuilderSnapshotPanel
+            snapshot={state.builder_snapshot}
+            complexity={state.round.complexity}
+            showCoords={showCoords}
           />
         )}
       </aside>
@@ -190,17 +196,28 @@ function BuilderSnapshotPanel({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="absolute bottom-6 right-6 z-40 w-[300px] cursor-pointer text-left"
+        className="w-full cursor-pointer text-left"
         style={{ background: "transparent", padding: 0, border: "none" }}
         aria-label="Open builder shared progress full screen"
       >
-        <div className="t-card flex flex-col gap-2 p-3 hover:shadow-md-soft">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-ink-2)]">
-              Builder shared progress
+        <div
+          className="t-card flex flex-col gap-2 p-3 hover:shadow-md-soft"
+          style={{
+            // Match the brief envelope's pulse treatment so a fresh
+            // share clearly arrives in the guider's peripheral vision.
+            background: "var(--color-tint-orange)",
+            border: "1.5px solid var(--color-t-orange)",
+          }}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span
+              className="t-mono text-[10px] font-bold uppercase tracking-widest"
+              style={{ color: "var(--color-t-orange)" }}
+            >
+              ● BUILDER SHARED PROGRESS
             </span>
             <span className="t-mono text-[10px] text-[var(--color-ink-3)]">
-              tap to expand · {snapshot.length} placed
+              {snapshot.length} placed · tap to expand
             </span>
           </div>
           <div
@@ -210,6 +227,7 @@ function BuilderSnapshotPanel({
               transformOrigin: "top left",
               height: 200,
               marginBottom: -200,
+              background: "#fff",
             }}
           >
             <PlayCanvas
