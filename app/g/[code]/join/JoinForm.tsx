@@ -7,19 +7,26 @@ import { Field } from "@/components/primitives/Field";
 export interface JoinFormProps {
   code: string;
   defaultName: string;
+  /** From games.breakout_provider — if 'google_meet', email is required. */
+  breakoutProvider?: string;
 }
 
-type FormField = "name" | null;
+type FormField = "name" | "email" | null;
 interface FormError {
   field: FormField;
   message: string;
 }
 
-export function JoinForm({ code, defaultName }: JoinFormProps) {
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export function JoinForm({ code, defaultName, breakoutProvider }: JoinFormProps) {
   const router = useRouter();
   const [displayName, setDisplayName] = useState(defaultName);
+  const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<FormError | null>(null);
+
+  const emailRequired = breakoutProvider === "google_meet";
 
   const [recoveryModal, setRecoveryModal] = useState<{
     url: string;
@@ -33,6 +40,21 @@ export function JoinForm({ code, defaultName }: JoinFormProps) {
       setError({ field: "name", message: "Pick a display name to continue." });
       return;
     }
+    if (emailRequired) {
+      const trimmed = email.trim();
+      if (!trimmed) {
+        setError({
+          field: "email",
+          message:
+            "Email is required for this game so the facilitator can add you to your breakout call.",
+        });
+        return;
+      }
+      if (!EMAIL_RE.test(trimmed)) {
+        setError({ field: "email", message: "That doesn't look like a valid email." });
+        return;
+      }
+    }
     setSubmitting(true);
     setError(null);
     setNameTakenHint(null);
@@ -43,6 +65,7 @@ export function JoinForm({ code, defaultName }: JoinFormProps) {
         body: JSON.stringify({
           display_name: displayName.trim(),
           role: undefined,
+          email: emailRequired ? email.trim() : undefined,
         }),
       });
       if (!res.ok) {
@@ -70,6 +93,17 @@ export function JoinForm({ code, defaultName }: JoinFormProps) {
           setError({
             field: null,
             message: "Couldn't find a game for that code.",
+          });
+          setSubmitting(false);
+          return;
+        }
+        if (data.error === "email_required" || data.error === "email_invalid") {
+          setError({
+            field: "email",
+            message:
+              data.error === "email_required"
+                ? "Email is required for this game's breakout calls."
+                : "That doesn't look like a valid email.",
           });
           setSubmitting(false);
           return;
@@ -105,6 +139,7 @@ export function JoinForm({ code, defaultName }: JoinFormProps) {
   }
 
   const nameError = error?.field === "name" ? error.message : null;
+  const emailError = error?.field === "email" ? error.message : null;
   const generalError = error?.field === null ? error.message : null;
 
   if (recoveryModal) {
@@ -146,6 +181,39 @@ export function JoinForm({ code, defaultName }: JoinFormProps) {
           }
         />
       </Field>
+
+      {emailRequired && (
+        <Field
+          label="Email"
+          hint={
+            emailError ??
+            "Required so the facilitator can add you to a breakout call. Tessera does not send any other email."
+          }
+        >
+          <input
+            className="t-input"
+            type="email"
+            value={email}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              if (error?.field === "email") setError(null);
+            }}
+            placeholder="you@example.com"
+            maxLength={120}
+            required
+            autoComplete="email"
+            aria-invalid={Boolean(emailError)}
+            style={
+              emailError
+                ? {
+                    borderColor: "var(--color-t-red)",
+                    boxShadow: "0 0 0 2px var(--color-tint-red)",
+                  }
+                : undefined
+            }
+          />
+        </Field>
+      )}
 
       {/* Role picker removed — game master always assigns roles. */}
       {false ? null : (

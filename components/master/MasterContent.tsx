@@ -87,7 +87,9 @@ interface LobbyResponse {
     builder: boolean;
     guider: boolean;
   };
+  meeting_mode: "remote" | "in_person";
   breakouts: {
+    provider: "none" | "google_meet" | "jitsi";
     configured: boolean;
     google_connected: boolean;
   };
@@ -830,18 +832,21 @@ export function MasterContent({
                     onChange={updateScoring}
                   />
                 </SetupStep>
-                {data?.breakouts.configured && (
+                {data && data.breakouts.provider !== "none" && (
                   <SetupStep
                     step={4}
-                    title="Per-pair breakout calls (optional)"
+                    title="Per-pair breakout calls"
                     hint={
-                      data.breakouts.google_connected
-                        ? "Google connected — generate when pairs are ready."
-                        : "Sign in with Google to mint Meet links per pair."
+                      data.breakouts.provider === "jitsi"
+                        ? "Jitsi — generate when pairs are ready."
+                        : data.breakouts.google_connected
+                          ? "Google connected — generate when pairs are ready."
+                          : "Sign in with Google to mint Meet links per pair."
                     }
                   >
                     <BreakoutsPanel
                       code={code}
+                      provider={data.breakouts.provider}
                       pairCount={pairs.length}
                       withBreakouts={
                         pairs.filter((p) => p.breakout_call_url).length

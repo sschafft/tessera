@@ -52,6 +52,21 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ ok: true, deleted: 0 });
   }
 
+  // Jitsi: nothing to delete on Google's side. Just clear the local
+  // pair fields and broadcast — the URL becomes irrelevant the moment
+  // the players leave the room (rooms are ephemeral on meet.jit.si).
+  if (game.breakout_provider === "jitsi") {
+    for (const b of breakouts) {
+      await repo.clearPairBreakout(b.id);
+    }
+    await publishGameEvent(game.id, "breakouts_changed", { cleared: true });
+    return NextResponse.json({
+      ok: true,
+      deleted: 0,
+      cleared_local: breakouts.length,
+    });
+  }
+
   let accessToken: string | null = null;
   try {
     accessToken = await getValidAccessToken(game.id);

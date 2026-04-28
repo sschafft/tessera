@@ -36,11 +36,28 @@ export interface CreateGameInput {
   video_call_url?: string | null;
   whiteboard_url?: string | null;
   /**
-   * When true, the GM can sign in with Google and mint per-pair Meet
-   * links via the Calendar API. The toggle is hidden in the host
-   * form on deployments without GOOGLE_OAUTH_CLIENT_ID.
+   * Vestigial: kept for backward compatibility. The canonical check
+   * is `breakout_provider !== 'none'`.
    */
   breakouts_enabled?: boolean;
+  /**
+   * "remote" → players join via video; the GM may also enable
+   * automated per-pair breakouts. "in_person" → everyone is in the
+   * same room; video-call URL + whiteboard URL + breakouts are
+   * skipped entirely.
+   */
+  meeting_mode?: "remote" | "in_person";
+  /**
+   * When the workshop is remote, the GM can opt into per-pair
+   * breakouts. Two providers ship:
+   *   - "google_meet": mints a Calendar event per pair via OAuth +
+   *     Calendar API. Adds participant emails as event attendees so
+   *     they bypass Meet's knock screen.
+   *   - "jitsi": constructs a deterministic meet.jit.si URL per pair.
+   *     No OAuth, no API call, no calendar pollution.
+   *   - "none": no breakouts (default).
+   */
+  breakout_provider?: "none" | "google_meet" | "jitsi";
   team_mode: TeamMode;
   default_complexity: number;
   builder_brief_on: boolean;
@@ -92,14 +109,15 @@ export interface ParticipantRecord {
   joined_at: string;
   last_seen_at: string;
   released_at: string | null;
-  /**
-   * Bcrypt hash of the player's one-shot recovery token. Plain token
-   * is returned once in the join response and never persisted; the
-   * /recover route bcrypt-compares against this hash. Nullable so
-   * GM-created participants (whose recovery is via games.host_token_hash)
-   * keep working.
-   */
   recovery_token_hash: string | null;
+  /**
+   * Optional. Required at join time only when the game's
+   * breakout_provider is 'google_meet' (so we can attach the player
+   * as a calendar event attendee, which lets them bypass Meet's
+   * knock screen if they sign in with Google). Never required for
+   * in-person games or jitsi-mode games.
+   */
+  email: string | null;
 }
 
 export interface CreateParticipantInput {
@@ -108,8 +126,9 @@ export interface CreateParticipantInput {
   display_name: string;
   role: ParticipantRole;
   color: string;
-  /** Optional — pre-hashed when set. */
   recovery_token_hash?: string | null;
+  /** Required when the game's breakout_provider is 'google_meet'. */
+  email?: string | null;
 }
 
 export interface PairRecord {

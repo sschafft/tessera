@@ -144,11 +144,13 @@ export type Database = {
       }
       games: {
         Row: {
+          breakout_provider: string
           breakouts_enabled: boolean
           builder_brief_custom: Json | null
           builder_brief_on: boolean
           builder_brief_source: Database["public"]["Enums"]["brief_source_t"]
           code: string
+          meeting_mode: string
           created_at: string
           default_complexity: number
           ended_at: string | null
@@ -173,11 +175,13 @@ export type Database = {
           workshop_name: string
         }
         Insert: {
+          breakout_provider?: string
           breakouts_enabled?: boolean
           builder_brief_custom?: Json | null
           builder_brief_on?: boolean
           builder_brief_source?: Database["public"]["Enums"]["brief_source_t"]
           code: string
+          meeting_mode?: string
           created_at?: string
           default_complexity: number
           ended_at?: string | null
@@ -202,11 +206,13 @@ export type Database = {
           workshop_name: string
         }
         Update: {
+          breakout_provider?: string
           breakouts_enabled?: boolean
           builder_brief_custom?: Json | null
           builder_brief_on?: boolean
           builder_brief_source?: Database["public"]["Enums"]["brief_source_t"]
           code?: string
+          meeting_mode?: string
           created_at?: string
           default_complexity?: number
           ended_at?: string | null
@@ -398,6 +404,7 @@ export type Database = {
         Row: {
           color: string
           display_name: string
+          email: string | null
           game_id: string
           id: string
           joined_at: string
@@ -410,6 +417,7 @@ export type Database = {
         Insert: {
           color: string
           display_name: string
+          email?: string | null
           game_id: string
           id?: string
           joined_at?: string
@@ -422,6 +430,7 @@ export type Database = {
         Update: {
           color?: string
           display_name?: string
+          email?: string | null
           game_id?: string
           id?: string
           joined_at?: string
