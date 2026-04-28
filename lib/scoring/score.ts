@@ -25,6 +25,15 @@ export interface ScoreBreakdown {
   penaltyApplied: boolean;
   /** Per-placement correctness, in original order. */
   placements: ScoredPlacement[];
+  /**
+   * Per-goal-piece correctness, parallel to the input goal array.
+   * `true` at index i means the builder has placed a piece that
+   * matches goal[i] (shape + color + position + rotation,
+   * normalized for symmetry). Drives the guider's mirrored
+   * "X / Y satisfied" view without leaking the builder's wrong
+   * placements.
+   */
+  goalCorrectness: boolean[];
 }
 
 /**
@@ -73,6 +82,7 @@ export function scorePlacements(
   }) =>
     `${g.shape}|${g.color}|${g.q},${g.r}|${normalizeRot(g.shape, g.rot)}`;
   const goalSet = new Set(goal.map(goalKey));
+  const placementSet = new Set(placements.map(goalKey));
 
   let correct = 0;
   let wrong = 0;
@@ -90,6 +100,7 @@ export function scorePlacements(
       correct: ok,
     };
   });
+  const goalCorrectness = goal.map((g) => placementSet.has(goalKey(g)));
 
   const score = config.correctPts * correct + config.wrongPts * wrong;
   const penaltyApplied = wrong > 0 && config.wrongPts !== 0;
@@ -101,5 +112,6 @@ export function scorePlacements(
     score,
     penaltyApplied,
     placements: scored,
+    goalCorrectness,
   };
 }

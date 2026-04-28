@@ -72,6 +72,14 @@ export interface PlayState {
     shares_remaining: number;
   } | null;
   goal: GoalPattern | null;
+  /**
+   * Per-goal-piece correctness, parallel to `goal`. Null until
+   * test_enabled fires (keeps the builder's correctness opt-in).
+   * Drives the mirrored ✓ overlay on the guider's goal canvas so
+   * they see which positions the builder has currently satisfied
+   * without seeing the builder's wrong placements.
+   */
+  goal_correctness: boolean[] | null;
   /** Goal piece count — exposed to all roles for the builder progress counter. */
   goal_count: number;
   /**

@@ -181,6 +181,7 @@ export function GuiderView({ state }: GuiderViewProps) {
           pieces={state.goal}
           complexity={state.round.complexity}
           showCoords={showCoords}
+          correctness={state.goal_correctness ?? undefined}
         />
       </div>
       <p
@@ -220,19 +221,15 @@ export function GuiderView({ state }: GuiderViewProps) {
             revealedPartner
           />
         )}
-        {/* Builder shared progress lives in the right-hand aside,
-            directly below the brief envelope. Was floating
-            absolute-bottom-right which playtest 2026-04-27 flagged as
-            "easy to miss" — the builder's most recent snapshot is
-            actively useful information for the guider mid-round, so
-            it earns the same prime real estate as the brief. */}
-        {state.builder_snapshot && state.builder_snapshot.length > 0 && (
-          <BuilderSnapshotPanel
-            snapshot={state.builder_snapshot}
-            complexity={state.round.complexity}
-            showCoords={showCoords}
-          />
-        )}
+        {/* The Agile-share BuilderSnapshotPanel was removed
+            2026-04-28 after playtest feedback: a tiny thumbnail of
+            the builder's current canvas competed with the goal
+            canvas's own correctness overlay (✓ green pulses on
+            satisfied goal positions) and read as confusing duplicate
+            state. The data still flows on the wire (state.builder_
+            snapshot) for future use, but the guider's mid-round
+            collaboration signal is now the goal correctness overlay
+            + the score chip, not a miniature canvas mirror. */}
       </aside>
 
       {!briefOpened && <BriefGate role="guider" />}
@@ -255,118 +252,6 @@ export function GuiderView({ state }: GuiderViewProps) {
         />
       )}
     </section>
-  );
-}
-
-function BuilderSnapshotPanel({
-  snapshot,
-  complexity,
-  showCoords,
-}: {
-  snapshot: NonNullable<PlayState["builder_snapshot"]>;
-  complexity: number;
-  showCoords: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="w-full cursor-pointer text-left"
-        style={{ background: "transparent", padding: 0, border: "none" }}
-        aria-label="Open builder shared progress full screen"
-      >
-        <div
-          className="t-card flex flex-col gap-2 p-3 hover:shadow-md-soft"
-          style={{
-            // Match the brief envelope's pulse treatment so a fresh
-            // share clearly arrives in the guider's peripheral vision.
-            background: "var(--color-tint-orange)",
-            border: "1.5px solid var(--color-t-orange)",
-          }}
-        >
-          <div className="flex items-center justify-between gap-2">
-            <span
-              className="t-mono text-[10px] font-bold uppercase tracking-widest"
-              style={{ color: "var(--color-t-orange)" }}
-            >
-              ● BUILDER SHARED PROGRESS
-            </span>
-            <span className="t-mono text-[10px] text-[var(--color-ink-3)]">
-              {snapshot.length} placed · tap to expand
-            </span>
-          </div>
-          <div
-            className="overflow-hidden rounded-[10px]"
-            style={{
-              transform: "scale(0.4)",
-              transformOrigin: "top left",
-              height: 200,
-              marginBottom: -200,
-              background: "#fff",
-            }}
-          >
-            <PlayCanvas
-              pieces={snapshot}
-              complexity={complexity}
-              showCoords={showCoords}
-            />
-          </div>
-        </div>
-      </button>
-
-      {open && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ background: "rgba(31,26,20,0.62)" }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setOpen(false);
-          }}
-        >
-          <div
-            className="t-card flex flex-col items-center gap-3 p-5"
-            style={{ background: "#fff", maxWidth: "92vw", maxHeight: "92vh" }}
-          >
-            <div className="flex w-full items-center justify-between gap-3">
-              <span
-                className="t-mono text-[11px] uppercase tracking-widest text-[var(--color-ink-3)]"
-                style={{ letterSpacing: ".15em" }}
-              >
-                Builder shared progress · {snapshot.length} placed
-              </span>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                aria-label="Close"
-                className="grid h-8 w-8 place-items-center rounded-md text-[20px] text-[var(--color-ink-2)]"
-                style={{ background: "var(--color-paper-2)" }}
-              >
-                ×
-              </button>
-            </div>
-            <PlayCanvas
-              pieces={snapshot}
-              complexity={complexity}
-              showCoords={showCoords}
-            />
-            <span className="t-mono text-[10px] text-[var(--color-ink-3)]">
-              Esc or click outside to close
-            </span>
-          </div>
-        </div>
-      )}
-    </>
   );
 }
 
