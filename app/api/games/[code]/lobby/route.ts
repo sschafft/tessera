@@ -4,10 +4,8 @@ import { readSessionForGame } from "@/lib/auth/session";
 import { getRepository } from "@/lib/game/getRepository";
 import { scorePlacements } from "@/lib/scoring/score";
 import type { GoalPattern } from "@/lib/pattern/types";
-import {
-  getGoogleAccessToken,
-  isClerkConfigured,
-} from "@/lib/google/clerkToken";
+import { isGoogleConfigured } from "@/lib/google/oauth";
+import { getSession as getGoogleSession } from "@/lib/google/tokenStore";
 
 export const runtime = "nodejs";
 
@@ -154,18 +152,14 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       builder: game.builder_brief_on,
       guider: game.guider_brief_on,
     },
-    // Per-pair breakouts state. `configured` is true when Clerk env
-    // vars are set on this deployment (the toggle gate). The dashboard
-    // shows the breakouts setup card whenever this is true. The
-    // GM's own connection state is derived client-side from Clerk
-    // (useUser + a quick "is google linked" check); we still fetch
-    // it server-side here so the lobby snapshot can flip from
-    // "Sign in with Google" to "Generate breakout calls" without a
-    // separate Clerk roundtrip on the client.
+    // Per-pair breakouts state. `configured` is true when the Google
+    // OAuth env vars are present on this deployment (the toggle gate
+    // for the dashboard's Step 4 card). `google_connected` reflects
+    // whether we have an encrypted token row for THIS game.
     breakouts: {
-      configured: isClerkConfigured(),
-      google_connected: isClerkConfigured()
-        ? (await getGoogleAccessToken().catch(() => null)) !== null
+      configured: isGoogleConfigured(),
+      google_connected: isGoogleConfigured()
+        ? (await getGoogleSession(game.id)) !== null
         : false,
     },
     participants,

@@ -8,9 +8,10 @@ import {
   deleteBreakoutEvent,
 } from "@/lib/google/calendar";
 import {
-  ClerkUnconfiguredError,
-  getGoogleAccessToken,
-} from "@/lib/google/clerkToken";
+  GoogleSessionLost,
+  getValidAccessToken,
+  revokeAndDelete,
+} from "@/lib/google/tokenStore";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -52,44 +53,37 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ ok: true, already_ended: true });
   }
 
-  // Calendar cleanup BEFORE flipping the game so we still have a
-  // running game to gate the GM session check on. Failures here
-  // don't block game-end — orphaned calendar events are visible only
-  // to the GM and easy to bulk-delete by searching "Tessera breakout".
-  // Clerk holds the OAuth grant; we don't need to revoke anything
-  // locally — the GM can disconnect Google from their Clerk account
-  // settings if they want to drop the grant entirely.
+  // Calendar cleanup BEFORE flipping the game so the gm_google_tokens
+  // row is still around to read. Failures here don't block game-end
+  // — orphaned calendar events are visible only to the GM and easy
+  // to bulk-delete by searching "Tessera breakout". After cleanup we
+  // revoke the OAuth grant + drop the encrypted token row.
   const breakouts = await repo.listPairsWithBreakouts(game.id);
   let deleted = 0;
   let cleanupWarning: string | null = null;
   if (breakouts.length > 0) {
     try {
-      const session = await getGoogleAccessToken();
-      if (!session) {
-        cleanupWarning = "google_session_lost";
-      } else {
-        const accessToken = session.accessToken;
-        for (const b of breakouts) {
-          try {
-            await deleteBreakoutEvent({ accessToken, eventId: b.event_id });
-            deleted += 1;
-          } catch (err) {
-            if (err instanceof CalendarApiError && err.isAuthError) {
-              cleanupWarning = "google_session_lost_mid_cleanup";
-              break;
-            }
-            console.warn(
-              `[end] delete event ${b.event_id} failed: ${
-                err instanceof Error ? err.message : String(err)
-              }`,
-            );
+      const accessToken = await getValidAccessToken(game.id);
+      for (const b of breakouts) {
+        try {
+          await deleteBreakoutEvent({ accessToken, eventId: b.event_id });
+          deleted += 1;
+        } catch (err) {
+          if (err instanceof CalendarApiError && err.isAuthError) {
+            cleanupWarning = "google_session_lost_mid_cleanup";
+            break;
           }
-          await repo.clearPairBreakout(b.id).catch(() => undefined);
+          console.warn(
+            `[end] delete event ${b.event_id} failed: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
         }
+        await repo.clearPairBreakout(b.id).catch(() => undefined);
       }
     } catch (err) {
-      if (err instanceof ClerkUnconfiguredError) {
-        cleanupWarning = "clerk_unconfigured";
+      if (err instanceof GoogleSessionLost) {
+        cleanupWarning = "google_session_lost";
       } else {
         cleanupWarning = "cleanup_failed";
         console.warn(
@@ -102,6 +96,12 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       await repo.clearPairBreakout(b.id).catch(() => undefined);
     }
   }
+  // Revoke + drop the GM's stored Google tokens (best effort).
+  await revokeAndDelete(game.id).catch((err) =>
+    console.warn(
+      `[end] revokeAndDelete: ${err instanceof Error ? err.message : String(err)}`,
+    ),
+  );
 
   // End the active round first (idempotent), then flip the game.
   const round = await repo.findLatestRound(game.id);
