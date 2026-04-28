@@ -297,6 +297,24 @@ for i, entry in enumerate(ROSTER):
     else:
         body += player_breakouts_check
 
+    # v1.4 UX + copy lens — separate observation pass on copy quality
+    # and brief evocativeness. Brief library was tuned with new themed
+    # vocabularies (floop-doopy, acronym officer, pirate's log, star
+    # captain, cooking show, telegraph operator) + softened over-stacked
+    # builder briefs. We want experiential read on whether the briefs
+    # land and whether the site copy reads polished or rough.
+    ux_copy_lens = (
+        "\n\n## v1.4 UX + copy lens (NEW — read this and respond in your final report)\n"
+        "Beyond your role-specific phases, run a separate observation pass on TWO things:\n"
+        "\n"
+        "1. **Brief evocativeness.** When you read your own brief (and any briefs revealed at round-end), judge each one as a piece of writing. Was it tricky-but-parseable, or convoluted? Did the constraint feel themed and consistent (e.g., a clean nautical vocabulary you could lean into), or like an arbitrary stack of rules? Specifically watch for the new themed briefs — pirate's log, star captain, cooking show host, acronym officer, floop-doopy lexicon, telegraph operator. If you got one, did it generate the kind of weird-funny conversation Tessera is supposed to spark? Or did it just slow you down?\n"
+        "\n"
+        "2. **Copy polish across the site.** As you move between surfaces (landing page → join → lobby → play → round end), notice the copy. Anywhere a label, hint, button, or banner felt: too clever, too jargony, too generic, internally inconsistent (e.g., a button labelled X but the next screen calls the same action Y), or just rough — flag it. Specifically check: lobby waiting copy ('YOU'RE IN · WAITING' badge + body text), top-bar Pair-call vs Main-room labels, brief envelope wording, super-power tile labels, round-ended view header copy.\n"
+        "\n"
+        "Add these as `findings` with `category: copy` and `area: shared` (or your role) AND surface 1–2 sentences of synthesis in `experience.what_to_change` if copy was the dominant issue.\n"
+    )
+    body += ux_copy_lens
+
     setup = (
         f"You are playing one role in a live Tessera workshop running at {TESSERA_URL} (code: {CODE}).\n\n"
         f"Your role: {role}\n"

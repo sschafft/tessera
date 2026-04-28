@@ -28,28 +28,27 @@ export function LobbyWaiting({
         {roundInFlight ? (
           hasCall ? (
             <>
-              A round is already underway. Hop on the call — your facilitator
-              will pull you in for the next one.
+              A round&apos;s already running. Hop on the call now —
+              your facilitator will seat you in the next one.
             </>
           ) : (
             <>
-              A round is already underway. Your facilitator will pull you in
-              for the next one.
+              A round&apos;s already running. Your facilitator will seat
+              you in the next one.
             </>
           )
         ) : hasCall ? (
           <>
-            You&apos;re seated and connected. Your facilitator picks pairs from
-            the lobby; you&apos;ll move into your role automatically the moment
-            they assign you.
+            You&apos;re seated. The facilitator will pair you up and the
+            screen will flip into your role on its own — no need to refresh.
             <br />
-            Hop on the call so you&apos;re ready when the round starts.
+            <b>While you wait:</b> hop on the call below and introduce
+            yourself — your partner is probably joining too.
           </>
         ) : (
           <>
-            You&apos;re seated and connected. Your facilitator picks pairs from
-            the lobby; you&apos;ll move into your role automatically the moment
-            they assign you.
+            You&apos;re seated. The facilitator will pair you up and the
+            screen will flip into your role on its own — no need to refresh.
           </>
         )}
       </p>

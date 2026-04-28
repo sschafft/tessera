@@ -123,7 +123,7 @@ export function RoundEndedView({ state }: RoundEndedViewProps) {
       )}
 
       <p className="t-mono text-center text-[12px] text-[var(--color-ink-3)]">
-        Waiting for the next round · talk it through on your call
+        Debrief on your call. Your facilitator will move the room next.
       </p>
     </section>
   );
