@@ -285,24 +285,7 @@ export function PlayContent({ code, initial }: PlayContentProps) {
         {renderBody(state)}
       </main>
       {sessionLost && (
-        <div
-          className="flex flex-col gap-1 border-t border-[var(--color-line)] px-6 py-3 text-[13px]"
-          style={{ background: "var(--color-tint-red)", color: "var(--color-t-red)" }}
-          role="alert"
-        >
-          <span className="font-bold">Your session for this game was lost.</span>
-          <span style={{ color: "#7a1818" }}>
-            If you saved your recovery URL when you joined, open it now to
-            reclaim your seat. Otherwise{" "}
-            <a
-              href={`/g/${code}/join`}
-              className="underline font-bold"
-            >
-              rejoin with the same display name
-            </a>
-            .
-          </span>
-        </div>
+        <SessionLostBanner code={code} />
       )}
       {error && !sessionLost && (
         <p className="px-6 py-2 text-[11px] text-[var(--color-ink-3)]">
@@ -338,6 +321,56 @@ function renderBody(state: PlayState) {
   if (state.role === "guider") return <GuiderView state={state} />;
   if (state.role === "observer") return <ObserverView state={state} />;
   return null;
+}
+
+/**
+ * Banner the player sees when their cookie was wiped mid-game.
+ * Prefer-recovery copy: re-joining with the same name fails the
+ * uniqueness check (the original participant row is still there)
+ * and lands on a confusing "name taken" error. The right path is
+ * the one-shot recovery URL the player was prompted to save at
+ * join time, which we also stash in localStorage as a fallback.
+ * If localStorage has it, we surface a single-click recover link.
+ */
+function SessionLostBanner({ code }: { code: string }) {
+  const [savedUrl, setSavedUrl] = useState<string | null>(null);
+  useEffect(() => {
+    try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot localStorage read after mount; SSR has no window.
+      setSavedUrl(window.localStorage.getItem(`tessera_recovery_${code}`));
+    } catch {
+      // localStorage disabled (private mode); the manual-paste copy
+      // below covers it.
+    }
+  }, [code]);
+  return (
+    <div
+      className="flex flex-col gap-1.5 border-t border-[var(--color-line)] px-6 py-3 text-[13px]"
+      style={{ background: "var(--color-tint-red)", color: "var(--color-t-red)" }}
+      role="alert"
+    >
+      <span className="font-bold">Your session for this game was lost.</span>
+      {savedUrl ? (
+        <span style={{ color: "#7a1818" }}>
+          We have your recovery URL stashed in this browser —{" "}
+          <a href={savedUrl} className="font-bold underline">
+            click here to reclaim your seat
+          </a>
+          .
+        </span>
+      ) : (
+        <span style={{ color: "#7a1818" }}>
+          Paste the recovery URL you saved at join time into the address bar,
+          or open{" "}
+          <a href={`/recover/${code}`} className="font-bold underline">
+            /recover/{code}
+          </a>{" "}
+          to enter your participant id + token manually. Re-joining with the
+          same name won&apos;t work — the original seat is still on the roster.
+        </span>
+      )}
+    </div>
+  );
 }
 
 function roleLabel(r: PlayRole) {
