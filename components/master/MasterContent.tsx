@@ -589,102 +589,106 @@ export function MasterContent({
           </a>
         </div>
       )}
-      <div
-        className="grid min-h-0 flex-1"
-        style={{
-          // Hero layout when nobody's joined yet: lobby column eats the
-          // middle so the share-link CTA + pairing controls sit front
-          // and centre. Once players land, snap back to the workshop
-          // layout (lobby | focused pair | super powers).
-          gridTemplateColumns:
-            participants.length === 0 && pairs.length === 0
-              ? "minmax(420px, 720px) 1fr 360px"
-              : "320px 1fr 360px",
-        }}
-      >
-        <aside className="flex flex-col border-r border-[var(--color-line)] bg-white">
-          <MasterLobby
-            code={code}
-            teamMode={teamMode}
-            members={lobbyMembers}
-            cap={cap}
-            selected={selected}
-            toggleSelect={toggleSelect}
-            clearSelection={clearSelection}
-            pollError={pollError}
-            actionError={actionError}
-            busy={busy}
-            pairs={pairs}
-            participants={participants}
-            onAutoPairs={(count) =>
-              allocate({ kind: "auto_pairs", count })
-            }
-            onAutoObservers={() => allocate({ kind: "auto_observers" })}
-            onPair={(builderId) => {
-              const arr = Array.from(selected);
-              if (arr.length !== 2) return;
-              allocate({
-                kind: "pair",
-                participant_ids: arr,
-                builder_id: builderId,
-              });
+      {/* Pre-round (no round, or round still in lobby/pending) the
+          middle "focused pair" column is dead weight — there's nothing
+          to observe yet, the placeholder card just took up space.
+          Drop the middle column entirely and let the lobby + pairs
+          sidebar fill the freed width. The right-side super-power
+          rail stays so the GM can pre-tune scoring + glance at
+          the (currently disabled) mechanics. The middle column
+          re-appears the moment a round is running or has data
+          worth observing (post-end debrief, etc.). */}
+      {(() => {
+        const hasRoundContent =
+          round !== null && round.status !== "pending";
+        return (
+          <div
+            className="grid min-h-0 flex-1"
+            style={{
+              gridTemplateColumns: hasRoundContent
+                ? "320px 1fr 360px"
+                : "1fr 360px",
             }}
-            onObserver={(pairId) =>
-              allocate({
-                kind: "observer",
-                participant_ids: Array.from(selected),
-                pair_id: pairId,
-              })
-            }
-          />
-          <PairsPanel
-            pairs={pairs}
-            participants={participants}
-            focusedPairId={focusedPairId}
-            onFocus={setFocusedPairId}
-          />
-        </aside>
+          >
+            <aside className="flex flex-col border-r border-[var(--color-line)] bg-white">
+              <MasterLobby
+                code={code}
+                teamMode={teamMode}
+                members={lobbyMembers}
+                cap={cap}
+                selected={selected}
+                toggleSelect={toggleSelect}
+                clearSelection={clearSelection}
+                pollError={pollError}
+                actionError={actionError}
+                busy={busy}
+                pairs={pairs}
+                participants={participants}
+                onAutoPairs={(count) =>
+                  allocate({ kind: "auto_pairs", count })
+                }
+                onAutoObservers={() => allocate({ kind: "auto_observers" })}
+                onPair={(builderId) => {
+                  const arr = Array.from(selected);
+                  if (arr.length !== 2) return;
+                  allocate({
+                    kind: "pair",
+                    participant_ids: arr,
+                    builder_id: builderId,
+                  });
+                }}
+                onObserver={(pairId) =>
+                  allocate({
+                    kind: "observer",
+                    participant_ids: Array.from(selected),
+                    pair_id: pairId,
+                  })
+                }
+              />
+              <PairsPanel
+                pairs={pairs}
+                participants={participants}
+                focusedPairId={focusedPairId}
+                onFocus={setFocusedPairId}
+              />
+            </aside>
 
-        <main
-          className="flex flex-col gap-4 overflow-y-auto p-6"
-          style={{ background: "var(--color-paper-2)" }}
-        >
-          {focusedPair && data?.game_id ? (
-            <MasterPairView
-              code={code}
-              gameId={data.game_id}
-              pairId={focusedPair.id}
-              onReroll={rerollBrief}
-              busy={busy}
-            />
-          ) : (
-            <FocusedPairPlaceholder round={round} pairs={pairs.length} />
-          )}
-        </main>
+            {hasRoundContent && (
+              <main
+                className="flex flex-col gap-4 overflow-y-auto p-6"
+                style={{ background: "var(--color-paper-2)" }}
+              >
+                {focusedPair && data?.game_id ? (
+                  <MasterPairView
+                    code={code}
+                    gameId={data.game_id}
+                    pairId={focusedPair.id}
+                    onReroll={rerollBrief}
+                    busy={busy}
+                  />
+                ) : (
+                  <FocusedPairPlaceholder round={round} pairs={pairs.length} />
+                )}
+              </main>
+            )}
 
-        <aside className="flex flex-col border-l border-[var(--color-line)] bg-white">
-          <AccelerantsRail
-            events={data?.accelerant_events ?? []}
-            roundRunning={round?.status === "running"}
-            focusedPair={focusedPair}
-            busy={busy}
-            // Scoring retune is "retroactive" only when a round is
-            // running AND something to retune exists. We don't have
-            // a per-pair placement count in the lobby payload, so
-            // we approximate via roundRunning + any pair existing.
-            // Trade-off: a confirmation flashes on the very first
-            // change of a round before any pieces are placed (safe);
-            // skipping confirm pre-round when no scores exist yet
-            // (also safe — nothing to recompute).
-            scoreRetuneIsRetroactive={
-              round?.status === "running" && pairs.length > 0
-            }
-            scoring={data?.scoring ?? { correct_pts: 10, wrong_pts: 0 }}
-            onTrigger={triggerAccelerant}
-            onScoring={updateScoring}
-          />
-        </aside>
-      </div>
+            <aside className="flex flex-col border-l border-[var(--color-line)] bg-white">
+              <AccelerantsRail
+                events={data?.accelerant_events ?? []}
+                roundRunning={round?.status === "running"}
+                focusedPair={focusedPair}
+                busy={busy}
+                scoreRetuneIsRetroactive={
+                  round?.status === "running" && pairs.length > 0
+                }
+                scoring={data?.scoring ?? { correct_pts: 10, wrong_pts: 0 }}
+                onTrigger={triggerAccelerant}
+                onScoring={updateScoring}
+              />
+            </aside>
+          </div>
+        );
+      })()}
       <EndGameModal
         open={endGameModalOpen}
         busy={busy}
