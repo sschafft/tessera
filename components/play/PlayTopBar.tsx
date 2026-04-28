@@ -131,7 +131,7 @@ function LinksBar({
             ▶
           </span>
           <span className="flex flex-col text-[12px] font-bold leading-tight">
-            Breakout
+            Pair call
             <span className="t-mono text-[10px] font-normal text-[var(--color-ink-3)]">
               just you + your partner
             </span>

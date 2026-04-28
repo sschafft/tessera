@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Avatar } from "@/components/primitives/Avatar";
 import type { LobbyPair, LobbyParticipant } from "./MasterContent";
 
@@ -108,10 +109,17 @@ function PairRow({
   const progress = pair.progress;
   const isComplete = progress?.complete === true;
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onFocus}
-      className="mb-1.5 flex flex-col gap-2 rounded-[12px] p-3 text-left"
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onFocus();
+        }
+      }}
+      className="mb-1.5 flex cursor-pointer flex-col gap-2 rounded-[12px] p-3 text-left"
       style={{
         border: `1.5px solid ${
           isComplete
@@ -205,6 +213,62 @@ function PairRow({
           </div>
         </div>
       )}
-    </button>
+      {pair.breakout_call_url && (
+        <PairCallLine url={pair.breakout_call_url} />
+      )}
+    </div>
+  );
+}
+
+function PairCallLine({ url }: { url: string }) {
+  const [copied, setCopied] = useState(false);
+  const host = (() => {
+    try {
+      return new URL(url).hostname;
+    } catch {
+      return "pair call";
+    }
+  })();
+  return (
+    <div
+      className="flex items-center gap-1.5 border-t border-[var(--color-line)] pt-2"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <span className="t-mono text-[10px] uppercase text-[var(--color-ink-3)]">
+        call
+      </span>
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="t-mono flex-1 truncate text-[11px] underline"
+        style={{ color: "var(--color-t-blue)" }}
+        title={url}
+      >
+        {host}
+      </a>
+      <button
+        type="button"
+        onClick={async (e) => {
+          e.stopPropagation();
+          try {
+            await navigator.clipboard.writeText(url);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          } catch {
+            setCopied(false);
+          }
+        }}
+        className="t-mono rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+        style={{
+          background: copied ? "var(--color-t-green)" : "var(--color-paper-2)",
+          color: copied ? "#fff" : "var(--color-ink-2)",
+          border: "1px solid var(--color-line)",
+        }}
+        aria-label="Copy pair call link"
+      >
+        {copied ? "✓" : "copy"}
+      </button>
+    </div>
   );
 }
