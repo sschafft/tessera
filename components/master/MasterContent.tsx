@@ -31,6 +31,19 @@ export interface LobbyPair {
     builder: { title: string; rules: string[] } | null;
     guider: { title: string; rules: string[] } | null;
   };
+  /**
+   * Live per-pair progress. Null when no round is running. Populated
+   * by the lobby route when a round is active so the PairsPanel can
+   * render a "✓ complete" overlay or "% correct" chip per row.
+   */
+  progress: {
+    correct: number;
+    total: number;
+    placed: number;
+    percent: number;
+    complete: boolean;
+    score: number;
+  } | null;
 }
 
 export interface LobbyRound {

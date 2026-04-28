@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isValidGameCode } from "@/lib/game/code";
 import { readSessionForGame } from "@/lib/auth/session";
 import { getRepository } from "@/lib/game/getRepository";
+import { scorePlacements } from "@/lib/scoring/score";
+import type { GoalPattern } from "@/lib/pattern/types";
 
 export const runtime = "nodejs";
 
@@ -46,12 +48,11 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     ? await repo.listAccelerantEvents(round.id)
     : [];
 
-  // Build a map of (pair_id → { builder_brief, guider_brief }) for the
-  // current round. The previous sequential `for await pairs` loop did
-  // 2×N round-trips per dashboard tick (findPairRound + listBriefs)
-  // with no parallelism — a 4-pair workshop spent ~120-160ms per
-  // /lobby fetch. Same shape, batched via Promise.all so the per-pair
-  // work runs concurrently.
+  // Build a map of (pair_id → { builder_brief, guider_brief, progress })
+  // for the current round. Per-pair progress drives the GM dashboard's
+  // completion overlay — green tint + ✓/% chip per row when a pair has
+  // satisfied the goal. We only compute progress for the running round;
+  // pre-round and ended-round pairs surface no chip.
   const briefsByPair = new Map<
     string,
     {
@@ -59,17 +60,39 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       guider: { title: string; rules: string[] } | null;
     }
   >();
+  const progressByPair = new Map<
+    string,
+    {
+      correct: number;
+      total: number;
+      placed: number;
+      percent: number;
+      complete: boolean;
+      score: number;
+    }
+  >();
   if (round) {
     const entries = await Promise.all(
       pairs.map(async (pair) => {
         const pr = await repo.findPairRound(round.id, pair.id);
         if (!pr) return null;
-        const list = await repo.listBriefsForPairRound(pr.id);
+        const [list, placements] = await Promise.all([
+          repo.listBriefsForPairRound(pr.id),
+          repo.listPlacements(pr.id),
+        ]);
         const builder = list.find((b) => b.role === "builder");
         const guider = list.find((b) => b.role === "guider");
-        return [
-          pair.id,
-          {
+        const goal = (pr.goal_pattern as GoalPattern) ?? [];
+        const breakdown = scorePlacements(placements, goal, {
+          correctPts: game.scoring_correct_pts,
+          wrongPts: game.scoring_wrong_pts,
+        });
+        const total = breakdown.total;
+        const percent =
+          total > 0 ? Math.round((breakdown.correct / total) * 100) : 0;
+        return {
+          pair_id: pair.id,
+          briefs: {
             builder: builder
               ? { title: builder.title, rules: builder.rules }
               : null,
@@ -77,11 +100,21 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
               ? { title: guider.title, rules: guider.rules }
               : null,
           },
-        ] as const;
+          progress: {
+            correct: breakdown.correct,
+            total,
+            placed: placements.length,
+            percent,
+            complete: total > 0 && breakdown.correct === total,
+            score: breakdown.score,
+          },
+        };
       }),
     );
     for (const e of entries) {
-      if (e) briefsByPair.set(e[0], e[1]);
+      if (!e) continue;
+      briefsByPair.set(e.pair_id, e.briefs);
+      progressByPair.set(e.pair_id, e.progress);
     }
   }
 
@@ -113,6 +146,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       guider_id: p.guider_id,
       created_at: p.created_at,
       briefs: briefsByPair.get(p.id) ?? { builder: null, guider: null },
+      progress: progressByPair.get(p.id) ?? null,
     })),
     round: round
       ? {

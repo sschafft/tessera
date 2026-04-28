@@ -236,9 +236,16 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
         penalty_applied: boolean;
       }
     | null = null;
+  // Per-goal-piece correctness, parallel to `goal`. Surfaced to roles
+  // that see the goal (guider + observer + post-round), but only
+  // when test_enabled — keeps the asymmetry intact pre-Test-Build.
+  let goalCorrectness: boolean[] | null = null;
   if (testEnabled && pairRound) {
     const goalPieces = (pairRound.goal_pattern as GoalPattern) ?? [];
-    const breakdown = scorePlacements(placementsWithCorrect, goalPieces, {
+    // Score against the FULL placements (not the role-gated
+    // visiblePlacements). The guider's view is [] of placements but
+    // the breakdown still needs to reflect every builder placement.
+    const breakdown = scorePlacements(placements, goalPieces, {
       correctPts: game.scoring_correct_pts,
       wrongPts: game.scoring_wrong_pts,
     });
@@ -257,6 +264,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       total: breakdown.total,
       penalty_applied: breakdown.penaltyApplied,
     };
+    goalCorrectness = breakdown.goalCorrectness;
   }
 
   return NextResponse.json({
@@ -307,6 +315,13 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     placements: placementsWithCorrect,
     accuracy,
     live_score: liveScore,
+    /**
+     * Per-goal-piece correctness, aligned to `goal`. Null until
+     * test_enabled (preserves asymmetry pre-Test-Build). Drives the
+     * guider's mirrored "✓ this position satisfied" overlay so they
+     * see live progress alongside the score chip.
+     */
+    goal_correctness: goalCorrectness,
     test_enabled: testEnabled,
     briefs_revealed: pairRound?.briefs_revealed ?? false,
     // Prototype glimpse — when active, builder gets a degraded preview.

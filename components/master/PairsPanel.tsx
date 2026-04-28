@@ -64,7 +64,34 @@ export function PairsPanel({
   );
 }
 
+function ProgressBar({
+  percent,
+  complete,
+}: {
+  percent: number;
+  complete: boolean;
+}) {
+  return (
+    <div
+      className="relative h-1.5 w-full overflow-hidden rounded-full"
+      style={{ background: "var(--color-paper-2)" }}
+      aria-hidden="true"
+    >
+      <div
+        className="absolute inset-y-0 left-0 transition-[width]"
+        style={{
+          width: `${Math.max(0, Math.min(100, percent))}%`,
+          background: complete
+            ? "var(--color-t-green)"
+            : "var(--color-t-blue)",
+        }}
+      />
+    </div>
+  );
+}
+
 function PairRow({
+  pair,
   builder,
   guider,
   observers,
@@ -78,19 +105,34 @@ function PairRow({
   focused: boolean;
   onFocus: () => void;
 }) {
+  const progress = pair.progress;
+  const isComplete = progress?.complete === true;
   return (
     <button
       type="button"
       onClick={onFocus}
       className="mb-1.5 flex flex-col gap-2 rounded-[12px] p-3 text-left"
       style={{
-        border: `1.5px solid ${focused ? "var(--color-ink)" : "transparent"}`,
-        background: focused ? "var(--color-paper)" : "transparent",
+        border: `1.5px solid ${
+          isComplete
+            ? "var(--color-t-green)"
+            : focused
+              ? "var(--color-ink)"
+              : "transparent"
+        }`,
+        background: isComplete
+          ? "var(--color-tint-green)"
+          : focused
+            ? "var(--color-paper)"
+            : "transparent",
+        boxShadow: isComplete
+          ? "inset 0 0 0 1px var(--color-t-green)"
+          : "none",
       }}
       aria-pressed={focused}
     >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-1">
           {builder && (
             <Avatar name={builder.display_name} color={builder.color} size={26} ring="#fff" />
           )}
@@ -99,11 +141,40 @@ function PairRow({
               <Avatar name={guider.display_name} color={guider.color} size={26} ring="#fff" />
             </span>
           )}
-          <span className="ml-2 text-[13px] font-bold">
+          <span className="ml-2 truncate text-[13px] font-bold">
             {builder?.display_name ?? "?"} ↔ {guider?.display_name ?? "?"}
           </span>
         </div>
+        {progress && progress.total > 0 && (
+          <span
+            className="t-mono flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold"
+            style={
+              isComplete
+                ? {
+                    background: "var(--color-t-green)",
+                    color: "#fff",
+                    boxShadow: "0 1px 2px rgba(0,0,0,.10)",
+                  }
+                : {
+                    background: "var(--color-paper-2)",
+                    color: "var(--color-ink-2)",
+                    boxShadow: "inset 0 0 0 1px var(--color-line)",
+                  }
+            }
+            aria-label={`${progress.correct} of ${progress.total} pieces correct${isComplete ? " — complete" : ""}`}
+          >
+            {isComplete
+              ? "✓ DONE"
+              : `${progress.percent}%`}
+          </span>
+        )}
       </div>
+      {progress && progress.total > 0 && (
+        <ProgressBar
+          percent={progress.percent}
+          complete={isComplete}
+        />
+      )}
       <div className="flex items-center justify-between text-[11px]">
         <span className="text-[var(--color-ink-3)]">
           builder · {builder?.display_name ?? "—"}
