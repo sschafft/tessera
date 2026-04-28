@@ -204,14 +204,26 @@ export function TopBarControls({
             game ended
           </span>
         ) : isRunning ? (
-          <button
-            type="button"
-            className="t-btn t-btn--primary t-btn--sm disabled:opacity-50"
-            onClick={onEnd}
-            disabled={busy}
-          >
-            {busy ? "Ending…" : "End round"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="t-btn t-btn--primary t-btn--sm disabled:opacity-50"
+              onClick={onEnd}
+              disabled={busy}
+            >
+              {busy ? "Ending…" : "End round"}
+            </button>
+            <button
+              type="button"
+              onClick={onEndGame}
+              disabled={busy}
+              className="t-mono rounded-full bg-white px-3 py-1.5 text-[11px] font-bold text-[var(--color-ink-2)] disabled:opacity-50"
+              style={{ border: "1.5px solid var(--color-line)" }}
+              title="End the whole game now (skips remaining rounds, runs cleanup)."
+            >
+              End game
+            </button>
+          </div>
         ) : (
           // Single between-rounds cluster covering both "more rounds
           // planned" and "all rounds done" states. The original layout

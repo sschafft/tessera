@@ -910,6 +910,17 @@ export function MasterContent({
                 participants={participants}
                 focusedPairId={focusedPairId}
                 onFocus={setFocusedPairId}
+                breakouts={
+                  data?.breakouts
+                    ? {
+                        provider: data.breakouts.provider,
+                        googleConnected: data.breakouts.google_connected,
+                        busy,
+                        onGenerate: generateBreakouts,
+                        onClear: clearBreakouts,
+                      }
+                    : undefined
+                }
               />
             </aside>
 
@@ -1041,16 +1052,23 @@ function FocusedPairPlaceholder({
           FOCUSED PAIR
         </div>
         {round?.status === "running" ? (
-          <h2 className="t-display text-2xl">
-            Round {round.index} live · {pairs} pair{pairs === 1 ? "" : "s"}
-          </h2>
+          <>
+            <h2 className="t-display text-2xl">
+              Round {round.index} live · {pairs} pair{pairs === 1 ? "" : "s"}
+            </h2>
+            <p className="max-w-md text-[14px] text-[var(--color-ink-2)]">
+              Click a pair on the left to drop into their canvas + briefs.
+              The super-power rail on the right fires on whichever pair is
+              focused, or on all pairs at once.
+            </p>
+          </>
         ) : (
           <>
             <h2 className="t-display text-2xl">Waiting for the round to start</h2>
             <p className="max-w-md text-[14px] text-[var(--color-ink-2)]">
               Once you allocate pairs in the sidebar, the <b>Start round</b>{" "}
-              button up top generates a fresh goal pattern for each pair and the
-              briefs in play appear here.
+              button up top generates a fresh goal pattern for each pair and
+              the briefs in play appear here.
             </p>
           </>
         )}
