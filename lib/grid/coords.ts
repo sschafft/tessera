@@ -58,7 +58,7 @@ export function canvasSizeFor(
  * Per-shape rendering size as a multiple of CELL. Larger shapes render
  * a bit bigger than their cell so the goal pattern feels chunky.
  */
-export const SHAPE_SIZE_RATIO: Record<TileShape, number> = {
+const SHAPE_SIZE_RATIO: Record<TileShape, number> = {
   "tri-up": 1.05,
   "tri-dn": 1.05,
   sq: 0.95,
@@ -82,23 +82,6 @@ export function cellToPixel(cell: Cell): Pixel {
   return {
     x: PADDING + cell.q * CELL,
     y: PADDING + cell.r * CELL,
-  };
-}
-
-/**
- * Closest cell for a given pixel coord, clamped to the supplied grid
- * size. Callers pass the round's grid (from gridSizeFor) so clamping
- * matches what's actually rendered.
- */
-export function pixelToCell(
-  pixel: Pixel,
-  size: GridSize = { w: MAX_GRID, h: MAX_GRID },
-): Cell {
-  const q = Math.round((pixel.x - PADDING) / CELL);
-  const r = Math.round((pixel.y - PADDING) / CELL);
-  return {
-    q: Math.max(0, Math.min(size.w - 1, q)),
-    r: Math.max(0, Math.min(size.h - 1, r)),
   };
 }
 

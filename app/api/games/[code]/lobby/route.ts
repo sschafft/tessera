@@ -42,10 +42,13 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     repo.findLatestRound(game.id),
   ]);
 
-  // Accelerant events for the current round (used to render usage
-  // counters + cooldowns on the dashboard rail).
-  const accelerantEvents = round
-    ? await repo.listAccelerantEvents(round.id)
+  // Super-power events for the current round (used to render usage
+  // counters + cooldowns on the dashboard rail). The DB-side
+  // `accelerant_events` table keeps its historic name for stable
+  // persistence — the repository surfaces them as super-power events
+  // here.
+  const superpowerEvents = round
+    ? await repo.listSuperPowerEvents(round.id)
     : [];
 
   // Build a map of (pair_id → { builder_brief, guider_brief, progress })
@@ -172,7 +175,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     // triggered_at=null (DB enum drift, possibly mid-deploy). The UI
     // can't render those usefully and surfacing nulls confuses
     // downstream consumers, so we filter rather than echo broken rows.
-    accelerant_events: accelerantEvents
+    superpower_events: superpowerEvents
       .filter((e) => e.kind != null && e.triggered_at != null)
       .map((e) => ({
         kind: e.kind,

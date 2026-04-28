@@ -1,17 +1,22 @@
 /**
- * Per-accelerant policy: caps per round and cooldown windows. The
- * accelerant route handler queries existing accelerant_events rows
- * and rejects new triggers that would exceed these limits.
+ * Per-super-power policy: caps per round and cooldown windows. The
+ * super-power route handler queries existing trigger-event rows and
+ * rejects new triggers that would exceed these limits.
+ *
+ * Note: the storage layer (DB table `accelerant_events`, enum
+ * `accelerant_t`) keeps the historic "accelerant" name for stable
+ * persistence — we map at the repository boundary so the rest of the
+ * codebase reads in product-aligned "super-power" terms.
  */
 
-export type AccelerantKind =
+export type SuperPowerKind =
   | "prototype"
   | "reveal_briefs"
   | "test_build"
   | "agile_share"
   | "time_pressure"
-  // vocab_swap is the historic name for "Change guider brief"; kept
-  // for backward compatibility with already-logged events. The UI
+  // vocab_swap is the historic kind name for "Change guider brief";
+  // kept for backward compatibility with already-logged events. The UI
   // surfaces it alongside change_builder_brief as paired buttons.
   | "vocab_swap"
   | "change_builder_brief"
@@ -20,9 +25,9 @@ export type AccelerantKind =
   | "harder"
   | "easier";
 
-export type AccelerantScope = "pair" | "all";
+export type SuperPowerScope = "pair" | "all";
 
-export interface AccelerantPolicy {
+export interface SuperPowerPolicy {
   /** Max triggers per round; null = unlimited. */
   maxPerRound: number | null;
   /** Cooldown between triggers in seconds; 0 = none. Pair-scoped. */
@@ -32,7 +37,7 @@ export interface AccelerantPolicy {
   implemented: boolean;
 }
 
-export const POLICIES: Record<AccelerantKind, AccelerantPolicy> = {
+export const POLICIES: Record<SuperPowerKind, SuperPowerPolicy> = {
   prototype: { maxPerRound: 4, cooldownSeconds: 12, implemented: true },
   reveal_briefs: { maxPerRound: 1, cooldownSeconds: 0, implemented: true },
   test_build: { maxPerRound: null, cooldownSeconds: 0, implemented: true },
@@ -55,8 +60,8 @@ export const POLICIES: Record<AccelerantKind, AccelerantPolicy> = {
 };
 
 export interface PriorEvent {
-  kind: AccelerantKind;
-  scope: AccelerantScope;
+  kind: SuperPowerKind;
+  scope: SuperPowerScope;
   pair_id: string | null;
   triggered_at: string;
 }
@@ -67,7 +72,7 @@ export interface PriorEvent {
  */
 export function countPriorEvents(
   events: PriorEvent[],
-  kind: AccelerantKind,
+  kind: SuperPowerKind,
   pair_id: string | null,
 ): { perPair: number; perAll: number } {
   let perPair = 0;
@@ -82,8 +87,8 @@ export function countPriorEvents(
 
 export interface CheckArgs {
   events: PriorEvent[];
-  kind: AccelerantKind;
-  scope: AccelerantScope;
+  kind: SuperPowerKind;
+  scope: SuperPowerScope;
   pair_id: string | null;
   now: Date;
 }

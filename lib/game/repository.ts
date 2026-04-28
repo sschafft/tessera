@@ -428,8 +428,12 @@ export interface GameRepository {
     on: boolean,
   ): Promise<void>;
 
-  // ─── Accelerants ───────────────────────────────────────────────────
-  createAccelerantEvent(input: {
+  // ─── Super-power events ───────────────────────────────────────────
+  // Persisted in the historic `accelerant_events` table; the repo
+  // layer presents them as super-power events to align with the
+  // product surface. (Renaming the DB table would require a migration
+  // we've decided not to ship — see TDD §15.4.)
+  createSuperPowerEvent(input: {
     round_id: string;
     scope: "pair" | "all";
     pair_id: string | null;
@@ -438,7 +442,7 @@ export interface GameRepository {
     triggered_by: string;
   }): Promise<{ id: string; triggered_at: string }>;
 
-  listAccelerantEvents(round_id: string): Promise<
+  listSuperPowerEvents(round_id: string): Promise<
     Array<{
       id: string;
       kind: string;

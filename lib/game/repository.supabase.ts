@@ -629,7 +629,7 @@ export class SupabaseGameRepository implements GameRepository {
     return (data ?? []).map(toBriefRecord);
   }
 
-  async createAccelerantEvent(input: {
+  async createSuperPowerEvent(input: {
     round_id: string;
     scope: "pair" | "all";
     pair_id: string | null;
@@ -651,12 +651,12 @@ export class SupabaseGameRepository implements GameRepository {
       .select("id, triggered_at")
       .single();
     if (error || !data) {
-      throw new Error(`createAccelerantEvent: ${error?.message ?? "unknown"}`);
+      throw new Error(`createSuperPowerEvent: ${error?.message ?? "unknown"}`);
     }
     return { id: data.id, triggered_at: data.triggered_at };
   }
 
-  async listAccelerantEvents(round_id: string): Promise<
+  async listSuperPowerEvents(round_id: string): Promise<
     Array<{
       id: string;
       kind: string;
@@ -670,7 +670,7 @@ export class SupabaseGameRepository implements GameRepository {
       .from("accelerant_events")
       .select("id, kind, scope, pair_id, triggered_at")
       .eq("round_id", round_id);
-    if (error) throw new Error(`listAccelerantEvents: ${error.message}`);
+    if (error) throw new Error(`listSuperPowerEvents: ${error.message}`);
     return (data ?? []).map((e) => ({
       id: e.id,
       kind: e.kind as string,

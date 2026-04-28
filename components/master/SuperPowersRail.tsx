@@ -4,12 +4,12 @@ import { useCallback, useEffect, useState } from "react";
 import {
   POLICIES,
   countPriorEvents,
-  type AccelerantKind,
-} from "@/lib/accelerants/policy";
-import type { AccelerantEvent, LobbyPair } from "./MasterContent";
+  type SuperPowerKind,
+} from "@/lib/superpowers/policy";
+import type { SuperPowerEvent, LobbyPair } from "./MasterContent";
 
 interface RailButtonSpec {
-  kind: AccelerantKind;
+  kind: SuperPowerKind;
   icon: string;
   color: TintColor;
   title: string;
@@ -21,7 +21,7 @@ type TintColor = "blue" | "purple" | "green" | "orange" | "red" | "teal";
 // Verb override on the trigger CTA — defaults to "Fire" elsewhere.
 // Specific verbs make it crisper which mechanic the GM is about to
 // invoke ("Reveal" vs "Fire", "Re-roll" vs "Fire", etc.).
-const TRIGGER_LABELS: Partial<Record<AccelerantKind, string>> = {
+const TRIGGER_LABELS: Partial<Record<SuperPowerKind, string>> = {
   prototype: "Show glimpse",
   reveal_briefs: "Reveal",
   test_build: "Enable testing",
@@ -108,8 +108,8 @@ const BUTTONS: RailButtonSpec[] = [
   },
 ];
 
-export interface AccelerantsRailProps {
-  events: AccelerantEvent[];
+export interface SuperPowersRailProps {
+  events: SuperPowerEvent[];
   roundRunning: boolean;
   focusedPair: LobbyPair | null;
   busy: boolean;
@@ -141,7 +141,7 @@ export interface AccelerantsRailProps {
   onScoring: (patch: { correct_pts?: number; wrong_pts?: number }) => void;
 }
 
-export function AccelerantsRail({
+export function SuperPowersRail({
   events,
   roundRunning,
   focusedPair,
@@ -151,7 +151,7 @@ export function AccelerantsRail({
   briefsEnabled,
   onTrigger,
   onScoring,
-}: AccelerantsRailProps) {
+}: SuperPowersRailProps) {
   const [scope, setScope] = useState<"pair" | "all">("pair");
   const [prototypeSec, setPrototypeSec] = useState(5);
   const [expanded, setExpanded] = useState(false);
@@ -726,7 +726,7 @@ function RailButton({
   onTrigger,
 }: {
   spec: RailButtonSpec;
-  events: AccelerantEvent[];
+  events: SuperPowerEvent[];
   scope: "pair" | "all";
   focusedPairId: string | null;
   disabled: boolean;
@@ -752,7 +752,7 @@ function RailButton({
 }) {
   const policy = POLICIES[spec.kind];
   const counts = countPriorEvents(
-    events as { kind: AccelerantKind; scope: "pair" | "all"; pair_id: string | null; triggered_at: string }[],
+    events as { kind: SuperPowerKind; scope: "pair" | "all"; pair_id: string | null; triggered_at: string }[],
     spec.kind,
     focusedPairId,
   );

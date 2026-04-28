@@ -11,9 +11,9 @@ export const maxDuration = 15;
 import {
   POLICIES,
   checkPolicy,
-  type AccelerantKind,
-  type AccelerantScope,
-} from "@/lib/accelerants/policy";
+  type SuperPowerKind,
+  type SuperPowerScope,
+} from "@/lib/superpowers/policy";
 import type {
   GoalPattern,
   GoalPiece,
@@ -27,15 +27,15 @@ interface RouteParams {
 }
 
 interface TriggerPayload {
-  kind?: AccelerantKind;
-  scope?: AccelerantScope;
+  kind?: SuperPowerKind;
+  scope?: SuperPowerScope;
   pair_id?: string | null;
   /** Per-kind options. Currently used: time_pressure { delta_seconds }. */
   payload?: Record<string, unknown>;
 }
 
-const KINDS: ReadonlySet<AccelerantKind> = new Set(
-  Object.keys(POLICIES) as AccelerantKind[],
+const KINDS: ReadonlySet<SuperPowerKind> = new Set(
+  Object.keys(POLICIES) as SuperPowerKind[],
 );
 
 export async function POST(req: NextRequest, { params }: RouteParams) {
@@ -78,9 +78,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
 
   // Policy check (caps, cooldowns, implementation status).
-  const rawEvents = await repo.listAccelerantEvents(round.id);
+  const rawEvents = await repo.listSuperPowerEvents(round.id);
   const events = rawEvents.map((e) => ({
-    kind: e.kind as AccelerantKind,
+    kind: e.kind as SuperPowerKind,
     scope: e.scope,
     pair_id: e.pair_id,
     triggered_at: e.triggered_at,
@@ -271,7 +271,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
 
   // Audit log.
-  await repo.createAccelerantEvent({
+  await repo.createSuperPowerEvent({
     round_id: round.id,
     scope: body.scope,
     pair_id: body.scope === "pair" ? body.pair_id! : null,
@@ -279,7 +279,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     payload: body.payload ?? {},
     triggered_by: claims.sub,
   });
-  await publishGameEvent(game.id, "accelerant_triggered", {
+  await publishGameEvent(game.id, "superpower_triggered", {
     kind: body.kind,
   });
 

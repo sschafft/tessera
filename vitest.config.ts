@@ -14,7 +14,7 @@ export default defineConfig({
       provider: "v8",
       include: [
         "lib/scoring/**",
-        "lib/accelerants/**",
+        "lib/superpowers/**",
         "lib/pattern/**",
         "lib/briefs/orchestrator.ts",
         "lib/briefs/library.ts",

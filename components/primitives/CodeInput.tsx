@@ -17,7 +17,7 @@ const ALLOWED = /[A-HJ-NP-Z2-9]/g;
  * code alphabet (no I, O, 0, 1), then hyphenates after the first 3
  * chars. Tolerates pasting "keb 4ha", "kEb-4hA", or "KEB4HA".
  */
-export function normalizeCodeInput(raw: string): string {
+function normalizeCodeInput(raw: string): string {
   const cleaned = raw.toUpperCase().match(ALLOWED)?.join("") ?? "";
   const head = cleaned.slice(0, 3);
   const tail = cleaned.slice(3, 6);

@@ -6,7 +6,7 @@ import { topicFor } from "./topic";
 
 export interface GameEventDetail {
   /**
-   * Event kind from the publish call (e.g. "accelerant_triggered",
+   * Event kind from the publish call (e.g. "superpower_triggered",
    * "placement_added"). The publisher always populates this; the
    * subscriber may still see a raw `payload` body via Supabase
    * Realtime's wrapper, but `kind` is what we key UI off.
