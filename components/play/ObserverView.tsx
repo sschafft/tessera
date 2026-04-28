@@ -119,16 +119,36 @@ function PaneHeader({
 }
 
 function WaitingForRound({ state }: { state: PlayState }) {
+  const myPair = state.pair?.id
+    ? state.available_pairs?.find((p) => p.id === state.pair?.id)
+    : null;
+  const pairLabel =
+    myPair && myPair.builder_name && myPair.guider_name
+      ? `${myPair.builder_name} ↔ ${myPair.guider_name}`
+      : null;
   return (
     <section className="m-auto flex max-w-[520px] flex-col items-center gap-5 px-6 text-center">
       <div className="t-mono text-[11px] tracking-widest text-[var(--color-ink-3)]">
-        OBSERVER · WAITING
+        OBSERVER · READY
       </div>
       <h1 className="t-display text-3xl">Hop on the call.</h1>
+      {pairLabel && (
+        <div
+          className="t-mono flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[12px] font-bold"
+          style={{
+            background: "var(--color-tint-blue)",
+            color: "var(--color-t-blue)",
+            boxShadow: "inset 0 0 0 1.5px var(--color-t-blue)",
+          }}
+        >
+          <span aria-hidden="true">👁</span>
+          <span>watching {pairLabel}</span>
+        </div>
+      )}
       <p className="text-[15px] text-[var(--color-ink-2)]">
-        Once the facilitator hits Start, you&apos;ll see your pair&apos;s
-        builder canvas alongside the goal — and overhear the conversation
-        that drives it on the call.
+        {pairLabel
+          ? `When the facilitator hits Start, the builder + goal canvases for ${pairLabel} appear here. Switch between pairs from the strip below.`
+          : "Once the facilitator hits Start, you'll see your pair's builder canvas alongside the goal — and overhear the conversation that drives it on the call."}
       </p>
       <JoinCallCta
         videoCallUrl={state.video_call_url}
