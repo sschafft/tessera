@@ -233,7 +233,7 @@ function BuilderInteractive({ state }: { state: PlayState }) {
         setError(err instanceof Error ? err.message : "place failed");
       }
     },
-    [selectedShape, selectedColor, selectedRotation, state.code],
+    [selectedShape, selectedColor, selectedRotation, state.code, clearLocalCorrect],
   );
 
   const moveEditingTo = useCallback(
@@ -284,7 +284,7 @@ function BuilderInteractive({ state }: { state: PlayState }) {
         );
       }
     },
-    [editingPiece, state.code],
+    [editingPiece, state.code, clearLocalCorrect],
   );
 
   // Esc cancels whichever mode is active; R rotates the editing piece
@@ -339,7 +339,7 @@ function BuilderInteractive({ state }: { state: PlayState }) {
     } catch (err) {
       setError(err instanceof Error ? err.message : "rotate failed");
     }
-  }, [editingPiece, state.code]);
+  }, [editingPiece, state.code, clearLocalCorrect]);
 
   // Mirror rotateEditing into the forward-ref so the keydown effect
   // above can call it. useLayoutEffect runs synchronously after render
@@ -390,7 +390,7 @@ function BuilderInteractive({ state }: { state: PlayState }) {
         setError(err instanceof Error ? err.message : "convert failed");
       }
     },
-    [selectedShape, selectedColor, selectedRotation, state.code],
+    [selectedShape, selectedColor, selectedRotation, state.code, clearLocalCorrect],
   );
 
   /**
@@ -434,7 +434,7 @@ function BuilderInteractive({ state }: { state: PlayState }) {
       });
       setError(err instanceof Error ? err.message : "delete failed");
     }
-  }, [editingPiece, state.code]);
+  }, [editingPiece, state.code, clearLocalCorrect]);
 
   const shareProgress = useCallback(async () => {
     setSharingProgress(true);
@@ -488,7 +488,7 @@ function BuilderInteractive({ state }: { state: PlayState }) {
       setClearing(false);
       setClearArmed(false);
     }
-  }, [clearArmed, state.code]);
+  }, [clearArmed, state.code, clearLocalCorrect]);
 
   const testSolution = useCallback(async () => {
     if (testing) return;
@@ -568,7 +568,7 @@ function BuilderInteractive({ state }: { state: PlayState }) {
       solvedFiredForRoundRef.current !== roundId
     ) {
       solvedFiredForRoundRef.current = roundId;
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot solved banner; gated by per-round ref.
+       
       setSolvedShown(true);
       if (state.sound_on) playSolved();
     }
@@ -612,7 +612,7 @@ function BuilderInteractive({ state }: { state: PlayState }) {
       return;
     }
     setShowNameNudge(true);
-  }, [state.pair, pairNeedsName]);
+  }, [state.pair, pairNeedsName, state.round?.status]);
   const dismissNameNudge = useCallback(() => {
     if (state.pair && typeof window !== "undefined") {
       window.sessionStorage.setItem(

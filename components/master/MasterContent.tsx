@@ -6,7 +6,8 @@ import type { TileColor } from "@/components/canvas/Tile";
 import { MasterLobby } from "./MasterLobby";
 import { PairsPanel } from "./PairsPanel";
 import { TopBarControls } from "./TopBarControls";
-import { SuperPowersRail, ScoringPanel } from "./SuperPowersRail";
+import { SuperPowersRail } from "./SuperPowersRail";
+import { ScoringPanel } from "./ScoringPanel";
 import { EndGameModal } from "./EndGameModal";
 import { GeminiFallbackModal } from "./GeminiFallbackModal";
 import { GameEndedView } from "@/components/play/GameEndedView";
@@ -475,7 +476,7 @@ export function MasterContent({
       // eslint-disable-next-line react-hooks/set-state-in-effect -- syncs focused-pair when the pairs list arrives or a Shuffle drops the focused row.
       setFocusedPairId(pairs[0]!.id);
     } else if (focusedPairId && !pairs.some((p) => p.id === focusedPairId)) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- same: focused row disappeared, snap to the first remaining pair.
+       
       setFocusedPairId(pairs[0]?.id ?? null);
     }
   }, [pairs, focusedPairId]);

@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Field } from "@/components/primitives/Field";
-import { Segmented } from "@/components/primitives/Segmented";
 import {
   ComplexitySlider,
   complexityHint,
@@ -14,8 +13,7 @@ import { isValidGameCode } from "@/lib/game/code";
 import type { TeamMode } from "@/lib/game/repository";
 
 type Tab = "host" | "join";
-const TEAM_OPTIONS = ["Game master picks", "Players pick"] as const;
-type TeamLabel = (typeof TEAM_OPTIONS)[number];
+type TeamLabel = "Game master picks" | "Players pick";
 
 const teamLabelToMode: Record<TeamLabel, TeamMode> = {
   "Game master picks": "gm_picks",

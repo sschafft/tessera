@@ -3,34 +3,21 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Field } from "@/components/primitives/Field";
-import { Segmented } from "@/components/primitives/Segmented";
-import type { TeamMode } from "@/lib/game/repository";
-
-const ROLE_OPTIONS = ["Builder", "Guider", "Observer"] as const;
-type RoleLabel = (typeof ROLE_OPTIONS)[number];
-
-const roleLabelToApi: Record<RoleLabel, "builder" | "guider" | "observer"> = {
-  Builder: "builder",
-  Guider: "guider",
-  Observer: "observer",
-};
 
 export interface JoinFormProps {
   code: string;
-  teamMode: TeamMode;
   defaultName: string;
 }
 
-type Field = "name" | null;
+type FormField = "name" | null;
 interface FormError {
-  field: Field;
+  field: FormField;
   message: string;
 }
 
-export function JoinForm({ code, teamMode, defaultName }: JoinFormProps) {
+export function JoinForm({ code, defaultName }: JoinFormProps) {
   const router = useRouter();
   const [displayName, setDisplayName] = useState(defaultName);
-  const [role, setRole] = useState<RoleLabel>("Builder");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<FormError | null>(null);
 

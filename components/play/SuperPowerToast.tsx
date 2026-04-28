@@ -83,7 +83,7 @@ export function SuperPowerToast({ gameId }: SuperPowerToastProps) {
     if (toasts.length === 0) return;
     const ids = toasts.map((t) => t.id);
     const timer = window.setTimeout(() => {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- expiry sweep; toasts are ephemeral by design.
+       
       setToasts((prev) => prev.filter((t) => !ids.includes(t.id)));
     }, 3200);
     return () => window.clearTimeout(timer);
