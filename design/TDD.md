@@ -165,7 +165,7 @@
 | Canvas | Inline SVG (no Canvas, no Konva) | Pieces are tens of polygons; SVG is plenty. |
 | DB / Realtime | Supabase (hosted free-tier project) | Postgres 15, Realtime. **No local Supabase stack** — dev points at a hosted project. Drops the Docker requirement and matches what runs in production exactly. |
 | Auth | Anonymous JWT minted by our route handler; **Supabase Auth not used** | We carry only `{ game_id, participant_id, role, exp }` in the JWT. |
-| Gemini | `@google/generative-ai` SDK, server-side only | `gemini-2.0-flash` (free tier). 1.5-flash was deprecated in late 2025; the SDK call surface is unchanged. |
+| Gemini | `@google/generative-ai` SDK, server-side only | `gemini-2.5-flash-lite` (free tier). Earlier passes used `gemini-2.0-flash` but its free-tier RPM/RPD bucket exhausts under workshop traffic; 2.5-flash-lite has a separate, looser bucket on free. SDK call surface is unchanged. |
 | Lint / format | ESLint (Next preset) + Prettier | |
 | Testing | Vitest (unit) + Playwright (e2e, smoke only in v1) | |
 | CI | GitHub Actions: typecheck, lint, vitest on PR | Playwright run on `main` only. |
