@@ -5,27 +5,22 @@ export const runtime = "nodejs";
 /**
  * Tiny diagnostic endpoint for the breakouts feature config. Returns
  * which env vars are PRESENT (not their values) so a maintainer can
- * verify the Clerk integration on Vercel without exposing secrets.
- *
- * Public on purpose — the response only confirms env-var presence,
- * which is the same signal you'd get by clicking the Sign in button
- * and seeing whether the OAuth flow starts. No secret material is
- * leaked.
+ * verify Vercel scope settings without exposing secrets.
  *
  * Usage:
- *   curl https://tessera.schaffters.com/api/_diag/clerk
+ *   curl https://tessera.schaffters.com/api/diag/clerk
+ *
+ * (The endpoint kept its `clerk` name from a brief Clerk-based
+ *  iteration; the underlying auth is a direct Google OAuth flow
+ *  built on `arctic`. Fields below reflect the current shape.)
  */
 export async function GET() {
   return NextResponse.json({
     server: {
-      // The runtime needs both halves: publishable for the client
-      // bundle, secret for server-side `auth()` + `clerkClient`.
-      next_public_clerk_publishable_key: Boolean(
-        process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
+      google_oauth_client_id: Boolean(process.env.GOOGLE_OAUTH_CLIENT_ID),
+      google_oauth_client_secret: Boolean(
+        process.env.GOOGLE_OAUTH_CLIENT_SECRET,
       ),
-      clerk_secret_key: Boolean(process.env.CLERK_SECRET_KEY),
-      // Bonus: while we're here, surface a few other env vars whose
-      // absence is the silent cause of feature-off behaviour.
       tessera_public_url: Boolean(process.env.TESSERA_PUBLIC_URL),
       tessera_jwt_secret: Boolean(process.env.TESSERA_JWT_SECRET),
       next_public_supabase_url: Boolean(
@@ -36,8 +31,8 @@ export async function GET() {
       ),
     },
     breakouts_configured: Boolean(
-      process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY &&
-        process.env.CLERK_SECRET_KEY,
+      process.env.GOOGLE_OAUTH_CLIENT_ID &&
+        process.env.GOOGLE_OAUTH_CLIENT_SECRET,
     ),
   });
 }

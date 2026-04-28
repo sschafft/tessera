@@ -1,28 +1,35 @@
-import { clerkMiddleware } from "@clerk/nextjs/server";
 import { NextResponse, type NextRequest } from "next/server";
 
 /**
- * Composed middleware:
+ * Lightweight per-IP rate limit for our public mutation routes.
  *
- *   1. Lightweight per-IP rate limit on a few sensitive POST routes
- *      (game create, host-recover, recover, join — all bcrypt-bound).
- *   2. Clerk auth context injection — but ONLY when the Clerk env
- *      vars are present. On deployments without Clerk configured
- *      (the breakouts feature is opt-in), we skip Clerk entirely
- *      so a missing key doesn't crash every request with
- *      MIDDLEWARE_INVOCATION_FAILED. The breakouts UI separately
- *      gates on `isClerkConfigured()` to keep the sign-in CTA from
- *      appearing on unconfigured deployments.
+ * The Tessera deployment runs on Vercel's free tier with no KV/Redis,
+ * so this implementation uses an in-memory sliding-window counter
+ * scoped to the runtime instance. That has known caveats:
+ *
+ *   - Counters reset on cold starts.
+ *   - A determined attacker can hit different instances to bypass
+ *     the per-instance window.
+ *
+ * Both are acceptable for v1 — this is a defence in depth against
+ * accidental client retries / casual abuse, NOT a hardened gate. The
+ * upgrade path when traffic warrants it is Vercel KV or Upstash Redis
+ * (drop-in replacement for the `hits` Map below).
+ *
+ * The limits are intentionally generous: a real workshop GM creating
+ * a game + one player joining sends ~6 mutating requests in the first
+ * 30 seconds. We bound at 60 mutations / minute / IP, which still
+ * leaves headroom for racy realtime updates.
  */
-
-const CLERK_AVAILABLE = Boolean(
-  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY &&
-    process.env.CLERK_SECRET_KEY,
-);
 
 const WINDOW_MS = 60_000;
 const MAX_REQUESTS = 60;
 
+// Mutation paths we want to gate. Read-only `/api/games/[code]/play`
+// and `/api/games/[code]/lobby` are excluded — they're polled at high
+// frequency by legitimate clients (2 Hz from the GM dashboard) and
+// gating them would create false positives faster than it stops
+// abuse.
 const GUARDED_PATTERNS: RegExp[] = [
   /^\/api\/games$/, // POST: create game (bcrypt, expensive)
   /^\/api\/games\/[A-Z0-9-]+\/host-recover$/, // POST: bcrypt verify
@@ -47,16 +54,16 @@ function getClientIp(req: NextRequest): string {
   return "unknown";
 }
 
-function applyRateLimit(req: NextRequest): NextResponse | null {
+export function middleware(req: NextRequest) {
   if (
     req.method === "GET" ||
     req.method === "HEAD" ||
     req.method === "OPTIONS"
   ) {
-    return null;
+    return NextResponse.next();
   }
   const path = req.nextUrl.pathname;
-  if (!gated(path)) return null;
+  if (!gated(path)) return NextResponse.next();
   const ip = getClientIp(req);
   const now = Date.now();
   const cutoff = now - WINDOW_MS;
@@ -92,35 +99,13 @@ function applyRateLimit(req: NextRequest): NextResponse | null {
       if (v.hits.length === 0) buckets.delete(k);
     }
   }
-  return null;
+  const remaining = MAX_REQUESTS - bucket.hits.length;
+  const res = NextResponse.next();
+  res.headers.set("X-RateLimit-Limit", String(MAX_REQUESTS));
+  res.headers.set("X-RateLimit-Remaining", String(remaining));
+  return res;
 }
 
-const clerkChain = clerkMiddleware((_auth, req) => {
-  const limited = applyRateLimit(req);
-  if (limited) return limited;
-  return NextResponse.next();
-});
-
-const fallbackChain = (req: NextRequest) => {
-  const limited = applyRateLimit(req);
-  if (limited) return limited;
-  return NextResponse.next();
-};
-
-// Pick the active middleware once at module-init based on whether
-// Clerk env vars exist. We can't make `clerkMiddleware` no-op at call
-// time because the ClerkProvider on the client also tries to read the
-// key — both surfaces gate identically. The fallback path keeps the
-// pre-Clerk behaviour (rate-limit-only) intact.
-export default CLERK_AVAILABLE ? clerkChain : fallbackChain;
-
 export const config = {
-  // Clerk's recommended matcher — every route except static assets +
-  // the Next.js internals. This is broader than the previous matcher
-  // (`/api/games/:path*`) but cheap because the inner rate-limit logic
-  // bails fast on non-guarded paths.
-  matcher: [
-    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
-    "/(api|trpc)(.*)",
-  ],
+  matcher: ["/api/games/:path*"],
 };

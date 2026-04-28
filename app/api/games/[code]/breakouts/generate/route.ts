@@ -7,9 +7,9 @@ import {
   createBreakoutEvent,
 } from "@/lib/google/calendar";
 import {
-  ClerkUnconfiguredError,
-  getGoogleAccessToken,
-} from "@/lib/google/clerkToken";
+  GoogleSessionLost,
+  getValidAccessToken,
+} from "@/lib/google/tokenStore";
 import { publishGameEvent } from "@/lib/realtime/publish";
 
 export const runtime = "nodejs";
@@ -57,19 +57,12 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
 
   let accessToken: string;
   try {
-    const session = await getGoogleAccessToken();
-    if (!session) {
-      return NextResponse.json(
-        { error: "google_session_lost", reason: "no_clerk_session" },
-        { status: 412 },
-      );
-    }
-    accessToken = session.accessToken;
+    accessToken = await getValidAccessToken(game.id);
   } catch (err) {
-    if (err instanceof ClerkUnconfiguredError) {
+    if (err instanceof GoogleSessionLost) {
       return NextResponse.json(
-        { error: "clerk_unconfigured" },
-        { status: 503 },
+        { error: "google_session_lost", reason: err.reason },
+        { status: 412 },
       );
     }
     throw err;
