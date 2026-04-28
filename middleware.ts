@@ -6,16 +6,19 @@ import { NextResponse, type NextRequest } from "next/server";
  *
  *   1. Lightweight per-IP rate limit on a few sensitive POST routes
  *      (game create, host-recover, recover, join — all bcrypt-bound).
- *   2. Clerk auth context injection. Runs on all non-asset routes so
- *      `auth()` works in any route handler / server component that
- *      needs to know who the signed-in GM is. We only actually use it
- *      under /api/games/[code]/breakouts/* and /api/games/[code]/end,
- *      but extending the matcher is cheap and avoids "auth() called
- *      outside Clerk middleware" surprises.
- *
- * The rate-limit logic was previously the entire middleware; it's now
- * the inner step inside Clerk's wrapper.
+ *   2. Clerk auth context injection — but ONLY when the Clerk env
+ *      vars are present. On deployments without Clerk configured
+ *      (the breakouts feature is opt-in), we skip Clerk entirely
+ *      so a missing key doesn't crash every request with
+ *      MIDDLEWARE_INVOCATION_FAILED. The breakouts UI separately
+ *      gates on `isClerkConfigured()` to keep the sign-in CTA from
+ *      appearing on unconfigured deployments.
  */
+
+const CLERK_AVAILABLE = Boolean(
+  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY &&
+    process.env.CLERK_SECRET_KEY,
+);
 
 const WINDOW_MS = 60_000;
 const MAX_REQUESTS = 60;
@@ -92,11 +95,24 @@ function applyRateLimit(req: NextRequest): NextResponse | null {
   return null;
 }
 
-export default clerkMiddleware((_auth, req) => {
+const clerkChain = clerkMiddleware((_auth, req) => {
   const limited = applyRateLimit(req);
   if (limited) return limited;
   return NextResponse.next();
 });
+
+const fallbackChain = (req: NextRequest) => {
+  const limited = applyRateLimit(req);
+  if (limited) return limited;
+  return NextResponse.next();
+};
+
+// Pick the active middleware once at module-init based on whether
+// Clerk env vars exist. We can't make `clerkMiddleware` no-op at call
+// time because the ClerkProvider on the client also tries to read the
+// key — both surfaces gate identically. The fallback path keeps the
+// pre-Clerk behaviour (rate-limit-only) intact.
+export default CLERK_AVAILABLE ? clerkChain : fallbackChain;
 
 export const config = {
   // Clerk's recommended matcher — every route except static assets +
