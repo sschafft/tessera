@@ -857,7 +857,7 @@ the whole `/rounds/start` budget.
 
 ### 15.4 Schema migrations applied
 
-In dependency order (14 total as of 2026-04-27):
+In dependency order (17 total as of 2026-04-28):
 1. `tessera_v1_schema` — initial tables.
 2. `tessera_v1_harden` — pinned search_path, anon revoke.
 3. `tessera_v1_seed_brief_library` — 33-entry library.
@@ -881,6 +881,20 @@ In dependency order (14 total as of 2026-04-27):
     constraint to `0..3` (square grid only takes 90° increments).
 14. `atomic_counter_rpcs` — race-safe `increment_*` RPCs replacing
     read-modify-write on counter columns.
+15. `video_call_url_optional` — drops `NOT NULL` from
+    `games.video_call_url`. Workshops that coordinate the call link
+    out-of-band shouldn't be forced to paste a URL into the host
+    form; the player views skip the "Join the video call" CTA when
+    null.
+16. `breakouts_and_google_tokens` — adds `games.breakouts_enabled`
+    (vestigial — current code paths gate on env-var presence, not
+    this flag), `pairs.{breakout_call_url, breakout_event_id}`, and
+    a new `gm_google_tokens` table (encrypted access + refresh
+    tokens, expiry, scope) for the per-pair Meet breakouts feature.
+17. `agile_share_default_off` — flips
+    `pair_rounds.shares_remaining` default from 3 → 0. The Agile
+    share super-power now grants +1 share per fire instead of
+    starting at 3 unconditionally.
 
 ### 15.5 New routes shipped beyond §10
 
@@ -940,6 +954,71 @@ Not in the original spec but shipped:
   filters out invalid/ended/purged sessions.
 - Game-over screen now renders a per-pair leaderboard with final
   accuracy + a CTA back to the home page.
+
+### 15.8 Per-pair Google Meet breakouts (optional feature)
+
+Only lights up when `GOOGLE_OAUTH_CLIENT_ID` + `_CLIENT_SECRET` are
+configured on the deployment. Feature is invisible (Step 4 setup card
+hidden, no API surface) when those env vars are absent.
+
+Architecture:
+
+- **OAuth via [`arctic`](https://arcticjs.dev)** — small, audited
+  library that wraps Google's authorization code + PKCE flow. We
+  ship a thin layer around `arctic.Google` in `lib/google/oauth.ts`
+  that adds a signed-JWT state parameter (binds the OAuth roundtrip
+  to a specific `game_id`, carries the PKCE verifier, and records
+  the request origin so the callback's redirect URI matches the one
+  Google saw on the start hop — important for preview deploys with
+  hosts that change per-PR).
+- **Routes:**
+  - `GET /api/auth/google/start?code=<game-code>` — GM-session-gated.
+    Redirects to Google's consent screen with `scope=calendar.events`
+    + `access_type=offline` + `prompt=consent` (the last two are
+    required to consistently get a refresh token on first
+    authorization).
+  - `GET /api/auth/google/callback` — verifies state JWT, exchanges
+    code for tokens via arctic, persists encrypted tokens, redirects
+    back to `/g/<code>/master?google_connected=1`.
+- **Token storage** — `gm_google_tokens` table (one row per game).
+  Tokens are AES-256-GCM encrypted at rest; the key is derived from
+  `TESSERA_JWT_SECRET` via HKDF with a "tokens" info string so the
+  JWT-signing path and the encryption path use independent material.
+  `lib/google/tokenStore.ts` exposes `upsertTokens`,
+  `getValidAccessToken` (auto-refreshes when within 60s of expiry),
+  `getSession` (presence check for the dashboard), and
+  `revokeAndDelete` (game-end cleanup).
+- **Per-pair link minting** — `POST /api/games/[code]/breakouts/generate`
+  iterates pairs sequentially (1-25 pairs, well under Calendar API
+  rate limits), calling `createBreakoutEvent` per pair. Each event is
+  set to private visibility, anchored 1 hour in the past, 5 minutes
+  long, with `conferenceData.createRequest` to attach a Meet link.
+  Persists `breakout_call_url` + `breakout_event_id` on the pair row.
+  Idempotent: pairs that already have a link are skipped.
+- **Cleanup** — `/end` calls `deleteBreakoutEvent` per pair, then
+  `revokeAndDelete` to invalidate the OAuth grant. Best-effort:
+  failures don't block game-end (orphaned events are GM-visible only
+  and easy to bulk-delete by searching "Tessera breakout").
+- **Player surface** — `JoinCallCta` accepts an optional
+  `breakoutCallUrl` prop. When set, primary CTA = breakout (purple
+  badge, "Join your pair's call · breakout"); workshop-level
+  `video_call_url` demotes to a small `↗ Main room` secondary link.
+  `PlayTopBar`'s LinksBar mirrors the same hierarchy.
+- **Diagnostic** — `GET /api/diag/clerk` (path kept from a brief
+  Clerk pivot) returns env-var presence (not values) so a maintainer
+  can verify Vercel scope settings without exposing secrets.
+
+Free-tier impact: zero. Calendar API has 1M queries/day; Tessera
+generates ≤2 per pair (create + delete) so workshop scale (~25
+pairs/game) sits at 0.005% of quota. OAuth itself isn't metered.
+
+Known caveat: Google Meet's join flow asks non-signed-in joiners
+for a name + sometimes a knock-to-join confirmation from the host.
+That's Meet's behaviour, not ours — we can't bypass it on consumer
+Gmail accounts via the Calendar API. Workspace + the Meet REST API
+(`spaces.create` with `accessType: OPEN`) is the only path to a
+fully no-account join experience, and it's a follow-up if/when
+Workspace-only deployments are an acceptable narrowing.
 
 ---
 

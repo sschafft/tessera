@@ -201,14 +201,21 @@ The right rail is now labelled "Super powers" in the UI (was
 "Accelerants" in v1.0; the underlying type names + table still use
 the historic name).
 
+The dashboard rail surfaces the **top 5** mechanics inline (in
+order: Prototype unlock, Reveal briefs, Requirement change, Time
+pressure, Randomizer). The remaining six live behind a **More super
+powers** CTA that opens a fullscreen modal. Picks were validated in
+playtest 2026-04-28 — these are the ones that nudge a stuck pair
+without paving over the lesson.
+
 | Super power | Trigger scope | Effect | Cooldown / cap (default) |
 | --- | --- | --- | --- |
-| Prototype unlock | per-pair or all | Builder sees a degraded preview of the goal: portions in grayscale, ~10–20% wrong pieces, "PROTOTYPE — not 100% accurate" banner. **Duration is GM-adjustable**: 3s / 5s / 10s / 15s; 5s default. | 4 uses / round, 12s cooldown |
-| Reveal briefs | per-pair or all | Both players in the pair see each other's brief. **Irreversible** within the round. | 1 use / round |
+| Prototype unlock | per-pair or all | Builder sees a degraded preview of the goal: portions in grayscale, ~10–20% wrong pieces, "PROTOTYPE — not 100% accurate" banner. **Duration is GM-adjustable**: 3s / 5s / 10s / 15s; 5s default. | ∞ uses / round, 12s cooldown |
+| Reveal briefs | per-pair or all | Both players in the pair see each other's brief. **Irreversible** within the round. Disabled in the rail when both sides have briefs off (nothing to reveal). | 1 use / round |
 | Test build | per-pair or all | GM-side counterpart to the builder's "Test solution" CTA — flips per-piece correctness highlights + accuracy gauge. Stays on once enabled. | ∞ |
-| Agile share | per-pair or all | Builder gets a "Share progress" button; uses are limited (default 3). Each share pushes a snapshot to the guider's preview thumbnail. **Guider can now full-screen the snapshot** (§6.7). | 3 uses / round |
+| Agile share | per-pair or all | Each fire **grants** the builder one snapshot unlock. The builder's "Share progress" button only appears once the GM has triggered Agile share at least once on that pair (each share decrements the granted count). Replaces the v1.1 default-of-3 model — playtest 2026-04-28 found GMs wanted the default to be off and the granting to be explicit. | ∞ |
 | Time pressure | per-pair or all | Subtracts a configurable amount (default 3:00) from the round timer. Plays an optional sting. | 2 uses / round |
-| Change guider brief *(historic name: vocab swap)* | per-pair or all | Re-rolls **just** the guider's brief mid-round. | ∞ |
+| Change guider brief *(historic name: vocab swap)* | per-pair or all | Re-rolls **just** the guider's brief mid-round. **Doubles as "Add guider brief"** when the side was off at game-create (the route flips `guider_brief_on=true` on first trigger). | ∞ |
 | Change builder brief | per-pair or all | Mirror of the above for the builder side. | ∞ |
 | Randomizer | per-pair or all | Resets that pair's (or all pairs') goal pattern at the same complexity. | ∞ |
 | Requirement change | per-pair or all | Mutates **one** element in the target pattern (color, position, shape, rotation). | ∞ |
@@ -362,6 +369,37 @@ on the Start button each round.
 - The game-end view (shared between players + GM) ships with a
   "Debrief prompts" card containing three suggested retro questions
   to seed the conversation on the call.
+
+### 6.13 Optional per-pair Google Meet breakouts
+- Workshops at workshop-scale (3+ pairs) often want each pair on
+  their own audio channel. Tessera offers an opt-in breakouts feature
+  that mints **one Google Meet link per pair** via the Google Calendar
+  API, surfaces it as the player's primary "Join your pair's call"
+  CTA, and demotes the workshop-level `video_call_url` to a small
+  "Main room ↗" secondary link.
+- **Auth model:** the GM signs in with Google once per game from the
+  master setup screen (Step 4 card, hidden when
+  `GOOGLE_OAUTH_CLIENT_ID` isn't configured on the deployment). The
+  consent screen asks only for the `calendar.events` scope. Tokens
+  are stored encrypted server-side, scoped to that game, and revoked
+  on game-end. **Players never sign in to Google** — they just click
+  the Meet link the GM minted for their pair. (Note: Google Meet's
+  own join flow may still ask non-signed-in joiners for a display
+  name; that's a Google Meet behaviour we don't control.)
+- **Side effect on the GM's calendar:** each pair gets a calendar
+  event on the GM's primary calendar, anchored 1 hour in the past,
+  5 minutes long, marked private. Auto-deleted when the GM ends the
+  game (a cleanup modal makes the wipe visible). The pre-creation
+  flow surfaces a confirmation modal explaining all of this before
+  any event is touched.
+- **Failure modes**: if the OAuth grant lapses mid-game (token
+  expired and refresh failed), the panel surfaces a re-auth CTA and
+  in-flight breakout links keep working until the cleanup pass —
+  events that can't be deleted on game-end leave a hint pointing the
+  GM at "search 'Tessera breakout'" to clean up manually.
+- **Hidden when unconfigured.** Deployments without Google OAuth env
+  vars never show the Step 4 card. Existing games are unaffected by
+  the feature toggle being off.
 
 ---
 

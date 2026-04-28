@@ -47,7 +47,9 @@ Minimum viable game: 1 GM + 1 Builder + 1 Guider.
 - **Pair self-naming.** A modal nudges each pair to name themselves after they read the brief. Falls back to "<builder> ↔ <guider>" if skipped. Editable inline at any time.
 - **Live multi-pair dashboard.** GM sees every pair's progress at a glance, drills into any one, fires accelerants per-pair or globally, and can re-roll briefs per-side.
 - **Sealed briefs from three sources.** Pre-seeded library (~33 entries), GM free-text custom briefs, or AI-generated via a **provider router** that tries OpenAI (`gpt-4o-mini`) first for paid-tier reliability, falls back to Gemini (`gemini-2.5-flash-lite`) when OpenAI is unconfigured or down, and finally drops to the library if both AI providers fail. Atomic per-game / global daily caps protect free-tier quotas and the orchestrator surfaces a "use preset briefs" recovery modal to the GM if the AI path fails on round start.
-- **Ten super-powers.** Prototype unlock, reveal briefs, agile share, time pressure, change builder brief, change guider brief, randomizer, requirement change, make it harder, make it easier — each a single-click GM mechanic that maps to a real-world facilitation lesson. The rail also has a fullscreen modal grid and an inline scoring tile (per-correct stepper + per-wrong penalty toggle, with a confirm modal when changing penalties mid-round).
+- **Curated super-powers rail.** The GM dashboard surfaces the **top 5** mechanics inline — prototype unlock, reveal briefs, requirement change, time pressure, randomizer — with a **More super powers** CTA that opens a fullscreen grid for the rest (agile share, test build, change builder/guider brief, make it harder/easier). Every super-power is a single-click GM mechanic that maps to a real-world facilitation lesson. Prototype + agile share are uncapped; everything else has small per-round caps. The rail also has an inline scoring tile (per-correct stepper + per-wrong penalty toggle, with a confirm modal when changing penalties mid-round).
+- **Optional per-pair Google Meet breakouts.** Facilitators who run pairs in parallel can sign in with Google from the master setup screen; Tessera mints one calendar event per pair via the Google Calendar API and surfaces the auto-attached Meet link as that pair's primary "Join your pair's call" CTA — the workshop-level video link demotes to a small "main room ↗" secondary link. Events are anchored 1 hour in the past, marked private, and deleted automatically when the GM ends the game (with a visible cleanup modal). OAuth is built on [`arctic`](https://arcticjs.dev) — small, audited, no SDK lock-in. Tokens are AES-256-GCM encrypted at rest. Players never sign in.
+- **Add briefs mid-game via super-powers.** When a GM creates a game with one or both briefs off, the rail relabels "Change builder/guider brief" to "Add builder/guider brief" — firing it both flips the side on for future rounds and mints a fresh brief for the current pair_round. Reveal Briefs disables itself when there's nothing to reveal.
 - **Brief envelope with minimise.** Players can minimise their brief to just the seal circle so it doesn't overlay the canvas, expand it again with one click, or re-seal it.
 - **Realtime updates.** Supabase Realtime broadcast keeps every connected client in sync within ~200ms; a 10-second polling loop is the fallback when sockets drop. Players see a "session lost" recovery banner when their cookie is invalidated mid-round instead of an empty canvas.
 - **Mirrored correctness for the guider.** When a builder hits "Test solution," the guider's goal canvas lights up the same green halos and ✓ badges, plus a live "X/Y placed" chip — so the guider can see at a glance whether the directions they're giving are landing.
@@ -122,6 +124,8 @@ See [`design/TDD.md` §11](./design/TDD.md) for the full setup including Vercel 
 | `TESSERA_PUBLIC_URL` | server | Used in host-recovery URLs |
 | `OPENAI_API_KEY` | server only | Optional. Primary AI provider for brief generation (`gpt-4o-mini`). When set, the AI brief router prefers OpenAI over Gemini for higher-volume workshops where the free Gemini tier exhausts. |
 | `GEMINI_API_KEY` | server only | Optional. Free-tier fallback AI provider for brief generation (`gemini-2.5-flash-lite`). When neither AI key is set, every "AI-generated" brief is silently library-sourced. |
+| `GOOGLE_OAUTH_CLIENT_ID` | server only | Optional. Required for the per-pair Google Meet breakouts feature. Set both this and `GOOGLE_OAUTH_CLIENT_SECRET` to light up the **Step 4 · Per-pair breakout calls** card on the GM setup screen. The OAuth client must list `<host>/api/auth/google/callback` in its Authorized redirect URIs. |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | server only | Optional. Paired with `GOOGLE_OAUTH_CLIENT_ID`. |
 
 ### Deploying to Vercel
 
@@ -129,6 +133,7 @@ See [`design/TDD.md` §11](./design/TDD.md) for the full setup including Vercel 
 2. In **Settings → Environment Variables**, add every row from the table above. Apply each to **Production**, **Preview**, and **Development** unless noted:
    - `OPENAI_API_KEY` — Production only is recommended (the paid OpenAI quota is shared across previews and could burn through unexpectedly during PR work).
    - `GEMINI_API_KEY` — Production only is recommended (previews fall back to library to avoid burning the free-tier quota).
+   - `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` — Production only is recommended. The redirect URI is derived from the request's origin at runtime, so each Vercel preview host you want to test breakouts on (e.g. `tessera-git-foo.vercel.app`) needs its `/api/auth/google/callback` URL added to the OAuth client's Authorized redirect URIs in Google Cloud Console.
    - `TESSERA_PUBLIC_URL` — set to your custom domain on Production.
 3. Push to `main` → Vercel deploys to Production.
 4. Push to a branch → Vercel deploys a preview against the same Supabase project.
@@ -154,16 +159,17 @@ tessera/
 │   ├── marketing/             # ContentLayout + OssFooter for the long-form pages
 │   └── primitives/            # Shared UI atoms (Wordmark, RoleChip, Avatar, Field…)
 ├── lib/
-│   ├── accelerants/           # Per-super-power policy + cooldown enforcement
-│   ├── auth/                  # JWT mint/verify, cookie helpers, host-token bcrypt
+│   ├── auth/                  # JWT mint/verify, cookie helpers, host-token bcrypt, AES-GCM token encryption
 │   ├── briefs/                # Library picker, AI router (OpenAI + Gemini), orchestrator
 │   ├── game/                  # Repository (in-memory + Supabase backends)
+│   ├── google/                # arctic-based OAuth helpers + Calendar API wrapper + token store
 │   ├── grid/                  # Cell↔pixel math + canvas constants
 │   ├── pattern/               # Deterministic procedural goal-pattern generator
 │   ├── realtime/              # Server publish + client subscribe hook
-│   └── sound/                 # Tone.js wrappers
+│   ├── sound/                 # Tone.js wrappers
+│   └── superpowers/           # Per-super-power policy + cooldown enforcement
 ├── styles/                    # globals.css + tessera.css design tokens
-├── supabase/migrations/       # 14 SQL migrations applied to tessera-dev
+├── supabase/migrations/       # 17 SQL migrations applied to tessera-dev
 ├── public/                    # Static assets
 └── design/                    # PRD, TDD, design_patterns, Claude Design handoff bundle
 ```
