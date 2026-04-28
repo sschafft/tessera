@@ -165,11 +165,11 @@
 | Canvas | Inline SVG (no Canvas, no Konva) | Pieces are tens of polygons; SVG is plenty. |
 | DB / Realtime | Supabase (hosted free-tier project) | Postgres 15, Realtime. **No local Supabase stack** — dev points at a hosted project. Drops the Docker requirement and matches what runs in production exactly. |
 | Auth | Anonymous JWT minted by our route handler; **Supabase Auth not used** | We carry only `{ game_id, participant_id, role, exp }` in the JWT. |
-| Gemini | `@google/generative-ai` SDK, server-side only | `gemini-2.5-flash-lite` (free tier). Earlier passes used `gemini-2.0-flash` but its free-tier RPM/RPD bucket exhausts under workshop traffic; 2.5-flash-lite has a separate, looser bucket on free. SDK call surface is unchanged. |
+| AI brief router | `lib/briefs/router.ts` — calls **OpenAI `gpt-4o-mini`** (`openai` SDK) first, falls back to **Google `gemini-2.5-flash-lite`** (`@google/generative-ai` SDK), then drops through to the static library. All providers are server-side only. | OpenAI primary buys paid-tier RPM/RPD reliability for workshop traffic; Gemini fallback keeps the AI path live for free-tier deployments. Earlier passes used `gemini-2.0-flash` directly but its free-tier RPM/RPD bucket exhausted under workshop traffic; 2.5-flash-lite has a separate, looser bucket on free. The persisted `briefs.source` is always `"gemini"` regardless of provider — see §15.3. |
 | Lint / format | ESLint (Next preset) + Prettier | |
 | Testing | Vitest (unit) + Playwright (e2e, smoke only in v1) | |
 | CI | GitHub Actions: typecheck, lint, vitest on PR | Playwright run on `main` only. |
-| Hosting | Vercel | Edge runtime where reasonable; Node runtime for Gemini proxy. |
+| Hosting | Vercel | Edge runtime where reasonable; Node runtime for the AI brief router. |
 
 ---
 
@@ -517,7 +517,7 @@ We don't run a server clock. The round row stores `started_at` and `duration_sec
 
 ## 9. Brief generation pipeline
 
-Single server-side path. **The browser never calls Gemini directly.** All Gemini spending flows through one route handler that enforces multiple layers of limits before touching the API.
+Single server-side path. **The browser never calls OpenAI or Gemini directly.** All AI spending flows through one router (`lib/briefs/router.ts`) that enforces multiple layers of limits before touching either provider.
 
 ```
 client → POST /api/briefs
@@ -527,40 +527,56 @@ client → POST /api/briefs
        [1] Validate JWT — must be gm role for this game
               │
               ▼
-       [2] Check global daily cap (games.gemini_calls_global_today ≤ 800)
+       [2] Check global daily cap (gemini_budget.calls_used ≤ 800)
               │
               ▼
        [3] Check per-game cap (games.gemini_calls_used ≤ 30)
               │
               ▼
-       [4] Check in-process cache keyed by hash(complexity, role, rules_version)
-              │ HIT                │ MISS
-              ▼                   ▼
-         return cached      gemini SDK call
-         result             with retry + 429 backoff
-                                  │ fail after 2 retries
-                                  ▼
-                             fall back to library
+       [4] AI provider router (lib/briefs/router.ts)
+              │
+              ▼
+         try OpenAI gpt-4o-mini
+              │ ok                   │ fail (auth, 429, schema, timeout)
+              ▼                      ▼
+         return brief        try Gemini gemini-2.5-flash-lite
+                                     │ ok          │ fail
+                                     ▼            ▼
+                              return brief    AIBriefRouterError
+                                                  │
+                                                  ▼
+                                  orchestrator catches → library
+                                  fallback (or surfaces typed
+                                  error to GM if
+                                  allow_library_fallback=false)
               │
               ▼
        increment games.gemini_calls_used (per-game)
-       + games.gemini_calls_global_today via daily counter row
+       + gemini_budget.calls_used (global daily)
+       — counters bump regardless of which provider answered, since
+         budget is enforced on the AI path overall
               │
               ▼
-       insert into briefs(...)
+       insert into briefs(...) with source='gemini'
+       (the storage enum is library|gm|gemini and we don't extend it;
+        the answering provider is logged for observability via
+        attempts[] in the router result)
               │
               ▼
-   postgres_changes → pair channel
+   broadcast tessera:<game_id> → clients refetch
 ```
 
 ### Budget layers
+
+The budget protects free-tier quota across the AI path overall, not per-provider — counters bump on success regardless of which provider answered.
 
 | Layer | Cap | Scope | Action on breach |
 | --- | --- | --- | --- |
 | Global daily | 800 calls | All games, resets midnight UTC | Fall back to library; no error shown |
 | Per-game | 30 calls | One game's lifetime | Fall back to library; no error shown |
 | Per-minute (client-side) | Re-roll button disabled for 4s after press | UX only | Button greyed out |
-| Gemini 429 retry | 2 retries, exponential 2s/4s backoff | One call | Fall back to library after final retry |
+| Provider-level retry | OpenAI: 1 retry on transient errors. Gemini: 1 retry on transient errors (`timeout`, `invalid_json`, `schema_violation`, 5xx, `ECONNRESET`). 6s timeout per call. | One call | Move to next provider in router order |
+| Router cascade | OpenAI → Gemini → library. Each provider is tried at most once after its retry. | One call | Throw `AIBriefRouterError`; orchestrator falls through to library unless caller passed `allow_library_fallback: false` |
 
 ### Storage
 
@@ -591,7 +607,7 @@ Output is validated against the schema; malformed → retry once → library fal
 
 ### Default source
 
-**Library is the default source on game create.** Gemini is explicitly opt-in (GM selects "AI-generated" for builder and/or guider briefs at the create form). This means the free tier is only consumed when the GM actively asks for it — most games won't spend a single Gemini call.
+**Library is the default source on game create.** AI generation is explicitly opt-in (GM selects "AI-generated" for builder and/or guider briefs at the create form). This means paid OpenAI quota and free Gemini quota are only consumed when the GM actively asks for it — most games won't spend a single AI call. When neither AI key is configured (`OPENAI_API_KEY` and `GEMINI_API_KEY` both unset), the router silently degrades to the library path on every "AI-generated" request.
 
 ---
 
@@ -631,7 +647,7 @@ We use **two hosted Supabase projects** on the free tier — one for prod, one f
 1. **Supabase:** Create two projects at https://supabase.com — `tessera-dev` and `tessera-prod`. Note each project's URL, anon key, service-role key, and JWT secret.
 2. **Vercel:** Create a project at https://vercel.com, link it to the GitHub repo. Add env vars (table below) for both **Production** and **Preview** environments — Production points at `tessera-prod`, Preview points at `tessera-dev`.
 3. **Local:** `cp .env.example .env.local`, fill with the `tessera-dev` values. The same `TESSERA_JWT_SECRET` value goes in your Supabase project under Settings → API → JWT Settings → JWT Secret (replacing the auto-generated one) so RLS can verify our claims.
-4. **Gemini:** Add a Google AI Studio API key to Vercel (Production only — previews fall back to library briefs to avoid billing surprises).
+4. **AI providers:** Add an OpenAI API key (primary) and/or a Google AI Studio API key (fallback) to Vercel — Production only is recommended (previews fall back to library briefs to avoid burning paid OpenAI quota or the free Gemini RPD bucket). Setting both is the recommended posture: OpenAI handles workshop volume, Gemini covers OpenAI outages without billing impact.
 
 ### 11.2 Local development
 
@@ -654,7 +670,8 @@ For a clean slate during development, `pnpm db:reset:dev` (alias to `supabase db
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | prod anon | dev anon | dev anon | RLS-protected, safe in browser |
 | `SUPABASE_SERVICE_ROLE_KEY` | prod sr | dev sr | dev sr | Server-only, never bundled into the client |
 | `TESSERA_JWT_SECRET` | prod | dev | dev | Must match the Supabase project's JWT secret |
-| `GEMINI_API_KEY` | set | unset | unset | Previews + local fall back to library briefs |
+| `OPENAI_API_KEY` | set | unset | unset | Primary AI brief provider (`gpt-4o-mini`). Previews + local fall back to Gemini if set, else library. Optional. |
+| `GEMINI_API_KEY` | set | unset | unset | Fallback AI brief provider (`gemini-2.5-flash-lite`). Previews + local fall back to library when unset. Optional. |
 | `TESSERA_PUBLIC_URL` | https://tessera.app | preview URL | http://localhost:3000 | Used in host recovery URLs |
 
 ### 11.4 Deployment flow
@@ -690,18 +707,23 @@ Coverage target for v1: 70% unit, smoke-only e2e.
 
 This section documents explicit hard limits that protect the three billed services from cost overruns and quota exhaustion. The adversarial model here is **accidental abuse** (a busy workshop day) and **incidental abuse** (a bot hitting unauthenticated endpoints) — not a targeted attack.
 
-### 13.1 Gemini (15 RPM / 1,500 RPD free)
+### 13.1 AI brief generation (OpenAI primary + Gemini fallback)
+
+The AI path crosses two providers; budget is enforced once across the whole router.
 
 | Guard | Implementation | Where |
 | --- | --- | --- |
-| Global daily cap | `gemini_budget.calls_used ≤ 800` checked transactionally before each call | `/api/briefs` route handler |
-| Per-game cap | `games.gemini_calls_used ≤ 30` | same route handler |
+| Global daily cap | `gemini_budget.calls_used ≤ 800` checked transactionally before each AI call (name kept for backward-compat with the existing migration; the counter now bounds OpenAI **and** Gemini calls combined) | `/rounds/start` + `/briefs/reroll` via `repo.reserveGeminiCall` |
+| Per-game cap | `games.gemini_calls_used ≤ 30` (same caveat as above — counts across both providers) | same |
 | In-process cache | LRU(50) keyed by `sha256(complexity‖role‖rules_version)` | `lib/briefs/cache.ts`, process lifetime |
-| 429 backoff | Retry at 2s, then 4s; fall back to library on second failure | `lib/briefs/gemini.ts` |
-| Library-as-default | `source = 'library'` at game create; Gemini is explicit opt-in | landing form |
-| `maxDuration` | `export const maxDuration = 8` on `/api/briefs` (under Vercel Hobby 10s cap, leaves retry budget) | route file |
+| Provider router | Tries OpenAI `gpt-4o-mini` first, falls back to Gemini `gemini-2.5-flash-lite`. Each provider gets one retry on transient failure (timeout, 5xx, malformed JSON). | `lib/briefs/router.ts` |
+| Per-call timeout | 6s wall-clock per provider call to bound the per-pair budget on `/rounds/start` (which has `maxDuration=30` and processes pairs sequentially) | `lib/briefs/openai.ts`, `lib/briefs/gemini.ts` |
+| Library-as-default | `source = 'library'` at game create; AI is explicit opt-in | landing form |
+| `maxDuration` | `export const maxDuration = 30` on `/rounds/start` (multiple briefs in parallel during round start), 15 on `/briefs/reroll` and `/accelerants` (single calls) | route files |
 
-**Worst case with guards:** 800 calls/day × ~500 tokens/call = 400K tokens/day. Well under the 1M TPM free tier; RPM is managed by the 4s client-side re-roll debounce and the global daily cap preventing a single workshop from consuming them all.
+**Free-tier sanity check.** Worst case with guards: 800 AI calls/day × ~500 tokens/call = 400K tokens/day. Well under the 1M TPM free tier on Gemini; OpenAI is paid, but the same 800/day cap bounds spend (~$0.30/day at `gpt-4o-mini` rates as of 2026-04). RPM is managed by the 4s client-side re-roll debounce and the global daily cap preventing a single workshop from consuming the budget.
+
+**Why a router and not just one provider.** During v1.1 alpha the Gemini free-tier daily and per-minute quotas exhausted on `gemini-2.0-flash` under workshop traffic — every parallel pair brief request burned the per-minute bucket and threw 429s. Switching the model to `gemini-2.5-flash-lite` (separate, looser bucket on free) bought breathing room, and adding OpenAI as the primary buys redundancy when one provider is rate-limited or down. The `briefs.source` enum stays `library | gm | gemini` for backward compatibility — see §15.3.
 
 ### 13.2 Supabase Realtime (200 concurrent WS / 2M messages/month free)
 
@@ -721,9 +743,9 @@ This section documents explicit hard limits that protect the three billed servic
 | Rate limit: game create | Edge Middleware: 10 req/min per IP, sliding window in Vercel KV (or Supabase `rate_limits` table as fallback) | `middleware.ts` path `/api/games` |
 | Rate limit: join | Edge Middleware: 30 req/min per IP | `middleware.ts` path `/api/games/*/join` |
 | Rate limit: accelerants | 60 req/min per `game_id` claim from JWT (server-side, Supabase counter) | `/api/accelerants` route |
-| `maxDuration` on Gemini routes | `export const maxDuration = 8` | `/api/briefs`, `/api/accelerants` |
+| `maxDuration` on AI routes | `export const maxDuration = 30` on `/rounds/start` (parallel briefs); 15 on `/briefs/reroll` and `/accelerants` (single calls). Each provider call inside the router caps at 6s wall-clock so a hung provider can't gobble the whole budget. | route files; `lib/briefs/router.ts` |
 | Edge runtime for read routes | `export const runtime = 'edge'` on `/api/games/[code]` (GET), join page loader — eliminates cold-start for read-heavy paths | those route files |
-| Keepalive cron | `vercel.json`: `{ "crons": [{ "path": "/api/keepalive", "schedule": "0 12 */4 * *" }] }` — lightweight GET, no Gemini | `app/api/keepalive/route.ts` |
+| Keepalive cron | `vercel.json`: `{ "crons": [{ "path": "/api/keepalive", "schedule": "0 12 */4 * *" }] }` — lightweight GET, no AI calls | `app/api/keepalive/route.ts` |
 
 ### 13.4 Rate limit implementation
 
@@ -762,7 +784,7 @@ Edge middleware for the two unauthenticated endpoints uses an in-memory sliding 
 | 9 | **CI:** GH Actions: typecheck + lint + vitest on PR; Playwright smoke on `main` only. |
 | 10 | **Telemetry:** Vercel request logs only (geo + path + status code). No additional analytics SDK; no personally identifiable data stored beyond what Vercel captures by default. |
 | 11 | **Branding:** text `Tessera` wordmark in Fraunces; mono SVG favicon matching the design system. |
-| 12 | **Gemini default source:** library. Gemini is explicit opt-in at game create; see §13 for budget guardrails. |
+| 12 | **AI default source:** library. AI generation is explicit opt-in at game create; see §13.1 for the OpenAI+Gemini router and budget guardrails. |
 | 13 | **JWT expiry:** 4h (down from initial 12h sketch). |
 | 14 | **Cookie:** `HttpOnly`, `Secure`, `SameSite=Lax`, path `/`, named `ts_<code>` per game. |
 
@@ -804,23 +826,38 @@ only caller.
 ### 15.3 Brief orchestration
 
 Original §9 sketched the brief pipeline as a single endpoint. Shipped
-shape: `lib/briefs/orchestrator.ts` chooses a source per call:
+shape: `lib/briefs/orchestrator.ts` chooses a source per call, and the
+`gemini` source delegates to a runtime provider router
+(`lib/briefs/router.ts`):
 
 - `gm` source uses the `games.${role}_brief_custom` jsonb. Falls back
   to library if the column is null.
-- `gemini` source reserves via `reserve_gemini_call` first; on
-  reservation failure (cap hit) or Gemini error (auth/schema/etc.),
-  falls back to library. The reservation isn't refunded on failure
-  because failures are rare and refunds add complexity.
+- `gemini` source reserves via `reserve_gemini_call` first; on success
+  it calls `generateBriefViaAI` which tries OpenAI `gpt-4o-mini`,
+  then Gemini `gemini-2.5-flash-lite`, then throws
+  `AIBriefRouterError`. On any AI failure (router error, reservation
+  cap, schema/timeout), the orchestrator falls back to library by
+  default; `/rounds/start` passes `allow_library_fallback: false` so
+  it can surface a typed `GeminiBriefFailedError` to the GM and let
+  them choose between &ldquo;Use preset briefs&rdquo; / Cancel via
+  the `GeminiFallbackModal`. The reservation isn't refunded on
+  failure because failures are rare and refunds add complexity.
 - `library` source is the default and the universal fallback.
 
-`maxDuration` set to 30s on `/rounds/start` (multiple Gemini calls in
+The persisted `briefs.source` is always `"gemini"` regardless of which
+AI provider answered — the storage enum is `library | gm | gemini` and
+we don't extend it. The actual provider is reported via
+`router.attempts[]` in the orchestrator's observability log.
+
+`maxDuration` set to 30s on `/rounds/start` (multiple AI calls in
 parallel during round start), 15s on `/briefs/reroll` and
-`/accelerants` (single calls).
+`/accelerants` (single calls). Each provider call inside the router
+has its own 6s wall-clock timeout so one hung provider can't gobble
+the whole `/rounds/start` budget.
 
 ### 15.4 Schema migrations applied
 
-In dependency order:
+In dependency order (14 total as of 2026-04-27):
 1. `tessera_v1_schema` — initial tables.
 2. `tessera_v1_harden` — pinned search_path, anon revoke.
 3. `tessera_v1_seed_brief_library` — 33-entry library.
@@ -828,7 +865,22 @@ In dependency order:
 5. `tessera_v1_briefs_revealed` — Reveal-briefs state.
 6. `tessera_v1_prototype_and_snapshot` — Prototype + Agile-share state.
 7. `tessera_v1_custom_briefs` — GM free-text brief storage.
-8. `tessera_v1_gemini_reserve_rpc` — atomic budget reservation.
+8. `tessera_v1_gemini_reserve_rpc` — atomic budget reservation
+   (now also bounds OpenAI calls via the AI router; name kept for
+   backward compatibility).
+9. `add_scoring_fields_to_games` — `scoring_correct_pts` /
+   `scoring_wrong_pts` for the v1.1 Test-solution scoring tile.
+10. `add_pair_display_name` — `pairs.display_name` for pair self-naming.
+11. `add_v11_accelerant_kinds` — extends `accelerant_t` with
+    `change_builder_brief`, `harder`, `easier` (Vocab swap was already
+    `vocab_swap` in the v1.0 enum and is reused for &ldquo;Change
+    guider brief&rdquo;).
+12. `add_player_recovery_token` — bcrypt hash + plain-token shadow for
+    the player recovery flow.
+13. `tighten_placements_rot_check` — narrows the `rot` check
+    constraint to `0..3` (square grid only takes 90° increments).
+14. `atomic_counter_rpcs` — race-safe `increment_*` RPCs replacing
+    read-modify-write on counter columns.
 
 ### 15.5 New routes shipped beyond §10
 

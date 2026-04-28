@@ -192,8 +192,8 @@ Two-tab card: **Host a game** | **Join a game**.
 - **Guider brief** examples: "use only nautical terms," "no plain shape names."
 - Briefs are confidential to their owner (sealed envelope). Players **cannot tell** their partner the contents — they may *only* infer them via 20-questions-style probing during the off-platform call.
 - The GM sees both briefs and can **re-roll** them per pair.
-- Brief sources, in priority order: (a) **GM free-text** authored at create-time or via Re-roll, (b) **curated library** — the default at game create (a ~30-brief set shipped with the app, covering all complexity buckets), (c) **Gemini-generated** server-side — explicit opt-in only, never the default. The GM picks the source per side (Builder / Guider) at create-time and can change it any time via Re-roll.
-- The Gemini key is owner-provided as a Vercel server env var; the client never sees it. Multiple layers of rate limits protect the free-tier quota — see TDD §13.1.
+- Brief sources, in priority order: (a) **GM free-text** authored at create-time or via Re-roll, (b) **curated library** — the default at game create (a ~33-brief set shipped with the app, covering all complexity buckets), (c) **AI-generated** server-side — explicit opt-in only, never the default. The GM picks the source per side (Builder / Guider) at create-time and can change it any time via Re-roll.
+- AI-generated briefs flow through a server-side **provider router** (`lib/briefs/router.ts`): OpenAI `gpt-4o-mini` is the primary, Gemini `gemini-2.5-flash-lite` is the fallback, library is the final fallback. Both AI keys are optional and owner-provided as Vercel server env vars; the client never sees either. Multiple layers of rate limits protect the free-tier quotas — see TDD §13.1. The persisted `briefs.source` is `"gemini"` regardless of which provider answered (the storage enum is `library | gm | gemini` and we don't extend it); the actual provider is logged in the orchestrator&apos;s observability output.
 
 ### 6.3 Super powers (full spec)
 
@@ -458,7 +458,7 @@ All write paths go through Supabase Row Level Security checks against the JWT's 
 | 11 | Goal patterns are procedural at all complexities, seeded by `(complexity, round_id, pair_id)` so Randomizer never repeats. |
 | 12 | Color-blind accessibility deferred — v1 ignores. (Logged in §12 follow-ups.) |
 | 13 | GM is GM only — cannot fill a Builder/Guider/Observer slot. |
-| 14 | Brief sources: GM free-text, curated library, or Gemini-generated. GM picks per side at create-time and can re-roll any time. |
+| 14 | Brief sources: GM free-text, curated library, or AI-generated (server-side provider router: OpenAI primary, Gemini fallback, library final fallback). GM picks per side at create-time and can re-roll any time. |
 
 
 ---
@@ -472,6 +472,19 @@ into the live build and listed here so the PRD stays honest.
   free text"; all three ship. The Host form has a per-side `Library /
   AI / Custom` segmented picker. Library is still the default at game
   create.
+- **AI provider router replaces single-vendor Gemini call.** The
+  &ldquo;AI&rdquo; brief source is no longer a direct Gemini call; it
+  routes through `lib/briefs/router.ts` which tries OpenAI
+  `gpt-4o-mini` first (paid tier, more reliable quota at workshop
+  scale), then falls back to Gemini `gemini-2.5-flash-lite` (free
+  tier), then falls through to the static library. Background: during
+  v1.1 alpha workshops the Gemini free-tier daily and per-minute
+  quotas exhausted on `gemini-2.0-flash`; switching to
+  `gemini-2.5-flash-lite` (separate, looser bucket) bought breathing
+  room, and adding OpenAI as primary buys redundancy when one provider
+  is rate-limited or down. The `briefs.source` enum stays as
+  `library | gm | gemini` for backward compatibility — the answering
+  provider is logged for observability rather than stored on the row.
 - **Player-selected role visibility.** `team_mode='players_pick'` now
   shows ALL unallocated players (not just `role='lobby'`) in the GM's
   Lobby panel. Self-selected role appears as "picked builder/guider/

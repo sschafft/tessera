@@ -46,10 +46,14 @@ Minimum viable game: 1 GM + 1 Builder + 1 Guider.
 - **Test solution + scoring.** Builder hits a "Test solution" CTA at any time; the round computes correct/wrong against the goal pattern and lights green/red highlights per piece. Per-wrong penalty is GM-tunable; scores can go negative.
 - **Pair self-naming.** A modal nudges each pair to name themselves after they read the brief. Falls back to "<builder> ↔ <guider>" if skipped. Editable inline at any time.
 - **Live multi-pair dashboard.** GM sees every pair's progress at a glance, drills into any one, fires accelerants per-pair or globally, and can re-roll briefs per-side.
-- **Sealed briefs from three sources.** Pre-seeded library (~33 entries), GM free-text custom briefs, or AI-generated via **Gemini 2.0 Flash** with atomic per-game / global daily caps and graceful fallback to the library on failure.
-- **Ten super-powers.** Prototype unlock, reveal briefs, agile share, time pressure, change builder brief, change guider brief, randomizer, requirement change, make it harder, make it easier — each a single-click GM mechanic that maps to a real-world facilitation lesson. The rail also has a fullscreen modal grid and an inline scoring tile.
+- **Sealed briefs from three sources.** Pre-seeded library (~33 entries), GM free-text custom briefs, or AI-generated via a **provider router** that tries OpenAI (`gpt-4o-mini`) first for paid-tier reliability, falls back to Gemini (`gemini-2.5-flash-lite`) when OpenAI is unconfigured or down, and finally drops to the library if both AI providers fail. Atomic per-game / global daily caps protect free-tier quotas and the orchestrator surfaces a "use preset briefs" recovery modal to the GM if the AI path fails on round start.
+- **Ten super-powers.** Prototype unlock, reveal briefs, agile share, time pressure, change builder brief, change guider brief, randomizer, requirement change, make it harder, make it easier — each a single-click GM mechanic that maps to a real-world facilitation lesson. The rail also has a fullscreen modal grid and an inline scoring tile (per-correct stepper + per-wrong penalty toggle, with a confirm modal when changing penalties mid-round).
 - **Brief envelope with minimise.** Players can minimise their brief to just the seal circle so it doesn't overlay the canvas, expand it again with one click, or re-seal it.
-- **Realtime updates.** Supabase Realtime broadcast keeps every connected client in sync within ~200ms; a 30-second polling loop is the fallback when sockets drop.
+- **Realtime updates.** Supabase Realtime broadcast keeps every connected client in sync within ~200ms; a 10-second polling loop is the fallback when sockets drop. Players see a "session lost" recovery banner when their cookie is invalidated mid-round instead of an empty canvas.
+- **Mirrored correctness for the guider.** When a builder hits "Test solution," the guider's goal canvas lights up the same green halos and ✓ badges, plus a live "X/Y placed" chip — so the guider can see at a glance whether the directions they're giving are landing.
+- **Stepped GM setup flow.** Pre-round, the master view collapses to a single column with three numbered cards (1. Invite players, 2. Pairs + observers, 3. Game settings). Once a round starts, the dashboard expands to the three-column layout with the focused-pair canvas and Super powers rail.
+- **GM per-pair progress chips.** Pair rows on the dashboard show a live progress bar + completion %; pairs that have solved their puzzle render in green. The GM can spot which pair to nudge without drilling in.
+- **Celebration UX.** Pairs that complete a round see a "Solved!" banner + confetti burst; super-power triggers fire a momentary `SuperPowerToast` for the affected pair so the change is felt rather than missed.
 - **Multi-round + replay.** GM-configurable round count (1–5); after a game ends, the GM can launch a fresh round with the same players from the summary screen.
 - **GM debrief prompts + leaderboard.** Game-end view ships with three retro questions to seed the post-game conversation, plus a pair leaderboard ranked by total score.
 - **Tone.js sound effects.** Synthesised round-end ding, last-two-minutes warning, time-pressure sting, game-end fanfare. Respects the GM's per-game `sound_on` toggle.
@@ -65,7 +69,7 @@ Minimum viable game: 1 GM + 1 Builder + 1 Guider.
 - **Supabase** Postgres + Realtime, with Row Level Security
 - **Tailwind CSS v4** + a small CSS layer porting the design tokens
 - **Inline SVG** for tiles (no Konva or Canvas2D)
-- **Gemini 2.0 Flash** for procedural brief generation (server-side only)
+- **AI brief router** — OpenAI `gpt-4o-mini` (primary) → Google `gemini-2.5-flash-lite` (fallback) → static library (final fallback). All AI calls are server-side only.
 - **Tone.js** for synthesised sound effects (no audio assets)
 - **jose** for HS256 JWTs, **bcryptjs** for the host-recovery token
 
@@ -116,12 +120,14 @@ See [`design/TDD.md` §11](./design/TDD.md) for the full setup including Vercel 
 | `SUPABASE_SERVICE_ROLE_KEY` | server only | Used by route handlers; bypasses RLS |
 | `TESSERA_JWT_SECRET` | server | Signs our session JWTs (independent of Supabase's JWT secret) |
 | `TESSERA_PUBLIC_URL` | server | Used in host-recovery URLs |
-| `GEMINI_API_KEY` | server only | Optional. When set, GMs can pick "AI-generated" as a brief source. Library is the always-on fallback. |
+| `OPENAI_API_KEY` | server only | Optional. Primary AI provider for brief generation (`gpt-4o-mini`). When set, the AI brief router prefers OpenAI over Gemini for higher-volume workshops where the free Gemini tier exhausts. |
+| `GEMINI_API_KEY` | server only | Optional. Free-tier fallback AI provider for brief generation (`gemini-2.5-flash-lite`). When neither AI key is set, every "AI-generated" brief is silently library-sourced. |
 
 ### Deploying to Vercel
 
 1. Connect this GitHub repo to a new Vercel project (Add New… → Project → Import).
 2. In **Settings → Environment Variables**, add every row from the table above. Apply each to **Production**, **Preview**, and **Development** unless noted:
+   - `OPENAI_API_KEY` — Production only is recommended (the paid OpenAI quota is shared across previews and could burn through unexpectedly during PR work).
    - `GEMINI_API_KEY` — Production only is recommended (previews fall back to library to avoid burning the free-tier quota).
    - `TESSERA_PUBLIC_URL` — set to your custom domain on Production.
 3. Push to `main` → Vercel deploys to Production.
@@ -148,26 +154,27 @@ tessera/
 │   ├── marketing/             # ContentLayout + OssFooter for the long-form pages
 │   └── primitives/            # Shared UI atoms (Wordmark, RoleChip, Avatar, Field…)
 ├── lib/
+│   ├── accelerants/           # Per-super-power policy + cooldown enforcement
 │   ├── auth/                  # JWT mint/verify, cookie helpers, host-token bcrypt
-│   ├── briefs/                # Library picker, Gemini integration, source orchestrator
+│   ├── briefs/                # Library picker, AI router (OpenAI + Gemini), orchestrator
 │   ├── game/                  # Repository (in-memory + Supabase backends)
 │   ├── grid/                  # Cell↔pixel math + canvas constants
 │   ├── pattern/               # Deterministic procedural goal-pattern generator
 │   ├── realtime/              # Server publish + client subscribe hook
 │   └── sound/                 # Tone.js wrappers
 ├── styles/                    # globals.css + tessera.css design tokens
-├── supabase/migrations/       # 12 SQL migrations applied to tessera-dev
+├── supabase/migrations/       # 14 SQL migrations applied to tessera-dev
 ├── public/                    # Static assets
-└── design/                    # PRD, TDD, Claude Design handoff bundle
+└── design/                    # PRD, TDD, design_patterns, Claude Design handoff bundle
 ```
 
 ---
 
 ## Open-source / scaling note
 
-Tessera runs on the **Vercel + Supabase free tier** and is built around those constraints — see TDD §13 for the per-service guardrails (Gemini per-game + per-day caps, Realtime drag-broadcast throttle, concurrent-game cap, Vercel `maxDuration`). It's plenty for facilitator workshops with up to ~50 participants per game.
+Tessera runs on the **Vercel + Supabase free tier** and is built around those constraints — see TDD §13 for the per-service guardrails (AI per-game + per-day caps, Realtime drag-broadcast throttle, concurrent-game cap, Vercel `maxDuration`). It's plenty for facilitator workshops with up to ~50 participants per game.
 
-For production-scale or commercial use, fork and self-host: drop your own Supabase project + Vercel team in, raise the caps, and you're off.
+For production-scale or commercial use, fork and self-host: drop your own Supabase project + Vercel team in, raise the caps, and you're off. The AI provider router makes it cheap to swap providers — drop in a paid OpenAI key for high-traffic workshops, leave the Gemini key set as a free fallback, and the orchestrator handles the rest.
 
 ---
 
