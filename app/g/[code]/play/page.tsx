@@ -80,7 +80,7 @@ export default async function PlayPage({ params }: PageProps) {
     code,
     game_id: game.id,
     workshop_name: game.workshop_name,
-    video_call_url: game.video_call_url,
+    video_call_url: game.video_call_url ?? null,
     whiteboard_url: game.whiteboard_url ?? null,
     game_status: game.status,
     sound_on: game.sound_on,

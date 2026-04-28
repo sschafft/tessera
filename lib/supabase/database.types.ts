@@ -167,7 +167,7 @@ export type Database = {
           sound_on: boolean
           status: Database["public"]["Enums"]["game_status_t"]
           team_mode: Database["public"]["Enums"]["team_mode_t"]
-          video_call_url: string
+          video_call_url: string | null
           whiteboard_url: string | null
           workshop_name: string
         }
@@ -195,7 +195,7 @@ export type Database = {
           sound_on?: boolean
           status?: Database["public"]["Enums"]["game_status_t"]
           team_mode: Database["public"]["Enums"]["team_mode_t"]
-          video_call_url: string
+          video_call_url?: string | null
           whiteboard_url?: string | null
           workshop_name: string
         }
@@ -223,7 +223,7 @@ export type Database = {
           sound_on?: boolean
           status?: Database["public"]["Enums"]["game_status_t"]
           team_mode?: Database["public"]["Enums"]["team_mode_t"]
-          video_call_url?: string
+          video_call_url?: string | null
           whiteboard_url?: string | null
           workshop_name?: string
         }

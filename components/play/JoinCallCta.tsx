@@ -1,17 +1,22 @@
 "use client";
 
 export interface JoinCallCtaProps {
-  videoCallUrl: string;
+  /**
+   * The facilitator's call link. When null OR a placeholder host
+   * (example.com etc), the component renders nothing so the parent
+   * can lay out without reserving space for a CTA that won't appear.
+   */
+  videoCallUrl: string | null;
   whiteboardUrl: string | null;
   /** Larger primary style (default) on waiting screens; smaller for inline use. */
   size?: "lg" | "md";
 }
 
 /**
- * Domains we treat as placeholder / non-real video URLs. Surface a
- * "no call configured" hint instead of rendering a CTA that links into
- * the void. example.com / example.org / localhost reach this when a GM
- * filled the form with a sentinel during testing.
+ * Domains we treat as placeholder / non-real video URLs. The host
+ * form only persists real http(s) URLs so this is mostly for the
+ * playtest agents' meet.example.com and the rare GM who pasted a
+ * sentinel before realising the field is now optional.
  */
 const PLACEHOLDER_HOSTS = new Set([
   "example.com",
@@ -34,9 +39,10 @@ function isPlaceholderUrl(url: string): boolean {
 
 /**
  * Big primary "Join the video call" button used on the waiting / lobby
- * screens — the single most important action a player has before the
- * round starts. Tessera is a scaffold for a conversation; the
- * conversation has to be happening.
+ * screens. Renders nothing when no URL is configured (or when the URL
+ * is a placeholder) — facilitators may coordinate the call link
+ * out-of-band, and a missing CTA is cleaner than a "no link configured"
+ * yellow note repeated across every player view.
  */
 export function JoinCallCta({
   videoCallUrl,
@@ -44,27 +50,23 @@ export function JoinCallCta({
   size = "lg",
 }: JoinCallCtaProps) {
   const big = size === "lg";
-  const placeholder = isPlaceholderUrl(videoCallUrl);
-  if (placeholder) {
-    return (
-      <div
-        className="flex flex-col items-center gap-1 rounded-[10px] px-4 py-3 text-center"
-        style={{
-          background: "var(--color-tint-yellow)",
-          color: "#7a5b00",
-          maxWidth: 360,
-        }}
-      >
-        <span className="text-[13px] font-semibold">
-          No video call configured
-        </span>
-        <span className="text-[12px]" style={{ lineHeight: 1.4 }}>
-          The facilitator hasn&apos;t set a real video link yet
-          ({new URL(videoCallUrl).hostname}). Hop into your usual call and
-          ping them.
-        </span>
-      </div>
-    );
+  if (!videoCallUrl || isPlaceholderUrl(videoCallUrl)) {
+    // Whiteboard alone still warrants a small CTA so observers can
+    // pop the scratch board up without the call link.
+    if (whiteboardUrl) {
+      return (
+        <a
+          href={whiteboardUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="t-mono text-[12px] underline"
+          style={{ color: "var(--color-ink-3)" }}
+        >
+          Open the whiteboard ↗
+        </a>
+      );
+    }
+    return null;
   }
   return (
     <div className="flex flex-col items-center gap-3">

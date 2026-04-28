@@ -27,7 +27,13 @@ export interface CustomBrief {
 
 export interface CreateGameInput {
   workshop_name: string;
-  video_call_url: string;
+  /**
+   * Optional. When omitted, the player views and lobby skip the
+   * "Join the video call" CTA — facilitators who coordinate the
+   * call link out-of-band (Slack DM, calendar invite, already on the
+   * call) shouldn't be forced to paste a URL into the host form.
+   */
+  video_call_url?: string | null;
   whiteboard_url?: string | null;
   team_mode: TeamMode;
   default_complexity: number;

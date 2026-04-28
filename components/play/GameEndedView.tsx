@@ -69,13 +69,11 @@ export function GameEndedView({ code, workshopName }: GameEndedViewProps) {
         surprised you?
       </p>
 
-      {callUrl && (
-        <JoinCallCta
-          videoCallUrl={callUrl}
-          whiteboardUrl={whiteboardUrl}
-          size="md"
-        />
-      )}
+      <JoinCallCta
+        videoCallUrl={callUrl}
+        whiteboardUrl={whiteboardUrl}
+        size="md"
+      />
 
       {summary && summary.length > 0 && (
         <div className="t-card flex w-full flex-col gap-3 p-5 text-left">

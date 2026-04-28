@@ -20,7 +20,7 @@ export interface PlayTopBarProps {
     duration_seconds: number;
     status: "pending" | "running" | "ended";
   } | null;
-  videoCallUrl: string;
+  videoCallUrl: string | null;
   whiteboardUrl: string | null;
 }
 
@@ -95,53 +95,58 @@ function LinksBar({
   videoCallUrl,
   whiteboardUrl,
 }: {
-  videoCallUrl: string;
+  videoCallUrl: string | null;
   whiteboardUrl: string | null;
 }) {
+  // Drop the LinksBar entirely when neither link exists — the top bar
+  // looks cleaner without an empty card slot.
+  if (!videoCallUrl && !whiteboardUrl) return null;
   return (
     <div className="t-card flex items-center gap-1 p-1.5">
-      <a
-        href={videoCallUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-[var(--color-paper-2)]"
-      >
-        <span
-          className="grid h-[22px] w-[22px] place-items-center rounded-md text-[12px] font-bold text-white"
-          style={{ background: "var(--color-t-blue)" }}
+      {videoCallUrl && (
+        <a
+          href={videoCallUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-[var(--color-paper-2)]"
         >
-          ▶
-        </span>
-        <span className="flex flex-col text-[12px] font-bold leading-tight">
-          Video call
-          <span className="t-mono text-[10px] font-normal text-[var(--color-ink-3)]">
-            {hostnameOf(videoCallUrl)}
-          </span>
-        </span>
-      </a>
-      {whiteboardUrl && (
-        <>
-          <span className="h-7 w-px bg-[var(--color-line)]" />
-          <a
-            href={whiteboardUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-[var(--color-paper-2)]"
+          <span
+            className="grid h-[22px] w-[22px] place-items-center rounded-md text-[12px] font-bold text-white"
+            style={{ background: "var(--color-t-blue)" }}
           >
-            <span
-              className="grid h-[22px] w-[22px] place-items-center rounded-md text-[12px] font-bold text-white"
-              style={{ background: "var(--color-t-purple)" }}
-            >
-              ▦
+            ▶
+          </span>
+          <span className="flex flex-col text-[12px] font-bold leading-tight">
+            Video call
+            <span className="t-mono text-[10px] font-normal text-[var(--color-ink-3)]">
+              {hostnameOf(videoCallUrl)}
             </span>
-            <span className="flex flex-col text-[12px] font-bold leading-tight">
-              Whiteboard
-              <span className="t-mono text-[10px] font-normal text-[var(--color-ink-3)]">
-                {hostnameOf(whiteboardUrl)}
-              </span>
+          </span>
+        </a>
+      )}
+      {videoCallUrl && whiteboardUrl && (
+        <span className="h-7 w-px bg-[var(--color-line)]" />
+      )}
+      {whiteboardUrl && (
+        <a
+          href={whiteboardUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-[var(--color-paper-2)]"
+        >
+          <span
+            className="grid h-[22px] w-[22px] place-items-center rounded-md text-[12px] font-bold text-white"
+            style={{ background: "var(--color-t-purple)" }}
+          >
+            ▦
+          </span>
+          <span className="flex flex-col text-[12px] font-bold leading-tight">
+            Whiteboard
+            <span className="t-mono text-[10px] font-normal text-[var(--color-ink-3)]">
+              {hostnameOf(whiteboardUrl)}
             </span>
-          </a>
-        </>
+          </span>
+        </a>
       )}
     </div>
   );

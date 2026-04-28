@@ -44,7 +44,7 @@ export interface PlayState {
   code: string;
   game_id: string;
   workshop_name: string;
-  video_call_url: string;
+  video_call_url: string | null;
   whiteboard_url: string | null;
   game_status: "lobby" | "running" | "ended" | "purged";
   sound_on: boolean;
