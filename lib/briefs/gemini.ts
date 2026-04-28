@@ -3,9 +3,23 @@ import "server-only";
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import type { BriefRole } from "@/lib/game/repository";
 
-// gemini-1.5-flash was deprecated in late 2025; gemini-2.0-flash is
-// the current free-tier replacement and uses the same API surface.
-const MODEL = "gemini-2.0-flash";
+// Free-tier quota notes (2026-04-28):
+//   - gemini-1.5-flash: deprecated late 2025.
+//   - gemini-2.0-flash: free-tier daily + per-minute request quota
+//     was repeatedly exhausting in workshop traffic — every parallel
+//     pair brief request burned the per-minute bucket. Verified
+//     against /v1beta/models/<m>:generateContent — 429 with
+//     `RESOURCE_EXHAUSTED · GenerateRequestsPerDay/MinutePerProject
+//     PerModel-FreeTier` on every retry.
+//   - gemini-2.0-flash-lite: same quota tier, also exhausted.
+//   - gemini-2.5-flash-lite: separate quota bucket on free, looser
+//     RPM/RPD allowances, currently healthy. Same SDK surface, same
+//     responseSchema support.
+// Switching to 2.5-flash-lite as the free-tier default. If/when its
+// quota also tightens we'll need to either pay for a tier or add a
+// model-rotation list; the orchestrator's per-game cap already
+// bounds spend, so paying isn't unreasonable.
+const MODEL = "gemini-2.5-flash-lite";
 
 export class GeminiUnavailableError extends Error {
   constructor() {
