@@ -3,7 +3,7 @@ import "server-only";
 import { getRepository } from "@/lib/game/getRepository";
 import type { BriefRole, BriefSource, CustomBrief } from "@/lib/game/repository";
 import { pickLibraryBrief, type PickedBrief } from "./library";
-import { generateBriefViaGemini } from "./gemini";
+import { AIBriefRouterError, generateBriefViaAI } from "./router";
 
 const PER_GAME_MAX = 30;
 const PER_DAY_MAX = 800;
@@ -61,7 +61,12 @@ export async function pickBrief(input: OrchestrateInput): Promise<PickedBrief> {
   }
 
   if (input.source === "gemini") {
-    let geminiFailReason: string | null = null;
+    // The "gemini" brief source is a runtime router (lib/briefs/
+    // router.ts) that tries OpenAI first, then Gemini, then falls
+    // through to library. Source label kept as "gemini" for stored-
+    // row compatibility (the briefs.source enum is library/gm/gemini);
+    // the actual answering provider is logged for observability.
+    let aiFailReason: string | null = null;
     try {
       const repo = getRepository();
       const reservation = await repo.reserveGeminiCall({
@@ -71,32 +76,45 @@ export async function pickBrief(input: OrchestrateInput): Promise<PickedBrief> {
       });
       if (reservation.ok) {
         try {
-          const brief = await generateBriefViaGemini({
+          const result = await generateBriefViaAI({
             role: input.role,
             complexity: input.complexity,
             exclude_titles: input.exclude_titles,
           });
+          const provider =
+            result.attempts.find((a) => a.ok)?.provider ?? "unknown";
           console.info(
-            `[briefs] gemini ok role=${input.role} title="${brief.title.slice(0, 40)}"`,
+            `[briefs] ai ok provider=${provider} role=${input.role} attempts=${result.attempts
+              .map((a) => `${a.provider}:${a.ok ? "ok" : a.reason ?? "fail"}`)
+              .join(",")} title="${result.brief.title.slice(0, 40)}"`,
           );
-          return brief;
+          return result.brief;
         } catch (err) {
-          geminiFailReason = err instanceof Error ? err.message : String(err);
-          console.warn(
-            `[briefs] gemini call failed role=${input.role}: ${geminiFailReason}`,
-          );
+          if (err instanceof AIBriefRouterError) {
+            aiFailReason = `router:${err.reason}`;
+            console.warn(
+              `[briefs] ai router exhausted role=${input.role}: ${err.attempts
+                .map((a) => `${a.provider}:${a.ok ? "ok" : a.reason ?? "fail"}`)
+                .join(",")}`,
+            );
+          } else {
+            aiFailReason = err instanceof Error ? err.message : String(err);
+            console.warn(
+              `[briefs] ai router unexpected role=${input.role}: ${aiFailReason}`,
+            );
+          }
         }
       } else {
-        geminiFailReason = `budget_${reservation.reason}`;
-        console.info(`[briefs] gemini budget exhausted (${reservation.reason})`);
+        aiFailReason = `budget_${reservation.reason}`;
+        console.info(`[briefs] ai budget exhausted (${reservation.reason})`);
       }
     } catch (err) {
-      geminiFailReason = err instanceof Error ? err.message : String(err);
-      console.warn(`[briefs] gemini reservation failed: ${geminiFailReason}`);
+      aiFailReason = err instanceof Error ? err.message : String(err);
+      console.warn(`[briefs] ai reservation failed: ${aiFailReason}`);
     }
 
-    if (geminiFailReason && !allowFallback) {
-      throw new GeminiBriefFailedError(input.role, geminiFailReason);
+    if (aiFailReason && !allowFallback) {
+      throw new GeminiBriefFailedError(input.role, aiFailReason);
     }
   }
 
