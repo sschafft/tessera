@@ -158,9 +158,10 @@ with open(f"{out_dir}/aggregate.json", "w") as fh:
     json.dump({"trajectories": results}, fh, indent=2)
 
 print()
-print("=== Orchestrator findings ===")
+print("=== Orchestrator outcome + findings ===")
 total_findings = 0
 by_sev = {"blocker": 0, "major": 0, "minor": 0, "nit": 0}
+would_use = {"yes": 0, "no": 0, "maybe": 0, "unknown": 0}
 for r in results:
     rep = r["report"]
     if not rep:
@@ -171,10 +172,31 @@ for r in results:
     for f in findings:
         sev = f.get("severity", "unknown")
         if sev in by_sev: by_sev[sev] += 1
-    print(f"  {r['name']:30}  ({r['trajectory_id']})  outcome={rep.get('outcome', '?'):8}  {len(findings)} findings")
+    exp = rep.get("experience") or {}
+    use = (exp.get("would_use_for_real") or "unknown").split()[0].lower()
+    would_use[use if use in would_use else "unknown"] += 1
+    print(f"  {r['name']:30}  ({r['trajectory_id']})  outcome={rep.get('outcome', '?'):8}  {len(findings)} findings  use={use}")
+
+# Experience block — the headline signal of the rewritten playbook.
+print()
+print("=== Experiential read ===")
+for r in results:
+    rep = r["report"]
+    if not rep: continue
+    exp = rep.get("experience") or {}
+    if not exp: continue
+    print(f"\n  --- {r['name']} ---")
+    summary = (exp.get("summary") or "").strip()
+    if summary:
+        print(f"  summary: {summary}")
+    for k in ("most_engaging_moment", "most_confusing_moment", "what_to_change"):
+        v = (exp.get(k) or "").strip()
+        if v:
+            print(f"  {k}: {v}")
 
 print()
 print(f"Total findings: {total_findings}  (blocker={by_sev['blocker']}, major={by_sev['major']}, minor={by_sev['minor']}, nit={by_sev['nit']})")
+print(f"Would-use-for-real: yes={would_use['yes']}  maybe={would_use['maybe']}  no={would_use['no']}  unknown={would_use['unknown']}")
 print(f"Aggregate JSON: {out_dir}/aggregate.json")
 PY
 

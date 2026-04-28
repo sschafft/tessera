@@ -49,114 +49,105 @@ ROSTER = [
     {"role": "observer", "name": "Indigo", "pair_idx": 2},
 ]
 
-# Activity targets per role. The roster doesn't dictate exact sequencing —
-# the agent multiplexes its attention as time allows. Calls out specific
-# UI surfaces to exercise, with explicit instructions to capture findings
-# on each.
+# Playtest framing — these prompts ask agents to play *as a person
+# trying to learn or facilitate something*, not to QA a feature
+# checklist. We do still need basic functionality verified, but the
+# primary signal we're after is whether the experience HOLDS UP as
+# a workshop tool: does the brief generate conversation, does the
+# super-power feel earned, does winning feel like a payoff, would
+# you spend an afternoon doing this. The setup steps stay specific
+# (manual pairing, fixed roster) so the runtime is reproducible;
+# the play loop opens up.
 
 GM_PLAYBOOK = (
-    "### GM playbook (Facilitator)\n\n"
-    "**Phase A — claim host session + manual pairing**\n"
-    "1. Navigate to {url}/host-recover/{code}; paste the host token in the form, submit. Land on /g/{code}/master.\n"
-    "2. Wait until 9 players appear in the lobby panel.\n"
-    "3. **Manually pair players by name** so each agent gets the role its playbook expects (auto-allocate is random, which has consistently broken the playtest by handing builder agents the guider role and vice versa). For each pair, in the Lobby sidebar:\n"
-    "   a. Click the checkbox next to the two intended players to select them. The 'Pair selected · assign roles' button appears.\n"
-    "   b. Click 'Pair selected · assign roles' — the 'Who builds?' picker opens with two buttons (one per selected player).\n"
-    "   c. Click the player who should be the BUILDER. The pair is created.\n"
-    "   d. Repeat for the other pairs.\n"
-    "   Pairings: **Avery (builder) + Bri (guider) → pair 0**, **Cameron (builder) + Drew (guider) → pair 1**, **Ellis (builder) + Finley (guider) → pair 2**.\n"
-    "4. **Manually assign observers**:\n"
-    "   a. Click the Gray checkbox (single-select). The '👁 As observer to pair…' button appears.\n"
-    "   b. Click it; the pair list opens. Click 'Avery ↔ Bri' to assign Gray to pair 0.\n"
-    "   c. Repeat: Harper → pair 1 (Cameron ↔ Drew), Indigo → pair 2 (Ellis ↔ Finley).\n"
-    "5. Open the AccelerantsRail's fullscreen modal (⤢ button top-right) and confirm all 10 super-powers render. Close it.\n"
-    "6. **Tune scoring** in the rail's Scoring tile: bump per-correct +1 (10→11), then step the wrong-attempt penalty down twice (0 → -2). Verify each click updates the displayed value instantly (no flicker, no rollback).\n\n"
-    "**Phase B — run round 1**\n"
-    "7. Set complexity to {complexity}, duration to {duration_min} minutes (free-text), click Start round 1.\n"
-    "8. While round 1 runs, fire these super-powers at staggered moments (use the segmented control to switch between 'this pair' and 'All pairs'):\n"
-    "   - At ~30s into the round: focus pair 0, fire **Reveal briefs**.\n"
-    "   - At ~75s: focus pair 1, fire **Prototype unlock** (5s glimpse).\n"
-    "   - At ~120s: scope=all, fire **Agile share** so each guider gets a snapshot.\n"
-    "   - At ~180s: focus pair 2, fire **Change builder brief**, observe brief swap.\n"
-    "   - At ~240s: scope=all, fire **Time pressure** (subtracts 3 min). Watch the timer turn red + jiggle.\n"
-    "9. Click +1m on the round timer (extends round). Confirm the timer adds 60s correctly.\n"
-    "10. As round 1 wraps, observe the leaderboard chip + per-pair score updates.\n\n"
-    "**Phase C — round 2 transition**\n"
-    "11. After round 1 ends, the dashboard should show round controls for round 2 (or 'all rounds done' if {round_count}=1). Verify which copy renders.\n"
-    "12. {round_2_action}\n\n"
-    "**Phase D — end game + debrief**\n"
-    "13. Click 'End game' (or use the 'all rounds done' CTA). Confirm GameEndedView renders with debrief prompts + per-pair leaderboard sorted by total score.\n"
-    "14. Capture the leaderboard order; note any pair names visible.\n\n"
-    "Findings to capture: dashboard responsiveness with 9 active sockets, scoring tile click-feel (instant or laggy?), AccelerantsRail fullscreen modal UX, super-power broadcast latency to player tabs (best-effort estimate), time-extension click feel, round 1→2 transition clarity, leaderboard ordering correctness, debrief prompt copy."
+    "### GM playbook (Facilitator) — running a workshop\n\n"
+    "You're the facilitator of a Tessera session. Your job is reading the room, deciding when a mechanic will *unstick* a pair vs when it'll just add noise, and using the game as a vehicle for the conversation that matters. Tessera's design promise is 'no logins, no install, real conversation' — judge whether the dashboard makes that promise feel kept.\n\n"
+    "**Phase A — get set up (lobby + roster)**\n"
+    "1. Navigate to {url}/host-recover/{code} and recover the host session. You should land on /g/{code}/master.\n"
+    "2. Wait for 9 players to appear in the lobby panel.\n"
+    "3. **Pair players manually by name** (auto-allocate is random and breaks the playtest's role expectations). For each pair: click both names → 'Pair selected · assign roles' → click the intended builder.\n"
+    "   Pairings: Avery (builder) ↔ Bri (guider) → pair 0; Cameron ↔ Drew → pair 1; Ellis ↔ Finley → pair 2.\n"
+    "4. Assign observers: Gray → pair 0, Harper → pair 1, Indigo → pair 2 (single-select → '👁 As observer to pair…' → pick the pair).\n"
+    "5. While doing this, *notice how the dashboard feels*: did you have to hunt for anything? Did the lobby copy + accelerant rail telegraph what you were supposed to do next, or did you guess?\n\n"
+    "**Phase B — facilitate round 1**\n"
+    "6. Pick a complexity ({complexity}) and a duration ({duration_min} min) that feel right for a real workshop. Start round 1.\n"
+    "7. Now your job is *facilitation*, not feature-QA. Watch the focused-pair canvas. Watch the score chips. Watch which pair seems stuck or in-flow. Fire super-powers when they'd actually serve the room — not on a timer:\n"
+    "   - Use **Reveal briefs** when a pair has plateaued and the conversation has stalled. Did revealing them break the silence?\n"
+    "   - Use **Prototype unlock** to give a struggling builder a 5s glimpse. Did the glimpse feel like a kindness or a cheat?\n"
+    "   - Use **Agile share** so guiders can spot a misalignment. Did surfacing the snapshot trigger a course-correction or a 'wait, what?'\n"
+    "   - Use **Change builder brief** or **Change guider brief** to mix up a pair that's coasting. Was the swap energising or disorienting?\n"
+    "   - Use **Time pressure** if the room is too easy. Did the squeeze focus people or panic them?\n"
+    "   - Tune the **Scoring** tile (per-correct + wrong-attempt penalty) at least once. Did changing it mid-round feel safe or wreckage-y?\n"
+    "8. Try the timer extensions (+30s / +1m / +2m) at moments where the room is *almost* somewhere — give them the time to land it. Did extending feel like good facilitation?\n\n"
+    "**Phase C — round transitions**\n"
+    "9. After round 1 ends, *take a beat as the facilitator*. The transition to round 2 (or to 'all planned rounds done') should answer: 'what do I do next?' Did it? If you wanted to start a bonus round, was the path obvious?\n"
+    "10. {round_2_action}\n\n"
+    "**Phase D — close the session**\n"
+    "11. End the game. Read the GameEndedView with a workshop-host's eye: do the debrief prompts feel like *useful conversation starters* or generic filler? Does the leaderboard surface the right things?\n"
+    "12. Decide: would you actually run this for your team? Why or why not?\n\n"
+    "Beyond bugs, capture the **dynamics**: which super-power generated the most conversation, which one felt like noise, which moment in the round felt the most alive, where the dashboard fought you, and whether scoring + briefs together actually shape behaviour or just keep score. If you ran this twice, what would you do differently?"
 )
 
 BUILDER_PLAYBOOK = (
-    "### Builder playbook (name: {name}, pair {pair_idx})\n\n"
-    "**Phase A — join + save recovery**\n"
-    "1. Navigate to {url}/g/{code}/join. Display name = '{name}'. Submit.\n"
-    "2. **CRITICAL**: a 'Save your recovery URL' modal should appear. Click 'copy' (verify clipboard write); copy the URL into your scratch notes. Click 'Got it · take me to the game'.\n"
-    "3. Land on /g/{code}/play. Note `joined_at` timestamp.\n\n"
-    "**Phase B — round 1 builder loop**\n"
-    "4. Wait for the GM to start round 1.\n"
-    "5. The brief envelope should pulse with attention animation. Verify: animation runs ~5 cycles then stops (not infinite).\n"
-    "6. Tap the sealed envelope to open the brief. Read it. The gate overlay should drop.\n"
-    "7. **Pair-name nudge**: a 'name your pair' modal may appear. Click 'skip for now' (or accept the random suggestion).\n"
-    "8. Place ~10–14 pieces using a mix of shapes (sq, tri-up, rhomb, trap) and colors. Sample latency on 5 placements (click→visible).\n"
-    "9. **Test 'Share progress' button**: with at least one piece placed, click 'Share progress with guider · 3 left'. Verify counter decrements to 2. Then place no more pieces and click again — verify it works (counter→1).\n"
-    "10. **Edit mode**: click an existing piece (in Edit mode), use the rotate ↻ button, then move it to an adjacent empty cell.\n"
-    "11. **Test solution** twice — once early (after ~5 placements), once near round end. Capture the celebratory animation + score change.\n"
-    "12. **Brief minimise**: tap the `−` button on your brief. Verify it collapses to just the seal circle. Verify the pair-name modal does NOT pop again. Click the seal circle to re-expand.\n"
-    "13. **Clear all** mid-round: tap 'Clear all' once, observe arming, tap again. Confirm canvas wipes. Place a few new pieces.\n"
-    "14. If your guider triggered a 'Reveal briefs' super-power, observe their brief now visible to you.\n"
-    "15. If your GM fired 'Change builder brief', observe the brief swap in your envelope (gate may re-arm).\n\n"
-    "**Phase C — recovery flow test (one builder per pair only — Avery)**\n"
-    "16. {recovery_test}\n\n"
-    "**Phase D — round 2 (if applicable)**\n"
-    "17. After round 1 ends, observe RoundEndedView. Wait for the GM to start round 2.\n"
-    "18. Round 2: place ~5 pieces, hit Test solution once. Then end naturally.\n\n"
-    "**Phase E — game end**\n"
-    "19. Observe the final GameEndedView leaderboard. Note your pair's rank.\n\n"
-    "Findings: place-piece responsiveness (any visible stutter? optimistic→server gap?), test-solution feedback clarity, brief envelope dismissal flow, pair-name nudge UX (does it pop on close vs minimize?), Clear-all confirm safety, recovery-URL flow if you tested it, score going negative if penalty bit, round 2 transition feel."
+    "### Builder playbook (name: {name}, pair {pair_idx}) — playing the game\n\n"
+    "You're a participant in a workshop. You're paired with a guider you can't see the same picture as; they have the goal, you have a tray. You'll be talking on a (simulated) call — imagine talking to a real partner. Don't 'place pieces and verify state'; play to actually rebuild what they're describing. Your tab is one half of a relationship.\n\n"
+    "**Phase A — join the room**\n"
+    "1. Navigate to {url}/g/{code}/join, display name = '{name}', submit. Save the recovery URL when the modal pops.\n"
+    "2. Land on /g/{code}/play. The pre-round 'waiting' state — does it feel like ready-to-go or is it an awkward beat?\n\n"
+    "**Phase B — round 1, a builder's loop**\n"
+    "3. Round starts. Your sealed brief is on the right. Open it. *Read it as guidance, not a constraint to QA.* Note: was the brief evocative? Funny? Did you want to share it with someone?\n"
+    "4. Now play — the guider is describing a picture you can't see. Listen, ask yes/no questions in your head, place ~10-14 pieces using a mix of shapes + colours. Try to actually be useful as a partner; if a description is ambiguous, place tentatively and adjust.\n"
+    "5. **Use the Test solution CTA** at least twice — once early (after ~5 placements) and once when you think you're done. Pay attention to the feedback moment: did getting some pieces right *feel like progress*? Did the partial-success confetti land or feel hollow? If you got everything right, did the 'you did it' celebration feel earned?\n"
+    "6. **Use Share progress** at least once. Did sharing feel like a meaningful act of collaboration or a button you pressed because it was there?\n"
+    "7. **Edit mode**: click an existing piece, rotate it, move it. Did it feel responsive? Did you ever lose your place?\n"
+    "8. If a super-power fires (Reveal briefs, Change builder brief, Prototype glimpse) — does it feel like the GM is helping you, surprising you, or interrupting? Note the emotional shape, not just the visual.\n"
+    "9. Spend a moment with the brief envelope: minimise it, re-seal it, re-open it. Is the envelope a thing you *like*, or is it ceremony in the way of doing the thing?\n\n"
+    "**Phase C — recovery flow test (Avery only)**\n"
+    "10. {recovery_test}\n\n"
+    "**Phase D — round 2 (if planned)**\n"
+    "11. Watch the RoundEndedView. Did the goal reveal feel cathartic or anticlimactic? Did you want to compare with your guider, or move on?\n"
+    "12. Play round 2 lighter — ~5 pieces, one Test. Notice if the second round felt different from the first. Better, worse, more of the same?\n\n"
+    "**Phase E — close**\n"
+    "13. GameEndedView leaderboard — note your pair's standing. Did the score reflect the experience, or did you feel like the game was scoring something else?\n\n"
+    "Capture the **feel** of being a builder: most-engaging moment, most-confusing moment, the place where the optimistic UI either delighted or stuttered, what you'd want a redesign to change, whether you'd play again."
 )
 
 GUIDER_PLAYBOOK = (
-    "### Guider playbook (name: {name}, pair {pair_idx})\n\n"
-    "**Phase A — join + save recovery**\n"
-    "1. Navigate to {url}/g/{code}/join. Name = '{name}'. Submit.\n"
-    "2. The 'Save your recovery URL' modal should appear. Click copy, then 'Got it'.\n"
-    "3. Land on /play. Wait for round start.\n\n"
-    "**Phase B — round 1 guider loop**\n"
-    "4. Tap your sealed brief (seal animation should stop after ~5 cycles). Read the brief.\n"
-    "5. Observe the goal canvas pattern — note readability at complexity {complexity}.\n"
-    "6. **Rename the pair**: click the PairNameBadge (yellow when unnamed). Set to '{pair_name_suggestion}'. **CRITICAL**: verify the badge updates IMMEDIATELY in your tab (no waiting for refetch). Before this fix, the first save returned 200 but the badge stayed stale.\n"
-    "7. **Brief minimise**: tap the `−` button. Verify the brief collapses to just the seal circle and stays out of the canvas. Click the seal to re-expand.\n"
-    "8. **Brief re-seal**: tap the `×` button. Verify it goes back to the sealed state.\n"
-    "9. If your GM fires 'Agile share', observe the 'Builder shared progress' panel appear in the bottom-right. Click it; verify full-screen modal opens. Press Esc; verify it closes.\n"
-    "10. If your GM fires 'Change guider brief', observe your envelope re-arming (gate overlay returns).\n\n"
-    "**Phase C — round 2 (if applicable)**\n"
-    "11. After round 1 ends, observe RoundEndedView. Compare your goal pattern to the builder's final placements (if visible).\n"
-    "12. Round 2 starts: open new brief, observe new goal.\n\n"
-    "**Phase D — game end**\n"
-    "13. Observe GameEndedView + leaderboard. Note your pair's rank.\n\n"
-    "Findings: goal canvas readability at complexity {complexity}, brief minimise/seal flow (does the brief overlay the goal canvas? if so, FLAG), pair-rename instant-update (was a known bug), super-power notifications visibility, round 2 transition."
+    "### Guider playbook (name: {name}, pair {pair_idx}) — describing what you can't show\n\n"
+    "You see the goal. Your builder doesn't. You have to talk them into rebuilding it through whatever constraint your secret brief gives you. The challenge is *the conversation* — the tile-placement is just the substrate. Play to make your builder's experience interesting, not to win efficiency.\n\n"
+    "**Phase A — join the room**\n"
+    "1. Navigate to {url}/g/{code}/join, name = '{name}', submit. Save the recovery URL.\n"
+    "2. Wait for round start.\n\n"
+    "**Phase B — round 1, a guider's loop**\n"
+    "3. Open your brief. *Sit with the constraint for a beat* — does it feel evocative, or like a tortured rule someone made up to be quirky? Note what your first instinct is: 'I can do something with this' or 'wait, how am I supposed to describe a square in nautical terms'?\n"
+    "4. Look at the goal canvas. Imagine describing it through your brief's constraint to someone who can't see it. Was the goal *talkable*? Was the complexity ({complexity}) too easy / too hard for an interesting conversation? Notice if you feel the brief generates *humour* or *frustration*.\n"
+    "5. **Name the pair** — click the PairNameBadge, set it to '{pair_name_suggestion}'. Did this small ritual feel like part of the game's identity, or a mandatory chore?\n"
+    "6. Try minimising / re-sealing the brief while you read the goal. Does the right column feel like a stable reference or do you have to keep poking it?\n"
+    "7. If a super-power fires (Agile share gives you the builder's snapshot, Reveal briefs unmasks both, Change guider brief swaps yours): pay attention to whether it changed the *conversation* you were having, not just whether the UI updated. The most important thing about Agile share is whether seeing the builder's progress made you say 'oh, they thought I meant…' — did it?\n"
+    "8. As the round wraps, watch the score chip rise. Did watching them get pieces right feel rewarding (you helped) or distancing (you're just observing)?\n\n"
+    "**Phase C — round transition**\n"
+    "9. After round 1 ends, the RoundEndedView shows both sides. Did revealing the briefs to each other feel like the *real* moment of the round? Did you want more time to talk about it?\n"
+    "10. Round 2 starts (if planned): new goal, new brief. Did the second round feel like a fresh game or a repeat?\n\n"
+    "**Phase D — close**\n"
+    "11. GameEndedView — read the debrief prompts as if you'd actually run them with a team. Are they good prompts?\n\n"
+    "Capture: was the brief constraint *fun to embody* or did you spend the round wrestling it? Was your builder's progress visible enough to feel like collaboration? When the celebration fired, did it feel shared with your builder or like a thing happening in your tab? What would change if you played this with a real partner over Zoom?"
 )
 
 OBSERVER_PLAYBOOK = (
-    "### Observer playbook (name: {name}, pair {pair_idx})\n\n"
-    "**Phase A — join + save recovery**\n"
-    "1. Navigate to {url}/g/{code}/join. Name = '{name}'. Submit.\n"
-    "2. Save the recovery URL via the post-join modal.\n"
-    "3. Wait for the GM to assign you to a pair as observer.\n\n"
-    "**Phase B — observe round 1**\n"
-    "4. Confirm side-by-side builder + goal canvas layout renders within ~3s of round start. Time it.\n"
-    "5. Watch the builder canvas update in (near-)realtime as pieces are placed. Capture latency from 'piece placed' (you can't see exactly when, but estimate from rate of change).\n"
-    "6. **Switch pairs**: if `available_pairs` shows other pairs, click a different pair from the bottom strip. Verify the layout updates to the new pair. **CRITICAL**: switch back to your originally-assigned pair (pair {pair_idx}) before phase C. Observer self-switching mutates `participants.pair_id` — the GM dashboard will read whatever pair you last selected as your 'home', which surfaces as cross-pair drift in the lobby sidebar if you forget to switch back.\n"
-    "7. When a super-power fires (e.g. Reveal briefs, Prototype unlock), observe whether the observer view reflects it.\n"
-    "8. Read both pair-side briefs if revealed.\n"
-    "9. **Test view scaling**: try resizing the browser to a narrower width (1024px) — does the layout adapt or break?\n\n"
-    "**Phase C — round 2 + game end**\n"
-    "10. Observe round transitions. After game ends, see the leaderboard.\n\n"
-    "Findings: observer view scaling at complexity {complexity}, pair-switcher UX (or absence — if available_pairs is null AND you were assigned observer, that's a bug), missing affordances (does observer have any agency or are they purely passive?), realtime updates lag from builder activity, layout breakage on narrow viewports."
+    "### Observer playbook (name: {name}, pair {pair_idx}) — watching the workshop\n\n"
+    "You're the spectator role — fly on the wall for one pair. The product question this role answers is: *is watching Tessera interesting, or is it homework?* You're allowed to switch pairs to compare. Treat your tab as the camera the workshop facilitator might walk people past during a debrief.\n\n"
+    "**Phase A — join + take your seat**\n"
+    "1. Navigate to {url}/g/{code}/join, name = '{name}'. Save recovery URL. Wait for the GM to seat you on a pair as observer.\n\n"
+    "**Phase B — round 1, watching**\n"
+    "2. Round starts. Your view = builder canvas + goal side-by-side. *Watch your assigned pair* (pair {pair_idx}) for the first ~3 minutes without doing anything else. Note: was watching engaging or did you reach for another tab?\n"
+    "3. As pieces land on the builder canvas, do you feel the pair's conversation happening through their actions? Are the placements telling a story or feeling like random clicks?\n"
+    "4. **Switch pairs** once mid-round to compare another pair's progress. Does seeing a different pair illuminate something or feel redundant? **CRITICAL**: switch back to pair {pair_idx} before phase C — observer self-switching writes participants.pair_id, and leaving you on the wrong pair shows up as drift in the GM's dashboard.\n"
+    "5. When the GM fires a super-power, watch what changes for the pair you're observing. Is the change visible enough that you understand what just happened, or does it pass without explanation?\n"
+    "6. Read the briefs once they're revealed. Are they *fun to read as a third party* — would you want to share them in a debrief?\n"
+    "7. Resize the browser briefly to a narrow width (~768px). Does the observer view stay usable or fall apart?\n\n"
+    "**Phase C — round transition + close**\n"
+    "8. Watch the round-end + game-end views. Do you feel like you're part of the workshop or like you've been doing busywork?\n\n"
+    "Capture: did watching feel like *meaningful spectating* (you learned, you were entertained, you'd talk about it after) or *passive waiting*? What would give the observer role agency without breaking the asymmetry that makes Tessera Tessera (e.g. lightweight react-emoji, flag-this-moment for the debrief)? Is there a viewport size where the side-by-side stops working?"
 )
 
 PLAYBOOK = {
@@ -254,21 +245,40 @@ for i, entry in enumerate(ROSTER):
         f'  "name": "{entry["name"]}",\n'
         f'  "pair_idx": {pair_idx_str},\n'
         '  "phases_completed": ["A", "B", "C", "D"],\n'
+        '\n'
+        '  // EXPERIENTIAL — the primary signal we want from this run.\n'
+        '  // Write as a player/facilitator, not as a QA. 1-3 sentences each.\n'
+        '  "experience": {\n'
+        '    "summary": "Overall, did this feel like a workshop tool you\'d use? Or pre-prod toy? Be specific.",\n'
+        '    "most_engaging_moment": "The single moment in the run where you were most absorbed. What made it work?",\n'
+        '    "most_confusing_moment": "The single moment you stopped and went \'wait, what?\'. What were you trying to do, what happened?",\n'
+        '    "would_use_for_real": "yes | no | maybe — and why in one sentence.",\n'
+        '    "what_to_change": "If you had a single design lever, what would you turn?"\n'
+        '  },\n'
+        '\n'
+        '  // FINDINGS — keep tracking concrete bugs + UX issues, but only flag\n'
+        '  // things that actually hurt the experience or break a user path. Don\'t pad.\n'
         '  "findings": [\n'
-        '    {"severity": "blocker | major | minor | nit", "area": "' + role + '", "category": "bug | ux-confusion | slowness | copy | accessibility | visual | performance", "title": "...", "detail": "...", "url_or_route": "/g/' + CODE + '/play", "evidence": "..."}\n'
+        '    {"severity": "blocker | major | minor | nit", "area": "' + role + '", "category": "bug | ux-confusion | slowness | copy | accessibility | visual | performance | dynamics", "title": "...", "detail": "...", "url_or_route": "/g/' + CODE + '/play", "evidence": "..."}\n'
         "  ],\n"
         '  "console_errors": [],\n'
         '  "network_errors": []\n'
         "}\n"
         "```\n\n"
-        "Track which phases you completed in `phases_completed` (A/B/C/D/E as listed in your playbook). If you bail mid-phase, set `outcome: \"partial\"` and explain why in a finding."
+        "The `experience` block is the new headline; `findings` is now secondary. We're testing whether Tessera is a *good workshop tool*, not whether each button works in isolation. If something feels off in a way you can't quite name, write that — naming the smell IS the finding.\n\n"
+        "Track which phases you completed in `phases_completed` (A/B/C/D/E). If you bail mid-phase, set `outcome: \"partial\"` and explain why in `experience.summary`."
     )
 
     full = (
         setup
         + body
-        + "\n\n## Universal observations\n"
-        "Note console errors, network errors, and general UX surprises (confusing copy, missing affordances, rough transitions, slow API calls > 1s, animations that block interaction, layout breakage). If something looks BROKEN (a button does nothing, a modal won't dismiss, a value won't save) record a `blocker` or `major` — those are what we ship for.\n"
+        + "\n\n## How to think about this run\n"
+        "You're not validating a feature spec — you're **playing the game** (or facilitating it) and reporting what the experience was like. Tessera is supposed to be a workshop tool that makes communication, asymmetry, and scaffolded iteration *felt* through play. The metric we care about is whether that worked.\n\n"
+        "- Speak as a player. \"The brief made me laugh\" is more useful than \"the brief envelope rendered.\"\n"
+        "- Notice silences. If you stalled or zoned out at a particular moment, that's signal — say where.\n"
+        "- Don't force findings. If the round felt good and nothing broke, the run is a success — write a thoughtful `experience` block and ship a short `findings` list.\n"
+        "- Real bugs (button does nothing, modal won't dismiss, value won't save, console error storms) still go in `findings` as `blocker` or `major`. Those gate ship-readiness.\n"
+        "- Capture console + network errors in the dedicated arrays even if they didn't break your run — they tell us about back-end health.\n"
         + output_schema
     )
 
