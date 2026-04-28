@@ -1,77 +1,66 @@
 "use client";
 
 import { useState } from "react";
+import { useSignIn } from "@clerk/nextjs";
 
 export interface BreakoutsPanelProps {
-  code: string;
   /** Total number of pairs allocated. */
   pairCount: number;
   /** Number of pairs that already have a breakout_call_url set. */
   withBreakouts: number;
-  /** Whether we have valid Google tokens server-side for this game. */
+  /** Server-confirmed: Clerk session has an active Google connection. */
   googleConnected: boolean;
   /** Mid-flight indicator from the parent (POST in flight). */
   busy: boolean;
-  /** Surface a query-param confirmation toast post-OAuth. */
-  recentlyConnected: boolean;
-  /** OAuth-flow error (e.g. user denied consent). */
-  oauthError: string | null;
   onGenerate: () => void;
   onClear: () => void;
-  onDismissBanner: () => void;
 }
 
 /**
  * GM-side surface for the per-pair Google Meet breakouts feature.
- * Lives as a SetupStep card pre-round and a status pill in the right
- * rail mid-round. Three lifecycle states are reflected in the body:
+ * Renders as Step 4 in the master setup flow. Two lifecycle states:
  *
- *   - Not connected → "Sign in with Google" CTA. Opens the OAuth
- *     flow in the same tab; we'll come back via /api/auth/google/
- *     callback with ?google_connected=1.
- *   - Connected, missing links → "Generate breakout calls" CTA, with
- *     a confirmation modal explaining the calendar-event side effect.
- *   - Connected, all links ready → green status + "Re-mint" / "Clear"
- *     affordances for re-shuffles.
+ *   - Google not connected → "Sign in with Google" CTA. Uses Clerk's
+ *     `signIn.sso()` with the Google OAuth strategy. The
+ *     `calendar.events` scope is configured once in the Clerk
+ *     Dashboard (SSO Connections → Google → Additional OAuth scopes)
+ *     so every sign-in inherits it without us having to pass it
+ *     per-call. After consent, Clerk redirects through /sso-callback
+ *     back to /master, and the next lobby poll flips
+ *     `googleConnected` to true.
+ *   - Connected → "Generate breakout calls" CTA, gated by a
+ *     confirmation modal that explains the calendar-event side
+ *     effect. Once links exist, "Clear breakouts" is available for
+ *     re-shuffles.
  */
 export function BreakoutsPanel({
-  code,
   pairCount,
   withBreakouts,
   googleConnected,
   busy,
-  recentlyConnected,
-  oauthError,
   onGenerate,
   onClear,
-  onDismissBanner,
 }: BreakoutsPanelProps) {
   const [confirming, setConfirming] = useState(false);
   const missing = Math.max(0, pairCount - withBreakouts);
+  const { signIn, fetchStatus } = useSignIn();
 
-  const startSignIn = () => {
-    window.location.href = `/api/auth/google/start?code=${encodeURIComponent(code)}`;
+  const startSignIn = async () => {
+    if (!signIn) return;
+    await signIn.sso({
+      strategy: "oauth_google",
+      redirectUrl: `${window.location.origin}/sso-callback`,
+      redirectCallbackUrl: window.location.href,
+    });
   };
 
   return (
     <div className="flex flex-col gap-3 px-5 py-4">
-      {recentlyConnected && (
-        <Banner
-          tint="green"
-          onDismiss={onDismissBanner}
-        >
-          ✓ Google connected — you can now generate per-pair breakout
-          calls below.
-        </Banner>
-      )}
-      {oauthError && (
-        <Banner tint="red" onDismiss={onDismissBanner}>
-          Google sign-in didn&apos;t finish ({oauthError}). Try again?
-        </Banner>
-      )}
-
       {!googleConnected ? (
-        <SignInState onSignIn={startSignIn} />
+        <SignInState
+          onSignIn={startSignIn}
+          disabled={fetchStatus === "fetching"}
+        />
       ) : (
         <ReadyState
           pairCount={pairCount}
@@ -97,24 +86,32 @@ export function BreakoutsPanel({
   );
 }
 
-function SignInState({ onSignIn }: { onSignIn: () => void }) {
+function SignInState({
+  onSignIn,
+  disabled,
+}: {
+  onSignIn: () => void;
+  disabled: boolean;
+}) {
   return (
     <div className="flex flex-col gap-2.5">
       <p
         className="text-[12px] leading-snug"
         style={{ color: "var(--color-ink-2)" }}
       >
-        Sign in with Google so Tessera can mint a private Meet link per
-        pair via the Calendar API. We only ask for the
+        Optional. Sign in with Google so Tessera can mint a private
+        Meet link per pair via the Calendar API. We only ask for the
         <span className="t-mono mx-1 rounded bg-[var(--color-paper-2)] px-1 py-0.5 text-[11px]">
           calendar.events
         </span>
-        scope and revoke access automatically when the game ends.
+        scope; you can revoke access anytime from your Clerk account
+        settings or your Google account.
       </p>
       <button
         type="button"
         onClick={onSignIn}
-        className="t-btn t-btn--primary t-btn--sm self-start"
+        disabled={disabled}
+        className="t-btn t-btn--primary t-btn--sm self-start disabled:opacity-50"
       >
         Sign in with Google →
       </button>
@@ -201,46 +198,6 @@ function ReadyState({
   );
 }
 
-function Banner({
-  tint,
-  children,
-  onDismiss,
-}: {
-  tint: "green" | "red";
-  children: React.ReactNode;
-  onDismiss: () => void;
-}) {
-  const palette =
-    tint === "green"
-      ? {
-          background: "var(--color-tint-green)",
-          color: "var(--color-t-green)",
-          border: "1.5px solid var(--color-t-green)",
-        }
-      : {
-          background: "var(--color-tint-red)",
-          color: "var(--color-t-red)",
-          border: "1.5px solid var(--color-t-red)",
-        };
-  return (
-    <div
-      role="status"
-      className="flex items-start gap-2 rounded-[10px] px-3 py-2 text-[12px]"
-      style={palette}
-    >
-      <span className="flex-1 leading-snug">{children}</span>
-      <button
-        type="button"
-        onClick={onDismiss}
-        aria-label="Dismiss"
-        className="t-mono text-[11px] underline"
-        style={{ color: palette.color }}
-      >
-        dismiss
-      </button>
-    </div>
-  );
-}
 
 function ConfirmGenerateModal({
   missing,

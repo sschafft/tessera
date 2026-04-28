@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
 import type { BriefSource, TeamMode } from "@/lib/game/repository";
 import type { TileColor } from "@/components/canvas/Tile";
 import { MasterLobby } from "./MasterLobby";
@@ -89,7 +88,6 @@ interface LobbyResponse {
   };
   breakouts: {
     configured: boolean;
-    enabled: boolean;
     google_connected: boolean;
   };
   participants: LobbyParticipant[];
@@ -434,27 +432,10 @@ export function MasterContent({
     }
   }, [code, fetchSnapshot, data]);
 
-  // Breakouts: generate / clear handlers + post-OAuth banner state.
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const [oauthBanner, setOauthBanner] = useState<{
-    connected: boolean;
-    error: string | null;
-  }>({ connected: false, error: null });
-  useEffect(() => {
-    const connected = searchParams.get("google_connected") === "1";
-    const error = searchParams.get("google_error");
-    if (!connected && !error) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot banner toggle keyed off the OAuth callback's query params; we strip them on the same tick to prevent re-fire.
-    setOauthBanner({ connected, error });
-    router.replace(`/g/${code}/master`, { scroll: false });
-    void fetchSnapshot();
-  }, [searchParams, router, code, fetchSnapshot]);
-  const dismissOauthBanner = useCallback(
-    () => setOauthBanner({ connected: false, error: null }),
-    [],
-  );
-
+  // Breakouts: generate / clear handlers. Clerk handles the OAuth
+  // callback dance for us — when the GM completes Google sign-in,
+  // the SSO callback page redirects them back to /master and the
+  // next lobby poll picks up the new google_connected=true.
   const generateBreakouts = useCallback(async () => {
     setBusy(true);
     setActionError(null);
@@ -826,10 +807,10 @@ export function MasterContent({
                     onChange={updateScoring}
                   />
                 </SetupStep>
-                {data?.breakouts.enabled && (
+                {data?.breakouts.configured && (
                   <SetupStep
                     step={4}
-                    title="Per-pair breakout calls"
+                    title="Per-pair breakout calls (optional)"
                     hint={
                       data.breakouts.google_connected
                         ? "Google connected — generate when pairs are ready."
@@ -837,18 +818,14 @@ export function MasterContent({
                     }
                   >
                     <BreakoutsPanel
-                      code={code}
                       pairCount={pairs.length}
                       withBreakouts={
                         pairs.filter((p) => p.breakout_call_url).length
                       }
                       googleConnected={data.breakouts.google_connected}
                       busy={busy}
-                      recentlyConnected={oauthBanner.connected}
-                      oauthError={oauthBanner.error}
                       onGenerate={generateBreakouts}
                       onClear={clearBreakouts}
-                      onDismissBanner={dismissOauthBanner}
                     />
                   </SetupStep>
                 )}

@@ -8,10 +8,9 @@ import {
   deleteBreakoutEvent,
 } from "@/lib/google/calendar";
 import {
-  GoogleSessionLost,
-  getValidAccessToken,
-  revokeAndDelete,
-} from "@/lib/google/tokenStore";
+  ClerkUnconfiguredError,
+  getGoogleAccessToken,
+} from "@/lib/google/clerkToken";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -53,60 +52,55 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ ok: true, already_ended: true });
   }
 
-  // Calendar cleanup BEFORE flipping the game so the GM-only path
-  // through getValidAccessToken still has a valid game row to look
-  // up. Failures here don't block game-end — orphaned calendar
-  // events are visible only to the GM and easy to bulk-delete by
-  // searching "Tessera breakout".
-  const breakouts = game.breakouts_enabled
-    ? await repo.listPairsWithBreakouts(game.id)
-    : [];
+  // Calendar cleanup BEFORE flipping the game so we still have a
+  // running game to gate the GM session check on. Failures here
+  // don't block game-end — orphaned calendar events are visible only
+  // to the GM and easy to bulk-delete by searching "Tessera breakout".
+  // Clerk holds the OAuth grant; we don't need to revoke anything
+  // locally — the GM can disconnect Google from their Clerk account
+  // settings if they want to drop the grant entirely.
+  const breakouts = await repo.listPairsWithBreakouts(game.id);
   let deleted = 0;
   let cleanupWarning: string | null = null;
   if (breakouts.length > 0) {
     try {
-      const accessToken = await getValidAccessToken(game.id);
-      for (const b of breakouts) {
-        try {
-          await deleteBreakoutEvent({ accessToken, eventId: b.event_id });
-          deleted += 1;
-        } catch (err) {
-          if (err instanceof CalendarApiError && err.isAuthError) {
-            cleanupWarning = "google_session_lost_mid_cleanup";
-            break;
+      const session = await getGoogleAccessToken();
+      if (!session) {
+        cleanupWarning = "google_session_lost";
+      } else {
+        const accessToken = session.accessToken;
+        for (const b of breakouts) {
+          try {
+            await deleteBreakoutEvent({ accessToken, eventId: b.event_id });
+            deleted += 1;
+          } catch (err) {
+            if (err instanceof CalendarApiError && err.isAuthError) {
+              cleanupWarning = "google_session_lost_mid_cleanup";
+              break;
+            }
+            console.warn(
+              `[end] delete event ${b.event_id} failed: ${
+                err instanceof Error ? err.message : String(err)
+              }`,
+            );
           }
-          console.warn(
-            `[end] delete event ${b.event_id} failed: ${
-              err instanceof Error ? err.message : String(err)
-            }`,
-          );
+          await repo.clearPairBreakout(b.id).catch(() => undefined);
         }
-        await repo.clearPairBreakout(b.id).catch(() => undefined);
       }
     } catch (err) {
-      if (err instanceof GoogleSessionLost) {
-        cleanupWarning = "google_session_lost";
+      if (err instanceof ClerkUnconfiguredError) {
+        cleanupWarning = "clerk_unconfigured";
       } else {
         cleanupWarning = "cleanup_failed";
         console.warn(
           `[end] cleanup error: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
-      // Still clear local rows so the dashboard reflects cleanup.
-      for (const b of breakouts) {
-        await repo.clearPairBreakout(b.id).catch(() => undefined);
-      }
     }
-  }
-
-  // Best-effort: revoke and drop the GM's stored Google tokens so
-  // we don't keep encrypted material around for an ended game.
-  if (game.breakouts_enabled) {
-    await revokeAndDelete(game.id).catch((err) => {
-      console.warn(
-        `[end] revokeAndDelete failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    });
+    // Always clear local rows so the dashboard reads as cleaned up.
+    for (const b of breakouts) {
+      await repo.clearPairBreakout(b.id).catch(() => undefined);
+    }
   }
 
   // End the active round first (idempotent), then flip the game.

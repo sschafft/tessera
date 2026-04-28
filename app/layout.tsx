@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Fraunces, DM_Sans, JetBrains_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
+import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -36,15 +37,23 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // ClerkProvider mounts the auth context globally. It does NOT gate
+  // anything on its own — every Tessera route stays public. The
+  // breakouts feature is the only surface that calls into Clerk; it
+  // uses Clerk's `<SignInButton>` / `signIn.authenticateWithRedirect`
+  // for the OAuth flow and `auth()` server-side to retrieve the
+  // Google access token. Players never touch Clerk.
   return (
-    <html
-      lang="en"
-      className={`${fraunces.variable} ${dmSans.variable} ${jetbrainsMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">
-        {children}
-        <Analytics />
-      </body>
-    </html>
+    <ClerkProvider>
+      <html
+        lang="en"
+        className={`${fraunces.variable} ${dmSans.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      >
+        <body className="min-h-full flex flex-col">
+          {children}
+          <Analytics />
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }

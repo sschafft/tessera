@@ -7,9 +7,9 @@ import {
   deleteBreakoutEvent,
 } from "@/lib/google/calendar";
 import {
-  GoogleSessionLost,
-  getValidAccessToken,
-} from "@/lib/google/tokenStore";
+  ClerkUnconfiguredError,
+  getGoogleAccessToken,
+} from "@/lib/google/clerkToken";
 import { publishGameEvent } from "@/lib/realtime/publish";
 
 export const runtime = "nodejs";
@@ -54,12 +54,12 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
 
   let accessToken: string | null = null;
   try {
-    accessToken = await getValidAccessToken(game.id);
-  } catch (err) {
-    // No Google session — can't issue DELETEs. Still clear the local
-    // pair fields so the dashboard reads as cleaned-up; calendar
-    // events are orphaned but only visible to the GM.
-    if (err instanceof GoogleSessionLost) {
+    const session = await getGoogleAccessToken();
+    if (!session) {
+      // GM is no longer signed into Clerk (or has revoked Google).
+      // Still clear the local pair fields so the dashboard reads as
+      // cleaned-up; calendar events are orphaned but only visible to
+      // the GM, who can search "Tessera breakout" to remove them.
       for (const b of breakouts) {
         await repo.clearPairBreakout(b.id);
       }
@@ -70,6 +70,14 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
         cleared_local: breakouts.length,
         warning: "google_session_lost_events_orphaned",
       });
+    }
+    accessToken = session.accessToken;
+  } catch (err) {
+    if (err instanceof ClerkUnconfiguredError) {
+      return NextResponse.json(
+        { error: "clerk_unconfigured" },
+        { status: 503 },
+      );
     }
     throw err;
   }
