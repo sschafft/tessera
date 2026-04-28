@@ -73,7 +73,7 @@ export function GuiderView({ state }: GuiderViewProps) {
   useEffect(() => {
     const prev = prevCorrectRef.current;
     if (liveCorrect > prev) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- bumps the confetti key on each rising-edge so the burst replays per new correct piece.
+       
       setPartialKey((k) => k + 1);
     }
     prevCorrectRef.current = liveCorrect;
@@ -87,7 +87,7 @@ export function GuiderView({ state }: GuiderViewProps) {
       solvedFiredForRoundRef.current !== roundId
     ) {
       solvedFiredForRoundRef.current = roundId;
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot solved banner trigger; gated by the per-round ref so it can't loop.
+       
       setSolvedShown(true);
       if (state.sound_on) playSolved();
     }
