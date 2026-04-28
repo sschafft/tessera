@@ -4,6 +4,8 @@ import { useState } from "react";
 
 export interface BreakoutsPanelProps {
   code: string;
+  /** Which breakout provider this game was created with. */
+  provider: "google_meet" | "jitsi";
   /** Total number of pairs allocated. */
   pairCount: number;
   /** Number of pairs that already have a breakout_call_url set. */
@@ -22,21 +24,20 @@ export interface BreakoutsPanelProps {
 }
 
 /**
- * GM-side surface for the per-pair Google Meet breakouts feature.
- * Renders as Step 4 in the master setup flow. Two lifecycle states:
+ * GM-side surface for the per-pair breakouts feature. Renders as Step
+ * 4 in the master setup flow. Two providers, three lifecycle states:
  *
- *   - Google not connected → "Sign in with Google" CTA. Hits
+ *   - google_meet, not connected → "Sign in with Google" CTA. Hits
  *     /api/auth/google/start which 302s through Google's consent
- *     screen and lands back on /g/[code]/master?google_connected=1.
- *     The OAuth flow itself is built on `arctic` server-side; this
- *     panel only links into it.
- *   - Connected → "Generate breakout calls" CTA, gated by a
- *     confirmation modal that explains the calendar-event side
- *     effect. Once links exist, "Clear breakouts" is available for
- *     re-shuffles.
+ *     screen.
+ *   - google_meet, connected → "Generate breakout calls" with a
+ *     confirmation modal explaining the calendar-event side effect.
+ *   - jitsi → no auth needed. Straight to "Generate" — Jitsi rooms
+ *     are deterministic URLs on meet.jit.si.
  */
 export function BreakoutsPanel({
   code,
+  provider,
   pairCount,
   withBreakouts,
   googleConnected,
@@ -49,6 +50,7 @@ export function BreakoutsPanel({
 }: BreakoutsPanelProps) {
   const [confirming, setConfirming] = useState(false);
   const missing = Math.max(0, pairCount - withBreakouts);
+  const needsGoogleSignIn = provider === "google_meet" && !googleConnected;
 
   const startSignIn = () => {
     window.location.href = `/api/auth/google/start?code=${encodeURIComponent(code)}`;
@@ -67,15 +69,23 @@ export function BreakoutsPanel({
           Google sign-in didn&apos;t finish ({oauthError}). Try again?
         </Banner>
       )}
-      {!googleConnected ? (
+      {needsGoogleSignIn ? (
         <SignInState onSignIn={startSignIn} />
       ) : (
         <ReadyState
+          provider={provider}
           pairCount={pairCount}
           withBreakouts={withBreakouts}
           missing={missing}
           busy={busy}
-          onGenerate={() => setConfirming(true)}
+          onGenerate={() => {
+            // Jitsi has no calendar side-effect, so skip the modal.
+            if (provider === "jitsi") {
+              onGenerate();
+            } else {
+              setConfirming(true);
+            }
+          }}
           onClear={onClear}
         />
       )}
@@ -161,6 +171,7 @@ function Banner({
 }
 
 function ReadyState({
+  provider,
   pairCount,
   withBreakouts,
   missing,
@@ -168,6 +179,7 @@ function ReadyState({
   onGenerate,
   onClear,
 }: {
+  provider: "google_meet" | "jitsi";
   pairCount: number;
   withBreakouts: number;
   missing: number;
@@ -176,6 +188,10 @@ function ReadyState({
   onClear: () => void;
 }) {
   const allReady = pairCount > 0 && missing === 0;
+  const clearTitle =
+    provider === "jitsi"
+      ? "Drop the per-pair links. (Jitsi rooms are stateless — nothing to delete on the server side.)"
+      : "Delete every breakout calendar event and clear the per-pair links.";
   return (
     <div className="flex flex-col gap-2.5">
       <div
@@ -204,6 +220,14 @@ function ReadyState({
           <span>
             {pairCount} pair{pairCount === 1 ? "" : "s"} allocated · no
             breakouts minted yet.
+            {provider === "jitsi" && (
+              <>
+                {" "}
+                <span style={{ color: "var(--color-ink-3)" }}>
+                  (Jitsi · free, no sign-in.)
+                </span>
+              </>
+            )}
           </span>
         )}
       </div>
@@ -229,7 +253,7 @@ function ReadyState({
             onClick={onClear}
             disabled={busy}
             className="t-btn t-btn--ghost t-btn--sm"
-            title="Delete every breakout calendar event and clear the per-pair links."
+            title={clearTitle}
           >
             Clear breakouts
           </button>

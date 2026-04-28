@@ -19,7 +19,11 @@ interface JoinPayload {
   display_name?: string;
   /** Only used when team_mode='players_pick'. Defaults to 'lobby' otherwise. */
   role?: ParticipantRole;
+  /** Required when game.breakout_provider === 'google_meet'. */
+  email?: string;
 }
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const ALLOWED_PICK_ROLES: ReadonlySet<ParticipantRole> = new Set([
   "builder",
@@ -70,6 +74,22 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "game_closed" }, { status: 410 });
   }
 
+  // Email is required only when this game uses Google Meet breakouts —
+  // we attach the player as a calendar event attendee so they bypass
+  // Meet's knock screen. Jitsi + in-person + no-breakouts games never
+  // collect email.
+  let email: string | null = null;
+  if (game.breakout_provider === "google_meet") {
+    const raw = (body.email ?? "").trim();
+    if (!raw) {
+      return NextResponse.json({ error: "email_required" }, { status: 400 });
+    }
+    if (!EMAIL_RE.test(raw) || raw.length > 120) {
+      return NextResponse.json({ error: "email_invalid" }, { status: 400 });
+    }
+    email = raw.toLowerCase();
+  }
+
   // Honour team_mode: if GM picks teams, ignore any client-provided role
   // and seat the player in the lobby for the GM to allocate later.
   const effectiveRole: ParticipantRole =
@@ -117,6 +137,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       role: effectiveRole,
       color: colorFor(displayName, game.id),
       recovery_token_hash: recoveryTokenHash,
+      email,
     });
   } catch (err) {
     if (err instanceof DuplicateNameError) {

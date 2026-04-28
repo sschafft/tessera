@@ -53,15 +53,15 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ ok: true, already_ended: true });
   }
 
-  // Calendar cleanup BEFORE flipping the game so the gm_google_tokens
-  // row is still around to read. Failures here don't block game-end
-  // — orphaned calendar events are visible only to the GM and easy
-  // to bulk-delete by searching "Tessera breakout". After cleanup we
-  // revoke the OAuth grant + drop the encrypted token row.
+  // Cleanup BEFORE flipping the game so any gm_google_tokens row is
+  // still around to read. Failures here don't block game-end — orphaned
+  // calendar events are visible only to the GM and easy to bulk-delete
+  // by searching "Tessera breakout".
   const breakouts = await repo.listPairsWithBreakouts(game.id);
   let deleted = 0;
   let cleanupWarning: string | null = null;
-  if (breakouts.length > 0) {
+  const usesGoogleMeet = game.breakout_provider === "google_meet";
+  if (breakouts.length > 0 && usesGoogleMeet) {
     try {
       const accessToken = await getValidAccessToken(game.id);
       for (const b of breakouts) {
@@ -91,17 +91,23 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         );
       }
     }
-    // Always clear local rows so the dashboard reads as cleaned up.
+  }
+  // Always clear local rows (jitsi rooms have nothing to delete; google_meet
+  // rows we may have only partially cleared above).
+  if (breakouts.length > 0) {
     for (const b of breakouts) {
       await repo.clearPairBreakout(b.id).catch(() => undefined);
     }
   }
-  // Revoke + drop the GM's stored Google tokens (best effort).
-  await revokeAndDelete(game.id).catch((err) =>
-    console.warn(
-      `[end] revokeAndDelete: ${err instanceof Error ? err.message : String(err)}`,
-    ),
-  );
+  // Revoke + drop any stored Google tokens (best effort) — only meaningful
+  // for google_meet games but harmless for others.
+  if (usesGoogleMeet) {
+    await revokeAndDelete(game.id).catch((err) =>
+      console.warn(
+        `[end] revokeAndDelete: ${err instanceof Error ? err.message : String(err)}`,
+      ),
+    );
+  }
 
   // End the active round first (idempotent), then flip the game.
   const round = await repo.findLatestRound(game.id);

@@ -152,15 +152,19 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       builder: game.builder_brief_on,
       guider: game.guider_brief_on,
     },
-    // Per-pair breakouts state. `configured` is true when the Google
-    // OAuth env vars are present on this deployment (the toggle gate
-    // for the dashboard's Step 4 card). `google_connected` reflects
-    // whether we have an encrypted token row for THIS game.
+    meeting_mode: game.meeting_mode ?? "remote",
+    // Per-pair breakouts state. `provider` reflects what was selected
+    // at game-create. `configured` is true when the Google OAuth env
+    // vars are present (only relevant for google_meet); `google_connected`
+    // reflects whether we have an encrypted token row for THIS game
+    // (only relevant for google_meet).
     breakouts: {
+      provider: game.breakout_provider ?? "none",
       configured: isGoogleConfigured(),
-      google_connected: isGoogleConfigured()
-        ? (await getGoogleSession(game.id)) !== null
-        : false,
+      google_connected:
+        game.breakout_provider === "google_meet" && isGoogleConfigured()
+          ? (await getGoogleSession(game.id)) !== null
+          : false,
     },
     participants,
     pairs: pairs.map((p) => ({

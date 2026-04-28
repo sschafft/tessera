@@ -64,7 +64,11 @@ export default async function JoinPage({ params, searchParams }: PageProps) {
           </p>
         </header>
 
-        <JoinForm code={code} defaultName={name ?? ""} />
+        <JoinForm
+          code={code}
+          defaultName={name ?? ""}
+          breakoutProvider={game.breakout_provider}
+        />
       </main>
     </div>
   );

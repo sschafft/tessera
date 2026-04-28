@@ -10,6 +10,7 @@ import {
   GoogleSessionLost,
   getValidAccessToken,
 } from "@/lib/google/tokenStore";
+import { jitsiUrlForPair } from "@/lib/breakouts/jitsi";
 import { publishGameEvent } from "@/lib/realtime/publish";
 
 export const runtime = "nodejs";
@@ -54,7 +55,41 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
   if (game.status === "ended" || game.status === "purged") {
     return NextResponse.json({ error: "game_closed" }, { status: 400 });
   }
+  if (game.breakout_provider === "none") {
+    return NextResponse.json({ error: "breakouts_disabled" }, { status: 400 });
+  }
 
+  const pairs = await repo.listPairs(game.id);
+  const todo = pairs.filter((p) => !p.breakout_call_url);
+  if (todo.length === 0) {
+    return NextResponse.json({ ok: true, created: 0, skipped: pairs.length });
+  }
+
+  // Jitsi: deterministic URLs per pair, no Google session needed. We
+  // store a sentinel event_id so the cleanup loop can identify these
+  // rows as no-op (jitsi rooms are stateless on the public server —
+  // there's nothing to delete at game-end).
+  if (game.breakout_provider === "jitsi") {
+    let created = 0;
+    for (const pair of todo) {
+      const url = jitsiUrlForPair({ gameCode: code, pairId: pair.id });
+      await repo.setPairBreakout(pair.id, {
+        call_url: url,
+        event_id: `jitsi:${pair.id}`,
+      });
+      created += 1;
+    }
+    await publishGameEvent(game.id, "breakouts_changed", { created });
+    return NextResponse.json({
+      ok: created > 0,
+      created,
+      skipped: pairs.length - todo.length,
+      failed: 0,
+      first_error: null,
+    });
+  }
+
+  // Google Meet path — needs a valid OAuth session for the GM.
   let accessToken: string;
   try {
     accessToken = await getValidAccessToken(game.id);
@@ -68,14 +103,11 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
     throw err;
   }
 
-  const pairs = await repo.listPairs(game.id);
-  const todo = pairs.filter((p) => !p.breakout_call_url);
-  if (todo.length === 0) {
-    return NextResponse.json({ ok: true, created: 0, skipped: pairs.length });
-  }
-
   const participants = await repo.listActiveParticipants(game.id);
   const nameById = new Map(participants.map((p) => [p.id, p.display_name]));
+  const emailById = new Map(
+    participants.filter((p) => p.email).map((p) => [p.id, p.email as string]),
+  );
   // Resolve a human label per pair so the calendar event title is
   // legible at a glance ("Tessera breakout · Sam ↔ Jules · Workshop").
   const labelFor = (p: (typeof pairs)[number]) => {
@@ -84,6 +116,18 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
     const guiderName = p.guider_id ? nameById.get(p.guider_id) : null;
     if (builderName && guiderName) return `${builderName} ↔ ${guiderName}`;
     return `Pair ${p.id.slice(0, 6)}`;
+  };
+  const emailsFor = (p: (typeof pairs)[number]): string[] => {
+    const out: string[] = [];
+    if (p.builder_id) {
+      const e = emailById.get(p.builder_id);
+      if (e) out.push(e);
+    }
+    if (p.guider_id) {
+      const e = emailById.get(p.guider_id);
+      if (e) out.push(e);
+    }
+    return out;
   };
 
   let created = 0;
@@ -99,6 +143,7 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
         workshopName: game.workshop_name,
         pairLabel: labelFor(pair),
         gameCode: code,
+        attendeeEmails: emailsFor(pair),
       });
       await repo.setPairBreakout(pair.id, {
         call_url: result.meetUrl,

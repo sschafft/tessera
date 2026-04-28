@@ -38,6 +38,8 @@ interface CreateGamePayload {
   round_duration_seconds?: number;
   participant_cap?: number;
   sound_on?: boolean;
+  meeting_mode?: "remote" | "in_person";
+  breakout_provider?: "none" | "google_meet" | "jitsi";
 }
 
 const CUSTOM_TITLE_MAX = 80;
@@ -137,10 +139,29 @@ function validate(payload: CreateGamePayload): CreateGameInput | { error: string
     guiderCustom = v;
   }
 
+  // Meeting mode + breakout provider: validate the (mode, provider)
+  // pair. In-person can't have breakouts (everyone's in the same
+  // room). Provider must be one of the three known strings.
+  const meetingMode: "remote" | "in_person" =
+    payload.meeting_mode === "in_person" ? "in_person" : "remote";
+  const provider: "none" | "google_meet" | "jitsi" =
+    payload.breakout_provider === "google_meet"
+      ? "google_meet"
+      : payload.breakout_provider === "jitsi"
+        ? "jitsi"
+        : "none";
+  if (meetingMode === "in_person" && provider !== "none") {
+    return { error: "in_person mode cannot have breakouts" };
+  }
+
   return {
     workshop_name: payload.workshop_name.trim().slice(0, 80),
-    video_call_url: payload.video_call_url || null,
-    whiteboard_url: payload.whiteboard_url || null,
+    // In-person workshops drop the video / whiteboard URLs even if
+    // the form somehow sent them — they're meaningless co-located.
+    video_call_url:
+      meetingMode === "in_person" ? null : payload.video_call_url || null,
+    whiteboard_url:
+      meetingMode === "in_person" ? null : payload.whiteboard_url || null,
     team_mode: payload.team_mode,
     default_complexity: c,
     builder_brief_on: Boolean(payload.builder_brief_on),
@@ -153,6 +174,9 @@ function validate(payload: CreateGamePayload): CreateGameInput | { error: string
     round_duration_seconds: dur,
     participant_cap: cap,
     sound_on: payload.sound_on ?? true,
+    meeting_mode: meetingMode,
+    breakout_provider: provider,
+    breakouts_enabled: provider !== "none",
   };
 }
 

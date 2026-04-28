@@ -77,6 +77,9 @@ function toGameRecord(row: DbGame): GameRecord {
     scoring_correct_pts: row.scoring_correct_pts,
     scoring_wrong_pts: row.scoring_wrong_pts,
     breakouts_enabled: row.breakouts_enabled,
+    meeting_mode: (row.meeting_mode as "remote" | "in_person") ?? "remote",
+    breakout_provider:
+      (row.breakout_provider as "none" | "google_meet" | "jitsi") ?? "none",
   };
 }
 
@@ -92,6 +95,7 @@ function toParticipantRecord(row: DbParticipant): ParticipantRecord {
     last_seen_at: row.last_seen_at,
     released_at: row.released_at,
     recovery_token_hash: row.recovery_token_hash,
+    email: row.email ?? null,
   };
 }
 
@@ -124,6 +128,8 @@ export class SupabaseGameRepository implements GameRepository {
         participant_cap: input.participant_cap,
         sound_on: input.sound_on,
         breakouts_enabled: input.breakouts_enabled ?? false,
+        meeting_mode: input.meeting_mode ?? "remote",
+        breakout_provider: input.breakout_provider ?? "none",
         host_token_hash: input.host_token_hash,
         gm_participant_id: input.gm_participant_id,
       })
@@ -160,6 +166,7 @@ export class SupabaseGameRepository implements GameRepository {
         role: input.role,
         color: input.color,
         recovery_token_hash: input.recovery_token_hash ?? null,
+        email: input.email ?? null,
       })
       .select()
       .single();

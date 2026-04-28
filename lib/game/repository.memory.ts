@@ -88,6 +88,8 @@ class MemoryGameRepository implements GameRepository {
       scoring_correct_pts: 10,
       scoring_wrong_pts: 0,
       breakouts_enabled: input.breakouts_enabled ?? false,
+      meeting_mode: input.meeting_mode ?? "remote",
+      breakout_provider: input.breakout_provider ?? "none",
     };
     this.games.set(record.code, record);
     return record;
@@ -118,6 +120,7 @@ class MemoryGameRepository implements GameRepository {
       last_seen_at: now,
       released_at: null,
       recovery_token_hash: input.recovery_token_hash ?? null,
+      email: input.email ?? null,
     };
     this.participants.set(record.id, record);
     return record;

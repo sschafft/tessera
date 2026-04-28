@@ -3,6 +3,7 @@ import { Tile } from "@/components/canvas/Tile";
 import { Wordmark } from "@/components/primitives/Wordmark";
 import { Bullet } from "@/components/primitives/Bullet";
 import { GithubIcon, OssFooter } from "@/components/marketing/OssFooter";
+import { isGoogleConfigured } from "@/lib/google/oauth";
 import { LandingTabs } from "./LandingTabs";
 import { ResumeGames } from "./ResumeGames";
 
@@ -125,7 +126,7 @@ export function LandingHero() {
         </div>
 
         <div className="relative">
-          <LandingTabs />
+          <LandingTabs googleMeetAvailable={isGoogleConfigured()} />
           <div
             className="absolute -right-4 -top-5 rotate-[8deg] rounded-full px-4 py-2.5"
             style={{

@@ -19,6 +19,13 @@ export interface CreateBreakoutEventArgs {
   workshopName: string;
   pairLabel: string;
   gameCode: string;
+  /**
+   * Email addresses to attach as event attendees. When set, Meet
+   * recognises these accounts (if signed into Google) and lets them
+   * join without the knock screen — the whole reason we collect email
+   * at join time when breakout_provider='google_meet'.
+   */
+  attendeeEmails?: string[];
 }
 
 export interface CreateBreakoutEventResult {
@@ -47,6 +54,10 @@ export async function createBreakoutEvent(
 ): Promise<CreateBreakoutEventResult> {
   const { start, end } = pastAnchorWindow();
   const requestId = `tessera-${args.gameCode}-${args.pairLabel.replace(/\s+/g, "_")}-${Date.now()}`;
+  const attendees =
+    args.attendeeEmails && args.attendeeEmails.length > 0
+      ? args.attendeeEmails.map((email) => ({ email, responseStatus: "accepted" }))
+      : undefined;
   const body = {
     summary: `Tessera breakout · ${args.pairLabel} · ${args.workshopName}`,
     description:
@@ -58,6 +69,7 @@ export async function createBreakoutEvent(
     visibility: "private",
     transparency: "transparent",
     reminders: { useDefault: false },
+    ...(attendees ? { attendees, guestsCanModify: false } : {}),
     conferenceData: {
       createRequest: {
         requestId,

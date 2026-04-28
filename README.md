@@ -48,7 +48,11 @@ Minimum viable game: 1 GM + 1 Builder + 1 Guider.
 - **Live multi-pair dashboard.** GM sees every pair's progress at a glance, drills into any one, fires accelerants per-pair or globally, and can re-roll briefs per-side.
 - **Sealed briefs from three sources.** Pre-seeded library (~33 entries), GM free-text custom briefs, or AI-generated via a **provider router** that tries OpenAI (`gpt-4o-mini`) first for paid-tier reliability, falls back to Gemini (`gemini-2.5-flash-lite`) when OpenAI is unconfigured or down, and finally drops to the library if both AI providers fail. Atomic per-game / global daily caps protect free-tier quotas and the orchestrator surfaces a "use preset briefs" recovery modal to the GM if the AI path fails on round start.
 - **Curated super-powers rail.** The GM dashboard surfaces the **top 5** mechanics inline — prototype unlock, reveal briefs, requirement change, time pressure, randomizer — with a **More super powers** CTA that opens a fullscreen grid for the rest (agile share, test build, change builder/guider brief, make it harder/easier). Every super-power is a single-click GM mechanic that maps to a real-world facilitation lesson. Prototype + agile share are uncapped; everything else has small per-round caps. The rail also has an inline scoring tile (per-correct stepper + per-wrong penalty toggle, with a confirm modal when changing penalties mid-round).
-- **Optional per-pair Google Meet breakouts.** Facilitators who run pairs in parallel can sign in with Google from the master setup screen; Tessera mints one calendar event per pair via the Google Calendar API and surfaces the auto-attached Meet link as that pair's primary "Join your pair's call" CTA — the workshop-level video link demotes to a small "main room ↗" secondary link. Events are anchored 1 hour in the past, marked private, and deleted automatically when the GM ends the game (with a visible cleanup modal). OAuth is built on [`arctic`](https://arcticjs.dev) — small, audited, no SDK lock-in. Tokens are AES-256-GCM encrypted at rest. Players never sign in.
+- **In-person vs remote mode.** At game-create the GM picks "remote" (default) or "in-person." In-person hides the video / whiteboard / breakouts UI entirely — everyone is in the same room, so the off-platform call CTAs would just be noise.
+- **Optional per-pair breakouts (Google Meet or Jitsi).** Remote games can opt into per-pair breakouts via one of two providers:
+  - **Google Meet** — GM signs in with Google from Step 4; Tessera mints one private calendar event per pair via the Google Calendar API, attaches the participant emails as attendees so they bypass Meet's knock screen, and surfaces the auto-attached Meet link as that pair's "Join your pair's call" CTA. Events are anchored 1 hour in the past, marked private, and deleted automatically when the GM ends the game. OAuth is built on [`arctic`](https://arcticjs.dev). Tokens are AES-256-GCM encrypted at rest. *Players are asked for an email at join time only when this provider is selected.*
+  - **Jitsi** — free, no sign-in for anyone. Tessera generates a deterministic `meet.jit.si/tessera-<code>-<pair>` URL per pair with no API calls and no calendar pollution. Rooms are stateless on the public Jitsi server; nothing to delete at game-end.
+  When breakouts are active, the workshop-level video link demotes to a small "main room ↗" secondary link.
 - **Add briefs mid-game via super-powers.** When a GM creates a game with one or both briefs off, the rail relabels "Change builder/guider brief" to "Add builder/guider brief" — firing it both flips the side on for future rounds and mints a fresh brief for the current pair_round. Reveal Briefs disables itself when there's nothing to reveal.
 - **Brief envelope with minimise.** Players can minimise their brief to just the seal circle so it doesn't overlay the canvas, expand it again with one click, or re-seal it.
 - **Realtime updates.** Supabase Realtime broadcast keeps every connected client in sync within ~200ms; a 10-second polling loop is the fallback when sockets drop. Players see a "session lost" recovery banner when their cookie is invalidated mid-round instead of an empty canvas.
@@ -124,7 +128,7 @@ See [`design/TDD.md` §11](./design/TDD.md) for the full setup including Vercel 
 | `TESSERA_PUBLIC_URL` | server | Used in host-recovery URLs |
 | `OPENAI_API_KEY` | server only | Optional. Primary AI provider for brief generation (`gpt-4o-mini`). When set, the AI brief router prefers OpenAI over Gemini for higher-volume workshops where the free Gemini tier exhausts. |
 | `GEMINI_API_KEY` | server only | Optional. Free-tier fallback AI provider for brief generation (`gemini-2.5-flash-lite`). When neither AI key is set, every "AI-generated" brief is silently library-sourced. |
-| `GOOGLE_OAUTH_CLIENT_ID` | server only | Optional. Required for the per-pair Google Meet breakouts feature. Set both this and `GOOGLE_OAUTH_CLIENT_SECRET` to light up the **Step 4 · Per-pair breakout calls** card on the GM setup screen. The OAuth client must list `<host>/api/auth/google/callback` in its Authorized redirect URIs. |
+| `GOOGLE_OAUTH_CLIENT_ID` | server only | Optional. Required only for the **Google Meet** breakout provider. Set both this and `GOOGLE_OAUTH_CLIENT_SECRET` to enable the Google Meet option in the host form's breakout-provider picker; the OAuth client must list `<host>/api/auth/google/callback` in its Authorized redirect URIs. The Jitsi provider needs no env vars. |
 | `GOOGLE_OAUTH_CLIENT_SECRET` | server only | Optional. Paired with `GOOGLE_OAUTH_CLIENT_ID`. |
 
 ### Deploying to Vercel
@@ -133,7 +137,7 @@ See [`design/TDD.md` §11](./design/TDD.md) for the full setup including Vercel 
 2. In **Settings → Environment Variables**, add every row from the table above. Apply each to **Production**, **Preview**, and **Development** unless noted:
    - `OPENAI_API_KEY` — Production only is recommended (the paid OpenAI quota is shared across previews and could burn through unexpectedly during PR work).
    - `GEMINI_API_KEY` — Production only is recommended (previews fall back to library to avoid burning the free-tier quota).
-   - `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` — Production only is recommended. The redirect URI is derived from the request's origin at runtime, so each Vercel preview host you want to test breakouts on (e.g. `tessera-git-foo.vercel.app`) needs its `/api/auth/google/callback` URL added to the OAuth client's Authorized redirect URIs in Google Cloud Console.
+   - `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` — Production only is recommended, and only needed if you want to offer the Google Meet breakout provider. The redirect URI is derived from the request's origin at runtime, so each Vercel preview host you want to test Google Meet breakouts on (e.g. `tessera-git-foo.vercel.app`) needs its `/api/auth/google/callback` URL added to the OAuth client's Authorized redirect URIs in Google Cloud Console. The Jitsi provider works on every deployment with no extra config.
    - `TESSERA_PUBLIC_URL` — set to your custom domain on Production.
 3. Push to `main` → Vercel deploys to Production.
 4. Push to a branch → Vercel deploys a preview against the same Supabase project.
@@ -169,7 +173,7 @@ tessera/
 │   ├── sound/                 # Tone.js wrappers
 │   └── superpowers/           # Per-super-power policy + cooldown enforcement
 ├── styles/                    # globals.css + tessera.css design tokens
-├── supabase/migrations/       # 17 SQL migrations applied to tessera-dev
+├── supabase/migrations/       # 18 SQL migrations applied to tessera-dev
 ├── public/                    # Static assets
 └── design/                    # PRD, TDD, design_patterns, Claude Design handoff bundle
 ```

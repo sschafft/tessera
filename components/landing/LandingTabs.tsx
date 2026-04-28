@@ -20,7 +20,12 @@ const teamLabelToMode: Record<TeamLabel, TeamMode> = {
   "Players pick": "players_pick",
 };
 
-export function LandingTabs() {
+export interface LandingTabsProps {
+  /** Server-resolved: are Google OAuth env vars configured on this deployment? */
+  googleMeetAvailable: boolean;
+}
+
+export function LandingTabs({ googleMeetAvailable }: LandingTabsProps) {
   const [tab, setTab] = useState<Tab>("host");
 
   return (
@@ -55,7 +60,11 @@ export function LandingTabs() {
         ))}
       </div>
 
-      {tab === "host" ? <HostForm /> : <JoinForm />}
+      {tab === "host" ? (
+        <HostForm googleMeetAvailable={googleMeetAvailable} />
+      ) : (
+        <JoinForm />
+      )}
     </div>
   );
 }
@@ -84,11 +93,17 @@ function errorStyle(hasError: boolean): React.CSSProperties | undefined {
 
 type BriefSource = "library" | "gm" | "gemini";
 
-function HostForm() {
+type MeetingMode = "remote" | "in_person";
+type BreakoutProvider = "none" | "google_meet" | "jitsi";
+
+function HostForm({ googleMeetAvailable }: { googleMeetAvailable: boolean }) {
   const router = useRouter();
   const [workshopName, setWorkshopName] = useState("");
+  const [meetingMode, setMeetingMode] = useState<MeetingMode>("remote");
   const [videoCallUrl, setVideoCallUrl] = useState("");
   const [whiteboardUrl, setWhiteboardUrl] = useState("");
+  const [breakoutProvider, setBreakoutProvider] =
+    useState<BreakoutProvider>("none");
   // Always gm_picks — kept as a constant so the create payload still
   // has the field server-side.
   const team: TeamLabel = "Game master picks";
@@ -108,10 +123,18 @@ function HostForm() {
   function validate(): Record<string, string> {
     const next: Record<string, string> = {};
     if (!workshopName.trim()) next.workshop_name = "Give the workshop a name.";
-    if (videoCallUrl.trim() && !isLikelyUrl(videoCallUrl)) {
+    if (
+      meetingMode === "remote" &&
+      videoCallUrl.trim() &&
+      !isLikelyUrl(videoCallUrl)
+    ) {
       next.video_call_url = "Use a full URL (https://…) or leave it blank.";
     }
-    if (whiteboardUrl.trim() && !isLikelyUrl(whiteboardUrl)) {
+    if (
+      meetingMode === "remote" &&
+      whiteboardUrl.trim() &&
+      !isLikelyUrl(whiteboardUrl)
+    ) {
       next.whiteboard_url = "Use a full URL or leave it blank.";
     }
     if (builderBrief && builderBriefSource === "gm") {
@@ -147,13 +170,16 @@ function HostForm() {
     setSubmitting(true);
     setErrors({});
     try {
+      const remote = meetingMode === "remote";
       const res = await fetch("/api/games", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           workshop_name: workshopName,
-          video_call_url: videoCallUrl,
-          whiteboard_url: whiteboardUrl || null,
+          meeting_mode: meetingMode,
+          breakout_provider: remote ? breakoutProvider : "none",
+          video_call_url: remote ? videoCallUrl : "",
+          whiteboard_url: remote && whiteboardUrl ? whiteboardUrl : null,
           team_mode: teamLabelToMode[team],
           default_complexity: complexity,
           builder_brief_on: builderBrief,
@@ -243,40 +269,81 @@ function HostForm() {
         />
       </Field>
 
-      <div className="grid grid-cols-2 gap-3">
-        <Field
-          label="Video call link"
-          hint={errors.video_call_url ?? "optional"}
-        >
-          <input
-            className="t-input"
-            value={videoCallUrl}
-            onChange={(e) => {
-              setVideoCallUrl(e.target.value);
-              clearError("video_call_url");
-            }}
-            placeholder="https://meet.google.com/…"
-            aria-invalid={Boolean(errors.video_call_url)}
-            style={errorStyle(Boolean(errors.video_call_url))}
+      <Field label="Meeting type" hint="In-person skips video / whiteboard / breakouts">
+        <div className="flex gap-2">
+          {(
+            [
+              { value: "remote" as const, label: "Remote" },
+              { value: "in_person" as const, label: "In-person" },
+            ] satisfies Array<{ value: MeetingMode; label: string }>
+          ).map((opt) => {
+            const active = meetingMode === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setMeetingMode(opt.value)}
+                className="flex-1 cursor-pointer rounded-[10px] px-3 py-2 text-[13px] font-semibold transition-colors"
+                style={{
+                  background: active ? "var(--color-t-blue)" : "var(--color-paper-2)",
+                  color: active ? "#fff" : "var(--color-ink-2)",
+                  border: active
+                    ? "1.5px solid var(--color-t-blue)"
+                    : "1.5px solid var(--color-line)",
+                }}
+                aria-pressed={active}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      </Field>
+
+      {meetingMode === "remote" && (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <Field
+              label="Video call link"
+              hint={errors.video_call_url ?? "optional · workshop main room"}
+            >
+              <input
+                className="t-input"
+                value={videoCallUrl}
+                onChange={(e) => {
+                  setVideoCallUrl(e.target.value);
+                  clearError("video_call_url");
+                }}
+                placeholder="https://meet.google.com/…"
+                aria-invalid={Boolean(errors.video_call_url)}
+                style={errorStyle(Boolean(errors.video_call_url))}
+              />
+            </Field>
+            <Field
+              label="Whiteboard"
+              hint={errors.whiteboard_url ?? "optional"}
+            >
+              <input
+                className="t-input"
+                value={whiteboardUrl}
+                onChange={(e) => {
+                  setWhiteboardUrl(e.target.value);
+                  clearError("whiteboard_url");
+                }}
+                placeholder="https://miro.com/…"
+                aria-invalid={Boolean(errors.whiteboard_url)}
+                style={errorStyle(Boolean(errors.whiteboard_url))}
+              />
+            </Field>
+          </div>
+
+          <BreakoutProviderPicker
+            provider={breakoutProvider}
+            onChange={setBreakoutProvider}
+            googleMeetAvailable={googleMeetAvailable}
           />
-        </Field>
-        <Field
-          label="Whiteboard"
-          hint={errors.whiteboard_url ?? "optional"}
-        >
-          <input
-            className="t-input"
-            value={whiteboardUrl}
-            onChange={(e) => {
-              setWhiteboardUrl(e.target.value);
-              clearError("whiteboard_url");
-            }}
-            placeholder="https://miro.com/…"
-            aria-invalid={Boolean(errors.whiteboard_url)}
-            style={errorStyle(Boolean(errors.whiteboard_url))}
-          />
-        </Field>
-      </div>
+        </>
+      )}
 
       {/* Team assignment is always GM-picks now — players_pick added
           UX complexity without value, removed in v1.2. */}
@@ -477,6 +544,95 @@ function BriefSourceSection({
         </>
       )}
     </div>
+  );
+}
+
+const BREAKOUT_PROVIDER_OPTIONS = [
+  {
+    value: "none" as const,
+    label: "No breakouts",
+    sub: "Pairs stay in the main room",
+  },
+  {
+    value: "google_meet" as const,
+    label: "Google Meet",
+    sub: "Requires participant emails · GM signs in",
+  },
+  {
+    value: "jitsi" as const,
+    label: "Jitsi",
+    sub: "Free · no sign-in for anyone",
+  },
+] satisfies Array<{ value: BreakoutProvider; label: string; sub: string }>;
+
+function BreakoutProviderPicker({
+  provider,
+  onChange,
+  googleMeetAvailable,
+}: {
+  provider: BreakoutProvider;
+  onChange: (p: BreakoutProvider) => void;
+  googleMeetAvailable: boolean;
+}) {
+  return (
+    <Field
+      label="Breakout rooms"
+      hint="Each builder/guider pair gets a private call link"
+    >
+      <div className="flex flex-col gap-1.5">
+        {BREAKOUT_PROVIDER_OPTIONS.map((opt) => {
+          const active = provider === opt.value;
+          const disabled =
+            opt.value === "google_meet" && !googleMeetAvailable;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => {
+                if (disabled) return;
+                onChange(opt.value);
+              }}
+              disabled={disabled}
+              className="flex items-start gap-3 rounded-[12px] px-3 py-2.5 text-left transition-colors"
+              style={{
+                background: active ? "var(--color-tint-blue)" : "var(--color-paper-2)",
+                border: active
+                  ? "1.5px solid var(--color-t-blue)"
+                  : "1.5px solid var(--color-line)",
+                opacity: disabled ? 0.5 : 1,
+                cursor: disabled ? "not-allowed" : "pointer",
+              }}
+              aria-pressed={active}
+              aria-disabled={disabled}
+            >
+              <span
+                className="mt-0.5 inline-block h-3.5 w-3.5 flex-shrink-0 rounded-full"
+                style={{
+                  border: active
+                    ? "4px solid var(--color-t-blue)"
+                    : "1.5px solid var(--color-line)",
+                  background: "#fff",
+                }}
+                aria-hidden
+              />
+              <span className="flex flex-col gap-0.5">
+                <span
+                  className="text-[13px] font-semibold"
+                  style={{ color: active ? "var(--color-t-blue)" : "var(--color-ink)" }}
+                >
+                  {opt.label}
+                </span>
+                <span className="text-[11px] text-[var(--color-ink-3)]">
+                  {disabled
+                    ? "Not configured on this deployment"
+                    : opt.sub}
+                </span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </Field>
   );
 }
 
