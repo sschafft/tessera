@@ -675,25 +675,33 @@ function FocusedPairPlaceholder({
   round: LobbyRound | null;
   pairs: number;
 }) {
+  // Pre-round the placeholder card stretches to fill the full centre
+  // column instead of hugging its content. Otherwise the GM sees a
+  // small "Waiting for the round to start" rectangle at the top with
+  // a wide expanse of paper-2 below it — visually unfinished, and the
+  // empty space carries no information. flex-1 lets the card grow,
+  // and the inner content stays vertically centred via my-auto.
   return (
-    <div className="t-card flex flex-col items-center justify-center gap-3 px-8 py-16 text-center">
-      <div className="t-mono text-[11px] tracking-widest text-[var(--color-ink-3)]">
-        FOCUSED PAIR
+    <div className="t-card flex flex-1 flex-col items-center gap-3 px-8 py-16 text-center">
+      <div className="my-auto flex flex-col items-center gap-3">
+        <div className="t-mono text-[11px] tracking-widest text-[var(--color-ink-3)]">
+          FOCUSED PAIR
+        </div>
+        {round?.status === "running" ? (
+          <h2 className="t-display text-2xl">
+            Round {round.index} live · {pairs} pair{pairs === 1 ? "" : "s"}
+          </h2>
+        ) : (
+          <>
+            <h2 className="t-display text-2xl">Waiting for the round to start</h2>
+            <p className="max-w-md text-[14px] text-[var(--color-ink-2)]">
+              Once you allocate pairs in the sidebar, the <b>Start round</b>{" "}
+              button up top generates a fresh goal pattern for each pair and the
+              briefs in play appear here.
+            </p>
+          </>
+        )}
       </div>
-      {round?.status === "running" ? (
-        <h2 className="t-display text-2xl">
-          Round {round.index} live · {pairs} pair{pairs === 1 ? "" : "s"}
-        </h2>
-      ) : (
-        <>
-          <h2 className="t-display text-2xl">Waiting for the round to start</h2>
-          <p className="max-w-md text-[14px] text-[var(--color-ink-2)]">
-            Once you allocate pairs in the sidebar, the <b>Start round</b>{" "}
-            button up top generates a fresh goal pattern for each pair and the
-            briefs in play appear here.
-          </p>
-        </>
-      )}
     </div>
   );
 }
