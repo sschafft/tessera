@@ -251,10 +251,7 @@ function RecoverySaveModal({
           One-shot — keep this safe.
         </h2>
         <p className="text-[13px] text-[var(--color-ink-2)]">
-          If your browser closes, your tab swaps out, or your session cookie
-          gets clobbered (multi-tab on shared devices), this URL is the only
-          way back to your seat with the same name + role. It&apos;s also
-          saved in this browser&apos;s localStorage as a fallback.
+          If this tab closes, this URL is the only way back to your seat.
         </p>
       </div>
 

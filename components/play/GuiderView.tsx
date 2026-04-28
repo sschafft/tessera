@@ -33,6 +33,11 @@ export function GuiderView({ state }: GuiderViewProps) {
     const pair = state.pair;
     if (!pair) return;
     if (pair.display_name && pair.display_name.length > 0) return;
+    // Don't pop the naming modal mid-round — playtest #b4vnm8o20
+    // caught the modal sitting over the canvas and intercepting clicks
+    // on Test solution. Inline PairNameBadge stays available for
+    // mid-round renames.
+    if (state.round?.status === "running") return;
     const key = `tessera_pair_name_dismissed_${pair.id}`;
     if (
       typeof window !== "undefined" &&
@@ -41,7 +46,7 @@ export function GuiderView({ state }: GuiderViewProps) {
       return;
     }
     setShowNameNudge(true);
-  }, [state.pair]);
+  }, [state.pair, state.round?.status]);
   const dismissNameNudge = useCallback(() => {
     if (state.pair && typeof window !== "undefined") {
       window.sessionStorage.setItem(

@@ -396,31 +396,6 @@ function JoinForm() {
         />
       </Field>
 
-      <div
-        className="flex items-start gap-3 rounded-[14px] px-4 py-3.5"
-        style={{ background: "var(--color-tint-yellow)" }}
-      >
-        <div
-          className="grid h-6 w-6 flex-shrink-0 place-items-center"
-          style={{
-            borderRadius: 6,
-            background: "var(--color-t-yellow)",
-            fontFamily: "var(--font-display)",
-            fontWeight: 700,
-            fontSize: 14,
-          }}
-        >
-          i
-        </div>
-        <div
-          className="text-[13px]"
-          style={{ color: "#7a5b00", lineHeight: 1.45 }}
-        >
-          Your facilitator chose <b>Players pick teams</b> — you&apos;ll choose
-          your role on the next screen.
-        </div>
-      </div>
-
       {error && (
         <p className="text-[13px] text-[var(--color-t-red)]" role="alert">
           {error}
@@ -533,7 +508,7 @@ function CreatedConfirm({
       </div>
 
       <div
-        className="flex flex-col gap-2 rounded-[14px] px-4 py-3.5"
+        className="flex flex-col gap-1 rounded-[14px] px-4 py-3"
         style={{ background: "var(--color-tint-yellow)" }}
       >
         <div
@@ -546,8 +521,7 @@ function CreatedConfirm({
           className="text-[13px]"
           style={{ color: "#7a5b00", lineHeight: 1.45 }}
         >
-          If you close this tab, this is the <b>only way back</b> into the
-          game master dashboard. Bookmark it now.
+          If this tab closes, this URL is the only way back to your dashboard.
         </p>
       </div>
 

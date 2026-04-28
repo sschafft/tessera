@@ -598,6 +598,12 @@ function BuilderInteractive({ state }: { state: PlayState }) {
     (state.pair.display_name === null || state.pair.display_name === "");
   const onBriefClose = useCallback(() => {
     if (!state.pair || !pairNeedsName) return;
+    // Don't pop the naming modal mid-round. Playtest #b4vnm8o20 caught
+    // a builder unable to click `Test solution` because the modal was
+    // sitting over the canvas. The inline `PairNameBadge` stays
+    // available either way, so naming after the round starts can flow
+    // through that affordance instead of a blocking dialog.
+    if (state.round?.status === "running") return;
     const key = `tessera_pair_name_dismissed_${state.pair.id}`;
     if (
       typeof window !== "undefined" &&

@@ -44,11 +44,8 @@ export function BriefGate({ role }: BriefGateProps) {
           className="text-[13px] text-[var(--color-ink-2)]"
           style={{ lineHeight: 1.5 }}
         >
-          Your secret rules are in the envelope at the top right. Read them
-          before you start — and remember: <b>don&apos;t share the contents
-          of your brief with your partner</b>. They have a different one.
-          You can answer their yes / no questions like a game of 20
-          questions.
+          Your secret rules are in the envelope (top right). Open it to
+          start the round.
         </p>
         <span
           className="t-mono text-[11px] tracking-widest text-[var(--color-ink-3)]"
