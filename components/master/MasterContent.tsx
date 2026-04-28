@@ -6,7 +6,7 @@ import type { TileColor } from "@/components/canvas/Tile";
 import { MasterLobby } from "./MasterLobby";
 import { PairsPanel } from "./PairsPanel";
 import { TopBarControls } from "./TopBarControls";
-import { AccelerantsRail } from "./AccelerantsRail";
+import { AccelerantsRail, ScoringPanel } from "./AccelerantsRail";
 import { EndGameModal } from "./EndGameModal";
 import { GeminiFallbackModal } from "./GeminiFallbackModal";
 import { GameEndedView } from "@/components/play/GameEndedView";
@@ -602,26 +602,104 @@ export function MasterContent({
           </a>
         </div>
       )}
-      {/* Pre-round (no round, or round still in lobby/pending) the
-          middle "focused pair" column is dead weight — there's nothing
-          to observe yet, the placeholder card just took up space.
-          Drop the middle column entirely and let the lobby + pairs
-          sidebar fill the freed width. The right-side super-power
-          rail stays so the GM can pre-tune scoring + glance at
-          the (currently disabled) mechanics. The middle column
-          re-appears the moment a round is running or has data
-          worth observing (post-end debrief, etc.). */}
+      {/* Layout has two phases:
+          - Pre-round (no round yet, or round pending): single-column
+            "setup" flow with numbered Step sections (invite → lobby
+            → pairs → game settings). The super-power rail is hidden
+            entirely — its mechanics light up only during a round, so
+            showing them disabled is just visual noise. The whole
+            column is centered with a max-width to keep the setup
+            flow readable on wide displays.
+          - Round running OR ended (debrief): three-column dashboard
+            (320 lobby / 1fr focused pair / 360 super-power rail).
+          User feedback 2026-04-28 explicitly asked for both: hide
+          super-powers pre-round + add visible separation between
+          invite / lobby / game-settings. */}
       {(() => {
         const hasRoundContent =
           round !== null && round.status !== "pending";
+        if (!hasRoundContent) {
+          return (
+            <main
+              className="flex min-h-0 flex-1 flex-col overflow-y-auto"
+              style={{ background: "var(--color-paper)" }}
+            >
+              <div className="mx-auto flex w-full max-w-[760px] flex-col gap-4 px-5 py-6">
+                <SetupStep step={1} title="Invite players">
+                  <MasterLobby
+                    code={code}
+                    teamMode={teamMode}
+                    members={lobbyMembers}
+                    cap={cap}
+                    selected={selected}
+                    toggleSelect={toggleSelect}
+                    clearSelection={clearSelection}
+                    pollError={pollError}
+                    actionError={actionError}
+                    busy={busy}
+                    pairs={pairs}
+                    participants={participants}
+                    onAutoPairs={(count) =>
+                      allocate({ kind: "auto_pairs", count })
+                    }
+                    onAutoObservers={() =>
+                      allocate({ kind: "auto_observers" })
+                    }
+                    onPair={(builderId) => {
+                      const arr = Array.from(selected);
+                      if (arr.length !== 2) return;
+                      allocate({
+                        kind: "pair",
+                        participant_ids: arr,
+                        builder_id: builderId,
+                      });
+                    }}
+                    onObserver={(pairId) =>
+                      allocate({
+                        kind: "observer",
+                        participant_ids: Array.from(selected),
+                        pair_id: pairId,
+                      })
+                    }
+                  />
+                </SetupStep>
+                <SetupStep
+                  step={2}
+                  title="Pairs + observers"
+                  hint={
+                    pairs.length === 0
+                      ? "No pairs yet — pair players above before starting a round."
+                      : `${pairs.length} pair${pairs.length === 1 ? "" : "s"} ready.`
+                  }
+                >
+                  <PairsPanel
+                    pairs={pairs}
+                    participants={participants}
+                    focusedPairId={focusedPairId}
+                    onFocus={setFocusedPairId}
+                  />
+                </SetupStep>
+                <SetupStep
+                  step={3}
+                  title="Game settings"
+                  hint="Tune scoring before round 1. The super-power rail unlocks once a round is live."
+                >
+                  <ScoringPanel
+                    correctPts={data?.scoring.correct_pts ?? 10}
+                    wrongPts={data?.scoring.wrong_pts ?? 0}
+                    busy={busy}
+                    retroactive={false}
+                    onChange={updateScoring}
+                  />
+                </SetupStep>
+              </div>
+            </main>
+          );
+        }
         return (
           <div
             className="grid min-h-0 flex-1"
-            style={{
-              gridTemplateColumns: hasRoundContent
-                ? "320px 1fr 360px"
-                : "1fr 360px",
-            }}
+            style={{ gridTemplateColumns: "320px 1fr 360px" }}
           >
             <aside className="flex flex-col border-r border-[var(--color-line)] bg-white">
               <MasterLobby
@@ -666,24 +744,22 @@ export function MasterContent({
               />
             </aside>
 
-            {hasRoundContent && (
-              <main
-                className="flex flex-col gap-4 overflow-y-auto p-6"
-                style={{ background: "var(--color-paper-2)" }}
-              >
-                {focusedPair && data?.game_id ? (
-                  <MasterPairView
-                    code={code}
-                    gameId={data.game_id}
-                    pairId={focusedPair.id}
-                    onReroll={rerollBrief}
-                    busy={busy}
-                  />
-                ) : (
-                  <FocusedPairPlaceholder round={round} pairs={pairs.length} />
-                )}
-              </main>
-            )}
+            <main
+              className="flex flex-col gap-4 overflow-y-auto p-6"
+              style={{ background: "var(--color-paper-2)" }}
+            >
+              {focusedPair && data?.game_id ? (
+                <MasterPairView
+                  code={code}
+                  gameId={data.game_id}
+                  pairId={focusedPair.id}
+                  onReroll={rerollBrief}
+                  busy={busy}
+                />
+              ) : (
+                <FocusedPairPlaceholder round={round} pairs={pairs.length} />
+              )}
+            </main>
 
             <aside className="flex flex-col border-l border-[var(--color-line)] bg-white">
               <AccelerantsRail
@@ -716,6 +792,54 @@ export function MasterContent({
         onCancel={dismissGeminiFallback}
       />
     </>
+  );
+}
+
+function SetupStep({
+  step,
+  title,
+  hint,
+  children,
+}: {
+  step: number;
+  title: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section
+      className="t-card flex flex-col overflow-hidden"
+      style={{
+        background: "#fff",
+        border: "1.5px solid var(--color-line)",
+        boxShadow: "0 3px 0 rgba(0,0,0,.05)",
+      }}
+    >
+      <header
+        className="flex items-baseline gap-3 border-b border-[var(--color-line)] px-5 py-3"
+        style={{ background: "var(--color-paper)" }}
+      >
+        <span
+          aria-hidden="true"
+          className="grid h-6 w-6 flex-shrink-0 place-items-center rounded-full text-[11px] font-extrabold"
+          style={{
+            background: "var(--color-ink)",
+            color: "var(--color-paper)",
+          }}
+        >
+          {step}
+        </span>
+        <h2 className="t-display text-[15px] font-bold leading-none">
+          {title}
+        </h2>
+        {hint && (
+          <span className="t-mono ml-auto text-[11px] text-[var(--color-ink-3)]">
+            {hint}
+          </span>
+        )}
+      </header>
+      <div className="flex flex-col">{children}</div>
+    </section>
   );
 }
 
