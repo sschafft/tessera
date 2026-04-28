@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   POLICIES,
   countPriorEvents,
@@ -17,6 +17,23 @@ interface RailButtonSpec {
 }
 
 type TintColor = "blue" | "purple" | "green" | "orange" | "red" | "teal";
+
+// Verb override on the trigger CTA — defaults to "Fire" elsewhere.
+// Specific verbs make it crisper which mechanic the GM is about to
+// invoke ("Reveal" vs "Fire", "Re-roll" vs "Fire", etc.).
+const TRIGGER_LABELS: Partial<Record<AccelerantKind, string>> = {
+  prototype: "Show glimpse",
+  reveal_briefs: "Reveal",
+  test_build: "Enable testing",
+  agile_share: "Unlock share",
+  time_pressure: "Squeeze",
+  change_builder_brief: "Re-roll",
+  vocab_swap: "Re-roll",
+  randomizer: "Re-roll goal",
+  requirement_change: "Mutate one",
+  harder: "Harder",
+  easier: "Easier",
+};
 
 const BUTTONS: RailButtonSpec[] = [
   {
@@ -229,6 +246,7 @@ export function AccelerantsRail({
           />
         ) : null
       }
+      triggerLabel={TRIGGER_LABELS[b.kind]}
       onTrigger={onTrigger}
     />
   );
@@ -311,13 +329,21 @@ export function AccelerantsRail({
 }
 
 /**
- * Game-wide scoring config tile. Lets the GM bump the +/per-correct
- * value and toggle the flat wrong-attempts penalty (0 = off, -1 = on).
- * Sits at the top of the super-powers panel so it's always visible.
+ * Game-wide scoring config tile. Lets the GM bump the per-correct
+ * value (stepper) and pick the wrong-attempt penalty from a labelled
+ * preset row (Off / Light / Med / Hard). Sits at the top of the
+ * super-powers panel so it's always visible.
+ *
+ * Optimistic local state: each click immediately updates the visible
+ * value while the API call resolves. A transient "✓ saved" pip
+ * confirms the write. Earlier passes used live props directly which
+ * meant the value flickered through the polling round-trip — GMs
+ * tapped twice thinking the first didn't take.
  */
 function ScoringPanel({
   correctPts,
   wrongPts,
+  busy,
   onChange,
 }: {
   correctPts: number;
@@ -325,19 +351,71 @@ function ScoringPanel({
   busy: boolean;
   onChange: (patch: { correct_pts?: number; wrong_pts?: number }) => void;
 }) {
-  const bumpCorrect = (delta: number) => {
-    const next = Math.max(1, Math.min(100, correctPts + delta));
-    if (next !== correctPts) onChange({ correct_pts: next });
-  };
-  // Bounds: -10..0. With per-wrong scoring (score = correct*correctPts +
-  // wrong*wrongPts), -10 is brutal but still useful as a punishing knob.
-  const bumpWrong = (delta: number) => {
-    const next = Math.max(-10, Math.min(0, wrongPts + delta));
-    if (next !== wrongPts) onChange({ wrong_pts: next });
-  };
+  const [optCorrect, setOptCorrect] = useState<number | null>(null);
+  const [optWrong, setOptWrong] = useState<number | null>(null);
+  const [savedAt, setSavedAt] = useState(0);
+  const [savedVisible, setSavedVisible] = useState(false);
+
+  // Drop optimistic overrides once the server-side state catches up.
+  useEffect(() => {
+    if (optCorrect !== null && optCorrect === correctPts) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- optimistic-GC: server caught up.
+      setOptCorrect(null);
+    }
+  }, [correctPts, optCorrect]);
+  useEffect(() => {
+    if (optWrong !== null && optWrong === wrongPts) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- optimistic-GC: server caught up.
+      setOptWrong(null);
+    }
+  }, [wrongPts, optWrong]);
+  // Show "✓ saved" pip for ~1.4s after each click. Schedule the
+  // hide via a fresh timer keyed off savedAt so back-to-back clicks
+  // keep the pip visible.
+  useEffect(() => {
+    if (savedAt === 0) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot pip toggle off a per-save sentinel; the cleanup timer handles auto-hide.
+    setSavedVisible(true);
+    const id = window.setTimeout(() => setSavedVisible(false), 1400);
+    return () => window.clearTimeout(id);
+  }, [savedAt]);
+
+  const visibleCorrect = optCorrect ?? correctPts;
+  const visibleWrong = optWrong ?? wrongPts;
+
+  const bumpCorrect = useCallback(
+    (delta: number) => {
+      const next = Math.max(1, Math.min(100, visibleCorrect + delta));
+      if (next === visibleCorrect) return;
+      setOptCorrect(next);
+      setSavedAt(Date.now());
+      onChange({ correct_pts: next });
+    },
+    [visibleCorrect, onChange],
+  );
+  const setWrong = useCallback(
+    (next: number) => {
+      if (next === visibleWrong) return;
+      setOptWrong(next);
+      setSavedAt(Date.now());
+      onChange({ wrong_pts: next });
+    },
+    [visibleWrong, onChange],
+  );
+
+  const PENALTY_PRESETS: Array<{ value: number; label: string; sub: string }> =
+    [
+      { value: 0, label: "Off", sub: "no penalty" },
+      { value: -1, label: "Light", sub: "−1" },
+      { value: -3, label: "Med", sub: "−3" },
+      { value: -5, label: "Hard", sub: "−5" },
+    ];
+
+  const showSaved = savedVisible;
+
   return (
     <div
-      className="flex flex-col gap-2 rounded-[14px] bg-white p-3.5"
+      className="flex flex-col gap-2.5 rounded-[14px] bg-white p-3.5"
       style={{
         border: "1.5px solid var(--color-line)",
         boxShadow: "0 3px 0 rgba(0,0,0,.06)",
@@ -356,81 +434,113 @@ function ScoringPanel({
           ★
         </span>
         <div className="flex flex-1 flex-col gap-0.5">
-          <span className="text-[14px] font-bold">Scoring</span>
+          <div className="flex items-center gap-2">
+            <span className="text-[14px] font-bold">Scoring</span>
+            {showSaved && (
+              <span
+                className="t-mono rounded-full px-1.5 py-0.5 text-[10px] font-bold"
+                style={{
+                  background: "var(--color-tint-green)",
+                  color: "var(--color-t-green)",
+                }}
+                role="status"
+                aria-live="polite"
+              >
+                ✓ saved
+              </span>
+            )}
+          </div>
           <span
             className="block text-[12px] leading-tight"
             style={{ color: "var(--color-ink-3)" }}
           >
-            Tune the points awarded per correct piece, or punish wrong
-            attempts with a flat penalty.
+            Live across every pair. Changes apply on the next Test
+            solution and recompute existing scores.
           </span>
         </div>
       </div>
+
+      {/* Per-correct stepper */}
       <div className="flex items-center justify-between gap-2 pt-1">
         <span className="text-[12px] font-semibold text-[var(--color-ink-2)]">
-          Per correct
+          Per correct piece
         </span>
         <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={() => bumpCorrect(-1)}
-            disabled={correctPts <= 1}
-            className="t-mono grid h-6 w-6 place-items-center rounded-md border-[1.5px] border-[var(--color-line)] bg-white text-[12px] font-bold disabled:opacity-50"
+            disabled={busy || visibleCorrect <= 1}
+            className="t-mono grid h-7 w-7 place-items-center rounded-md border-[1.5px] border-[var(--color-line)] bg-white text-[14px] font-bold disabled:opacity-50"
             aria-label="Decrease points per correct"
           >
             −
           </button>
           <span
-            className="t-mono w-8 text-center text-[13px] font-bold"
+            className="t-mono w-10 text-center text-[14px] font-bold"
             style={{ color: "var(--color-ink)" }}
+            aria-live="polite"
           >
-            {correctPts}
+            +{visibleCorrect}
           </span>
           <button
             type="button"
             onClick={() => bumpCorrect(+1)}
-            disabled={correctPts >= 100}
-            className="t-mono grid h-6 w-6 place-items-center rounded-md border-[1.5px] border-[var(--color-line)] bg-white text-[12px] font-bold disabled:opacity-50"
+            disabled={busy || visibleCorrect >= 100}
+            className="t-mono grid h-7 w-7 place-items-center rounded-md border-[1.5px] border-[var(--color-line)] bg-white text-[14px] font-bold disabled:opacity-50"
             aria-label="Increase points per correct"
           >
             +
           </button>
         </div>
       </div>
-      <div
-        className="flex items-center justify-between gap-2"
-        title="Flat penalty applied if any placement is wrong on a Test."
-      >
+
+      {/* Wrong-attempt penalty preset row. Was a +/- stepper which
+          had inverted semantics on negative numbers and read
+          identically to "Per correct" — GMs reported it as
+          "not feasible to trigger". Discrete labelled presets make
+          the choice explicit. */}
+      <div className="flex flex-col gap-1.5 pt-1">
         <span className="text-[12px] font-semibold text-[var(--color-ink-2)]">
           Wrong-attempt penalty
         </span>
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => bumpWrong(-1)}
-            disabled={wrongPts <= -10}
-            className="t-mono grid h-6 w-6 place-items-center rounded-md border-[1.5px] border-[var(--color-line)] bg-white text-[12px] font-bold disabled:opacity-50"
-            aria-label="Increase penalty (more negative)"
-          >
-            −
-          </button>
-          <span
-            className="t-mono w-10 text-center text-[13px] font-bold"
-            style={{
-              color: wrongPts < 0 ? "var(--color-t-red)" : "var(--color-ink-3)",
-            }}
-          >
-            {wrongPts === 0 ? "off" : wrongPts}
-          </span>
-          <button
-            type="button"
-            onClick={() => bumpWrong(+1)}
-            disabled={wrongPts >= 0}
-            className="t-mono grid h-6 w-6 place-items-center rounded-md border-[1.5px] border-[var(--color-line)] bg-white text-[12px] font-bold disabled:opacity-50"
-            aria-label="Decrease penalty (toward 0)"
-          >
-            +
-          </button>
+        <div
+          className="flex gap-0.5 rounded-[10px] bg-[var(--color-paper-2)] p-1"
+          role="radiogroup"
+          aria-label="Wrong-attempt penalty"
+        >
+          {PENALTY_PRESETS.map((p) => {
+            const active = visibleWrong === p.value;
+            return (
+              <button
+                key={p.value}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                disabled={busy}
+                onClick={() => setWrong(p.value)}
+                className="flex-1 cursor-pointer rounded-[8px] border-none px-2 py-1.5 text-center transition-colors disabled:opacity-50"
+                style={{
+                  background: active ? "#fff" : "transparent",
+                  boxShadow: active ? "0 1px 3px rgba(0,0,0,.10)" : "none",
+                  color: active
+                    ? p.value < 0
+                      ? "var(--color-t-red)"
+                      : "var(--color-ink)"
+                    : "var(--color-ink-3)",
+                }}
+              >
+                <span className="block text-[11px] font-bold leading-none">
+                  {p.label}
+                </span>
+                <span
+                  className="t-mono mt-0.5 block text-[10px]"
+                  style={{ opacity: active ? 1 : 0.7 }}
+                >
+                  {p.sub}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -445,6 +555,7 @@ function RailButton({
   disabled,
   payload,
   extra,
+  triggerLabel,
   onTrigger,
 }: {
   spec: RailButtonSpec;
@@ -456,6 +567,8 @@ function RailButton({
   payload?: Record<string, unknown>;
   /** Optional inline control rendered below the spec body (e.g. duration knob). */
   extra?: React.ReactNode;
+  /** Override for the trigger CTA's verb — defaults to "Fire". */
+  triggerLabel?: string;
   onTrigger: (
     kind: string,
     scope: "pair" | "all",
@@ -476,16 +589,63 @@ function RailButton({
   const reachedCap = cap !== null && usedForScope >= cap;
   const notImplemented = !policy.implemented;
   const finalDisabled = disabled || reachedCap;
+  const verb = triggerLabel ?? "Fire";
+  const ctaLabel =
+    scope === "all" ? `${verb} on all pairs` : `${verb} on this pair`;
 
+  // Card layout deliberately separates "read + configure" from "fire":
+  // - Top row: icon, title, usage. Read-only.
+  // - Body: description + optional `extra` (e.g. duration knob).
+  // - Footer: a clearly-coloured CTA button — the *only* tap target
+  //   that actually triggers the super-power. Earlier passes wrapped
+  //   the entire card in a button with the `extra` controls nested
+  //   inside, which left GMs guessing what would fire vs configure.
   return (
     <div
-      className="relative flex w-full flex-col gap-2 rounded-[14px] border-[1.5px] bg-white p-3.5"
+      className="relative flex w-full flex-col gap-2.5 rounded-[14px] border-[1.5px] bg-white p-3.5"
       style={{
         borderColor: "var(--color-line)",
         boxShadow: "0 3px 0 rgba(0,0,0,.08)",
-        opacity: finalDisabled ? 0.5 : 1,
+        opacity: finalDisabled ? 0.55 : 1,
       }}
     >
+      <div className="flex items-start gap-3">
+        <span
+          aria-hidden="true"
+          className="grid h-[38px] w-[38px] flex-shrink-0 place-items-center rounded-[10px] text-[18px]"
+          style={{
+            background: `var(--color-tint-${spec.color})`,
+            color: `var(--color-t-${spec.color})`,
+            boxShadow: `inset 0 0 0 1.5px var(--color-t-${spec.color})`,
+          }}
+        >
+          {spec.icon}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="mb-0.5 flex items-center justify-between gap-2">
+            <span className="text-[14px] font-bold">{spec.title}</span>
+            <span className="t-mono text-[10px] opacity-70">{usageLabel}</span>
+          </div>
+          <p
+            className="block text-[12px] leading-tight"
+            style={{ color: "var(--color-ink-3)" }}
+          >
+            {spec.sub}
+          </p>
+          {notImplemented && (
+            <span
+              className="t-mono mt-1.5 inline-block rounded-full px-2 py-0.5 text-[10px]"
+              style={{
+                background: "var(--color-paper-2)",
+                color: "var(--color-ink-3)",
+              }}
+            >
+              soon
+            </span>
+          )}
+        </div>
+      </div>
+      {extra && <div>{extra}</div>}
       <button
         type="button"
         onClick={() =>
@@ -497,45 +657,21 @@ function RailButton({
           )
         }
         disabled={finalDisabled}
-        className="flex w-full cursor-pointer items-start gap-3 text-left disabled:cursor-not-allowed"
-        style={{ background: "transparent", border: "none", padding: 0 }}
-      >
-      <span
-        aria-hidden="true"
-        className="grid h-[38px] w-[38px] flex-shrink-0 place-items-center rounded-[10px] text-[18px]"
+        className="t-mono w-full rounded-[10px] px-3 py-2 text-[12px] font-bold uppercase tracking-wide transition-colors disabled:cursor-not-allowed"
         style={{
-          background: `var(--color-tint-${spec.color})`,
-          color: `var(--color-t-${spec.color})`,
-          boxShadow: `inset 0 0 0 1.5px var(--color-t-${spec.color})`,
+          background: finalDisabled
+            ? "var(--color-paper-2)"
+            : `var(--color-t-${spec.color})`,
+          color: finalDisabled ? "var(--color-ink-3)" : "#fff",
+          letterSpacing: ".08em",
+          boxShadow: finalDisabled
+            ? "none"
+            : "0 2px 0 rgba(0,0,0,.10), inset 0 -1px 0 rgba(0,0,0,.10)",
         }}
+        aria-label={`${ctaLabel}${reachedCap ? " — cap reached" : ""}`}
       >
-        {spec.icon}
-      </span>
-      <span className="flex-1 min-w-0">
-        <span className="mb-0.5 flex items-center justify-between">
-          <span className="text-[14px] font-bold">{spec.title}</span>
-          <span className="t-mono text-[10px] opacity-70">{usageLabel}</span>
-        </span>
-        <span
-          className="block text-[12px] leading-tight"
-          style={{ color: "var(--color-ink-3)" }}
-        >
-          {spec.sub}
-        </span>
-        {notImplemented && (
-          <span
-            className="t-mono mt-1.5 inline-block rounded-full px-2 py-0.5 text-[10px]"
-            style={{
-              background: "var(--color-paper-2)",
-              color: "var(--color-ink-3)",
-            }}
-          >
-            soon
-          </span>
-        )}
-      </span>
+        {reachedCap ? "Cap reached" : `${verb} →`}
       </button>
-      {extra && <div>{extra}</div>}
     </div>
   );
 }
