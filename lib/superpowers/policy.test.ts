@@ -111,8 +111,13 @@ describe("checkPolicy — caps", () => {
     expect(r.ok).toBe(true);
   });
 
-  it("prototype caps at 4 per pair", () => {
-    const events: PriorEvent[] = Array.from({ length: 4 }, (_, i) =>
+  it("prototype is uncapped (always returns ok regardless of prior usage)", () => {
+    // Prototype was previously capped at 4 per pair; the 2026-04-28
+    // playtest cycle removed the cap (GMs hit it at the wrong moment
+    // and had no escape valve). Cooldown still applies — see the
+    // cooldown describe block below.
+    expect(POLICIES.prototype.maxPerRound).toBeNull();
+    const events: PriorEvent[] = Array.from({ length: 12 }, (_, i) =>
       event("prototype", "pair", "p1", at(i * 30 - 600, now)),
     );
     const r = checkPolicy({
@@ -122,17 +127,17 @@ describe("checkPolicy — caps", () => {
       pair_id: "p1",
       now,
     });
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.reason).toBe("cap_exceeded");
+    expect(r.ok).toBe(true);
   });
 
-  it("prototype 3 prior usages still allow the 4th", () => {
-    const events: PriorEvent[] = Array.from({ length: 3 }, (_, i) =>
-      event("prototype", "pair", "p1", at(i * 30 - 600, now)),
+  it("agile_share is uncapped per the playtest revision", () => {
+    expect(POLICIES.agile_share.maxPerRound).toBeNull();
+    const events: PriorEvent[] = Array.from({ length: 8 }, (_, i) =>
+      event("agile_share", "pair", "p1", at(i * 60 - 600, now)),
     );
     const r = checkPolicy({
       events,
-      kind: "prototype",
+      kind: "agile_share",
       scope: "pair",
       pair_id: "p1",
       now,

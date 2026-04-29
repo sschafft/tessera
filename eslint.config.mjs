@@ -15,6 +15,9 @@ const eslintConfig = defineConfig([
     // Reference-only design handoff bundle from Claude Design — not our
     // code, just the source mockups we're porting from.
     "design/**",
+    // Vitest coverage report — generated, gitignored, but we still
+    // shouldn't let eslint complain about its dist files.
+    "coverage/**",
   ]),
 ]);
 
