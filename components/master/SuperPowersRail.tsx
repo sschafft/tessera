@@ -352,7 +352,6 @@ export function SuperPowersRail({
           firing Change builder brief — the cards were stacked too
           tightly with similar bottom-CTA shapes. */}
       <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-3.5">
-        {scoringPanel}
         {!roundRunning && (
           <p className="px-2 py-2 text-[12px] text-[var(--color-ink-3)]">
             Super powers light up while a round is in flight.

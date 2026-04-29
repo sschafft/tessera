@@ -67,6 +67,11 @@ export function PlayCanvas({
         const size = tileSizeFor(p.shape);
         const offset = (size - CELL) / 2;
         const isCorrect = correctness?.[i] === true;
+        // Halo is bound to the CELL (not the tile), so adjacent
+        // correct pieces don't overlap their halos. Tile still renders
+        // at its native size and rotation; the halo just indicates the
+        // cell is satisfied.
+        const haloInset = 3;
         return (
           <div key={i} style={{ position: "absolute", inset: 0 }}>
             {isCorrect && (
@@ -74,10 +79,10 @@ export function PlayCanvas({
                 aria-hidden="true"
                 style={{
                   position: "absolute",
-                  left: x - offset - 4,
-                  top: y - offset - 4,
-                  width: size + 8,
-                  height: size + 8,
+                  left: x + haloInset,
+                  top: y + haloInset,
+                  width: CELL - haloInset * 2,
+                  height: CELL - haloInset * 2,
                   borderRadius: 8,
                   background: "var(--color-tint-green)",
                   boxShadow: "0 0 0 2px var(--color-t-green)",
@@ -100,8 +105,11 @@ export function PlayCanvas({
                 aria-hidden="true"
                 style={{
                   position: "absolute",
-                  left: x - offset + size - 14,
-                  top: y - offset - 6,
+                  // Anchor the check badge to the cell's top-right
+                  // corner so it doesn't drift across cells when the
+                  // tile is bigger than the cell (rhomb / trap).
+                  left: x + CELL - 16,
+                  top: y - 4,
                   width: 18,
                   height: 18,
                   borderRadius: "50%",
@@ -113,6 +121,7 @@ export function PlayCanvas({
                   placeItems: "center",
                   boxShadow: "0 1px 2px rgba(0,0,0,.15)",
                   pointerEvents: "none",
+                  zIndex: 2,
                 }}
               >
                 ✓

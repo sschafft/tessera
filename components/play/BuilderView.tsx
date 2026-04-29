@@ -624,6 +624,7 @@ function BuilderInteractive({ state }: { state: PlayState }) {
             pairId={state.pair.id}
             displayName={state.pair.display_name}
             defaultName={defaultPairName}
+            showRenameTip={briefOpened}
           />
         )}
         <ModeBanner
@@ -814,7 +815,6 @@ function BuilderInteractive({ state }: { state: PlayState }) {
             disabled={visiblePieces.length === 0}
             testing={testing}
             result={testResult}
-            liveScore={state.live_score?.score ?? null}
             onTest={testSolution}
           />
         </div>
