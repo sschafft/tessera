@@ -157,6 +157,14 @@ class MemoryGameRepository implements GameRepository {
     if (p) p.last_seen_at = new Date().toISOString();
   }
 
+  async releaseParticipant(id: string): Promise<void> {
+    const p = this.participants.get(id);
+    if (!p) return;
+    p.released_at = new Date().toISOString();
+    p.pair_id = null;
+    p.role = "lobby";
+  }
+
   async createPair(
     game_id: string,
     builder_id: string,

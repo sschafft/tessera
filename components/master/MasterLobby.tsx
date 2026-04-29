@@ -25,6 +25,13 @@ export interface MasterLobbyProps {
   onAutoObservers: () => void;
   onPair: (builderId: string) => void;
   onObserver: (pairId: string) => void;
+  /**
+   * GM-side escape valve for stuck seats — frees a participant's
+   * display name so they can rejoin under it. Used when a player
+   * cleared cookies / lost their recovery URL and the unique-name
+   * constraint is now blocking them.
+   */
+  onRelease: (participantId: string, displayName: string) => void;
 }
 
 export function MasterLobby({
@@ -44,7 +51,14 @@ export function MasterLobby({
   onAutoObservers,
   onPair,
   onObserver,
+  onRelease,
 }: MasterLobbyProps) {
+  const selectedSingle =
+    Array.from(selected).find((id) => members.some((m) => m.id === id)) ?? null;
+  const selectedSingleMember =
+    selectedSingle !== null
+      ? members.find((m) => m.id === selectedSingle) ?? null
+      : null;
   const selectedIds = Array.from(selected).filter((id) =>
     members.some((m) => m.id === id),
   );
@@ -146,6 +160,19 @@ export function MasterLobby({
           />
         )}
 
+        {selectedCount === 1 && selectedSingleMember && (
+          <ReleaseSeatButton
+            displayName={selectedSingleMember.display_name}
+            disabled={busy}
+            onConfirm={() => {
+              onRelease(
+                selectedSingleMember.id,
+                selectedSingleMember.display_name,
+              );
+            }}
+          />
+        )}
+
         {selectedCount >= 3 && pairs.length > 0 && (
           <ObserverAssignButton
             pairs={pairs}
@@ -241,6 +268,68 @@ export function MasterLobby({
         </p>
       </div>
     </div>
+  );
+}
+
+function ReleaseSeatButton({
+  displayName,
+  disabled,
+  onConfirm,
+}: {
+  displayName: string;
+  disabled: boolean;
+  onConfirm: () => void;
+}) {
+  // Two-tap confirm to prevent accidental release. First tap arms the
+  // confirm state for ~3s; second tap fires.
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const id = window.setTimeout(() => setArmed(false), 3000);
+    return () => window.clearTimeout(id);
+  }, [armed]);
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        if (armed) {
+          onConfirm();
+          setArmed(false);
+        } else {
+          setArmed(true);
+        }
+      }}
+      disabled={disabled}
+      className="flex items-center justify-center gap-2 rounded-[10px] px-3 py-2 text-[12px] font-bold transition-colors disabled:opacity-50"
+      style={
+        armed
+          ? {
+              background: "var(--color-t-red)",
+              color: "#fff",
+              border: "1.5px solid var(--color-t-red)",
+            }
+          : {
+              background: "var(--color-paper-2)",
+              color: "var(--color-ink-2)",
+              border: "1.5px dashed var(--color-line)",
+            }
+      }
+      title={
+        armed
+          ? `Tap again to confirm — frees the name "${displayName}" so the player can rejoin.`
+          : `Free this seat (use when a player can't get back in — clears their cookie session and frees their display name).`
+      }
+    >
+      {armed ? (
+        <>
+          ⚠ Tap again to release{" "}
+          <span className="t-mono">&ldquo;{displayName}&rdquo;</span>
+        </>
+      ) : (
+        <>× Release stuck seat · {displayName}</>
+      )}
+    </button>
   );
 }
 

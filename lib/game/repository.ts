@@ -250,6 +250,16 @@ export interface GameRepository {
   touchParticipant(id: string): Promise<void>;
 
   /**
+   * Mark a participant as released — sets released_at = now() and
+   * clears their pair_id. Frees their display name for re-use within
+   * the game (the unique-name constraint is scoped to active
+   * participants only). Used by the GM-side "Release seat" affordance
+   * for stuck players whose cookie is gone and who don't have their
+   * recovery URL.
+   */
+  releaseParticipant(id: string): Promise<void>;
+
+  /**
    * Create a pair with a builder + guider, and atomically update both
    * participants' role + pair_id.
    */

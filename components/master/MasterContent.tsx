@@ -193,6 +193,17 @@ export function MasterContent({
     [doAction],
   );
 
+  const releaseSeat = useCallback(
+    (participantId: string) =>
+      doAction(
+        "release",
+        `/participants/${participantId}/release`,
+        null,
+        clearSelection,
+      ),
+    [doAction, clearSelection],
+  );
+
   const [geminiFallback, setGeminiFallback] = useState<{
     failedRole: "builder" | "guider" | null;
   } | null>(null);
@@ -673,6 +684,7 @@ export function MasterContent({
                         pair_id: pairId,
                       })
                     }
+                    onRelease={releaseSeat}
                   />
                 </SetupStep>
                 <SetupStep
@@ -776,6 +788,7 @@ export function MasterContent({
                     pair_id: pairId,
                   })
                 }
+                onRelease={releaseSeat}
               />
               <PairsPanel
                 pairs={pairs}
