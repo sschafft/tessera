@@ -16,28 +16,18 @@ export interface TestSolutionCTAProps {
   disabled: boolean;
   testing: boolean;
   result: TestResult | null;
-  /**
-   * Latest server-side score from realtime — used to spot when scoring
-   * config moved out from under the test result (e.g. GM toggled the
-   * wrong-penalty mid-round, retroactively recomputing scores).
-   */
-  liveScore: number | null;
   onTest: () => void;
 }
 
 /**
  * Builder's "Test solution" CTA + the result card that pulses after
  * each press. The card is a snapshot of the moment of test; the live
- * score chip elsewhere is the canonical current value. When the two
- * disagree (scoring config changed since the test), the card surfaces
- * a small "scoring rules changed" annotation pointing the player at
- * the live truth.
+ * score chip elsewhere is the canonical current value.
  */
 export function TestSolutionCTA({
   disabled,
   testing,
   result,
-  liveScore,
   onTest,
 }: TestSolutionCTAProps) {
   // The result chip pulses on every Test-solution submission. The
@@ -45,8 +35,6 @@ export function TestSolutionCTA({
   // remounts the div and replays the CSS animation — no need for a
   // counter-in-effect to drive the remount.
   const anyCorrect = (result?.correct ?? 0) > 0;
-  const scoreShifted =
-    result !== null && liveScore !== null && liveScore !== result.score;
   return (
     <div className="mt-2 flex w-full max-w-[640px] flex-col items-center gap-3">
       {result && (
@@ -85,8 +73,8 @@ export function TestSolutionCTA({
                   : "var(--color-ink)",
               }}
             >
-              {result.score >= 0 ? `+${result.score}` : `${result.score}`}{" "}
-              point{Math.abs(result.score) === 1 ? "" : "s"}
+              {result.score} point
+              {Math.abs(result.score) === 1 ? "" : "s"}
             </span>
             <span className="text-[12px] text-[var(--color-ink-2)]">
               {result.correct} right · {result.wrong} wrong
@@ -94,15 +82,6 @@ export function TestSolutionCTA({
                 ? ` · penalty ${result.wrongPts} applied`
                 : ""}
             </span>
-            {scoreShifted && (
-              <span
-                className="t-mono text-[10px] font-bold uppercase tracking-wide"
-                style={{ color: "var(--color-t-purple)" }}
-                aria-live="polite"
-              >
-                ↻ scoring rules changed · current total: {liveScore} pts
-              </span>
-            )}
           </div>
           <span className="t-mono text-[10px] uppercase tracking-widest text-[var(--color-ink-3)]">
             tap test again any time

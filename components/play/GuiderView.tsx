@@ -99,6 +99,12 @@ export function GuiderView({ state }: GuiderViewProps) {
   const showCoords = (state.round.complexity ?? 5) <= 4;
   const partnerName = state.partner?.display_name ?? "builder";
   const defaultPairName = `${state.me.display_name} ↔ ${partnerName}`;
+  // Only render the brief aside (320px right rail) when there's
+  // actually a brief to show. Without this, an empty aside reserves
+  // its width and pushes the canvas off-centre.
+  const hasAside = Boolean(
+    (state.brief && state.brief.role === "guider") || state.partner_brief,
+  );
   return (
     <section className="relative flex w-full flex-1 gap-4 p-6">
       {state.pair && (
@@ -108,6 +114,7 @@ export function GuiderView({ state }: GuiderViewProps) {
             pairId={state.pair.id}
             displayName={state.pair.display_name}
             defaultName={defaultPairName}
+            showRenameTip={briefOpened}
           />
         </div>
       )}
@@ -198,6 +205,7 @@ export function GuiderView({ state }: GuiderViewProps) {
       </p>
 
       </div>
+      {hasAside && (
       <aside
         className="relative flex flex-shrink-0 flex-col items-end gap-3 pt-4"
         style={{ width: 320, zIndex: 30 }}
@@ -236,6 +244,7 @@ export function GuiderView({ state }: GuiderViewProps) {
             collaboration signal is now the goal correctness overlay
             + the score chip, not a miniature canvas mirror. */}
       </aside>
+      )}
 
       {!briefOpened && <BriefGate role="guider" />}
       {showNameNudge && state.pair && (

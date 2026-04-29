@@ -21,7 +21,11 @@ export function CanvasGridBg({ width, height }: CanvasGridBgProps) {
       style={{
         position: "absolute",
         inset: 0,
-        opacity: 0.6,
+        // Bumped from 0.6 → 1.0 with a stronger ink shade. Players
+        // reported the cells were hard to see when describing
+        // positions on the call ("the row second from the top"
+        // requires the grid lines to actually read).
+        opacity: 1,
         pointerEvents: "none",
       }}
       aria-hidden="true"
@@ -38,7 +42,7 @@ export function CanvasGridBg({ width, height }: CanvasGridBgProps) {
           <path
             d={`M ${CELL} 0 L 0 0 0 ${CELL}`}
             fill="none"
-            stroke="rgba(60,40,10,.14)"
+            stroke="rgba(60,40,10,.32)"
             strokeWidth="1"
           />
         </pattern>

@@ -66,31 +66,26 @@ export function BriefEnvelope({
     setView("open");
     onOpen?.();
   };
-  // Minimise: collapses to seal circle. Does NOT trigger onClose —
-  // playtests showed the pair-name nudge popping when players just
-  // wanted to get the brief out of the way, which felt unrelated.
-  // onClose only fires on the explicit × re-seal action OR an outside
-  // click on the open card (treated as the same gesture — see effect
-  // below).
-  const handleMinimize = () => {
+  // The single close affordance (×) collapses the open card to the
+  // minimised seal circle. Playtests showed the dual − / × buttons
+  // were confusing — players couldn't tell what the difference was
+  // and clicked one or the other without knowing which they wanted.
+  // One button, one outcome: tuck the brief out of the way; the
+  // circle remains tappable to bring it back. onClose still fires so
+  // the pair-name nudge gets its trigger.
+  const handleClose = () => {
     setView("minimized");
     onMinimize?.();
-  };
-  const handleSeal = () => {
-    setView("sealed");
     onClose?.();
   };
 
-  // Outside-click sealing: when the open card is up AND this envelope
-  // owns an onClose callback (i.e. it's the player's own brief, not a
-  // partner brief revealed by the super-power), treat a click anywhere
-  // outside it as a re-seal. Mirrors the × button so the pair-name
-  // nudge that GuiderView/BuilderView wire onto onClose fires on
-  // either gesture. Playtest 2026-04-27 surfaced the gap — players
-  // closed by clicking the canvas behind the envelope and never saw
-  // the naming prompt. Partner briefs intentionally don't get this
-  // behaviour (no onClose to fire) so glancing at the canvas while
-  // a partner brief is up doesn't snap it shut.
+  // Outside-click → minimise (same outcome as ×). When the open card
+  // is up AND this envelope owns an onClose callback (i.e. it's the
+  // player's own brief, not a partner brief revealed by the
+  // super-power), treat a click anywhere outside it as a tuck-away.
+  // Partner briefs intentionally don't get this behaviour (no onClose
+  // to fire) so glancing at the canvas while a partner brief is up
+  // doesn't snap it shut.
   const cardRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (view !== "open") return;
@@ -99,7 +94,7 @@ export function BriefEnvelope({
       const card = cardRef.current;
       if (!card) return;
       if (e.target instanceof Node && card.contains(e.target)) return;
-      handleSeal();
+      handleClose();
     };
     // Microtask delay so the click that opened the envelope (if it
     // happened in the same tick) doesn't immediately fire the
@@ -111,7 +106,7 @@ export function BriefEnvelope({
       window.clearTimeout(id);
       window.removeEventListener("pointerdown", onPointerDown);
     };
-    // handleSeal closes over view + onClose; since we only attach the
+    // handleClose closes over view + onClose; since we only attach the
     // listener while view==='open', re-running on view change is the
     // correct semantic.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -235,35 +230,15 @@ export function BriefEnvelope({
             ? `● ${roleLabel.toUpperCase()} · REVEALED`
             : `● ${roleLabel.toUpperCase()} · CONFIDENTIAL`}
         </span>
-        <div className="flex items-center gap-0.5">
-          <button
-            type="button"
-            onClick={handleMinimize}
-            aria-label="Minimise envelope to the seal"
-            title="Minimise"
-            className="grid h-7 w-7 place-items-center rounded-md text-[var(--color-ink-2)] hover:bg-[var(--color-paper-2)]"
-          >
-            <span
-              aria-hidden="true"
-              style={{
-                display: "block",
-                width: 12,
-                height: 2,
-                background: "currentColor",
-                borderRadius: 1,
-              }}
-            />
-          </button>
-          <button
-            type="button"
-            onClick={handleSeal}
-            aria-label="Seal envelope"
-            title="Re-seal"
-            className="grid h-7 w-7 place-items-center rounded-md text-[18px] text-[var(--color-ink-2)] hover:bg-[var(--color-paper-2)]"
-          >
-            ×
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={handleClose}
+          aria-label="Tuck envelope into the seal circle"
+          title="Tuck into the seal circle"
+          className="grid h-7 w-7 place-items-center rounded-md text-[18px] text-[var(--color-ink-2)] hover:bg-[var(--color-paper-2)]"
+        >
+          ×
+        </button>
       </div>
       <div
         className="t-display mb-2.5"
