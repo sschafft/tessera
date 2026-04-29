@@ -5,6 +5,7 @@ import { Wordmark } from "@/components/primitives/Wordmark";
 import { RoleChip, type Role } from "@/components/primitives/RoleChip";
 import { Avatar } from "@/components/primitives/Avatar";
 import type { TileColor } from "@/components/canvas/Tile";
+import { usableCallUrl } from "@/lib/util/url";
 
 export interface PlayTopBarProps {
   code: string;
@@ -99,32 +100,6 @@ export function PlayTopBar({
   );
 }
 
-// Mirror lib's placeholder filter — example.com / localhost shouldn't
-// surface to players. JoinCallCta already does this; the top-bar
-// LinksBar got missed and players (per playtest) flagged the raw
-// "meet.example.com" pill as undermining trust.
-const PLACEHOLDER_HOSTS = new Set([
-  "example.com",
-  "example.org",
-  "example.net",
-  "localhost",
-  "127.0.0.1",
-]);
-function isPlaceholderUrl(url: string): boolean {
-  try {
-    const u = new URL(url);
-    return [...PLACEHOLDER_HOSTS].some(
-      (h) => u.hostname === h || u.hostname.endsWith(`.${h}`),
-    );
-  } catch {
-    return true;
-  }
-}
-function usableUrl(url: string | null): string | null {
-  if (!url) return null;
-  return isPlaceholderUrl(url) ? null : url;
-}
-
 function LinksBar({
   videoCallUrl: rawVideoCallUrl,
   whiteboardUrl: rawWhiteboardUrl,
@@ -134,9 +109,9 @@ function LinksBar({
   whiteboardUrl: string | null;
   breakoutCallUrl: string | null;
 }) {
-  const videoCallUrl = usableUrl(rawVideoCallUrl);
-  const whiteboardUrl = usableUrl(rawWhiteboardUrl);
-  const breakoutCallUrl = usableUrl(rawBreakoutCallUrl);
+  const videoCallUrl = usableCallUrl(rawVideoCallUrl);
+  const whiteboardUrl = usableCallUrl(rawWhiteboardUrl);
+  const breakoutCallUrl = usableCallUrl(rawBreakoutCallUrl);
   if (!videoCallUrl && !whiteboardUrl && !breakoutCallUrl) return null;
   // The "Main room" label is consistent across the breakout-on / off
   // state — stable terminology beats two slightly different chips

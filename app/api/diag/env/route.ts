@@ -8,11 +8,7 @@ export const runtime = "nodejs";
  * verify Vercel scope settings without exposing secrets.
  *
  * Usage:
- *   curl https://tessera.schaffters.com/api/diag/clerk
- *
- * (The endpoint kept its `clerk` name from a brief Clerk-based
- *  iteration; the underlying auth is a direct Google OAuth flow
- *  built on `arctic`. Fields below reflect the current shape.)
+ *   curl https://tessera.schaffters.com/api/diag/env
  */
 export async function GET() {
   return NextResponse.json({

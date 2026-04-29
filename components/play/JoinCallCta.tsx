@@ -1,5 +1,7 @@
 "use client";
 
+import { usableCallUrl } from "@/lib/util/url";
+
 export interface JoinCallCtaProps {
   /**
    * Workshop-level "main room" link from game create. When a pair-
@@ -19,30 +21,6 @@ export interface JoinCallCtaProps {
   size?: "lg" | "md";
 }
 
-const PLACEHOLDER_HOSTS = new Set([
-  "example.com",
-  "example.org",
-  "example.net",
-  "localhost",
-  "127.0.0.1",
-]);
-
-function isPlaceholderUrl(url: string): boolean {
-  try {
-    const u = new URL(url);
-    return [...PLACEHOLDER_HOSTS].some(
-      (h) => u.hostname === h || u.hostname.endsWith(`.${h}`),
-    );
-  } catch {
-    return true;
-  }
-}
-
-function usable(url: string | null | undefined): string | null {
-  if (!url) return null;
-  return isPlaceholderUrl(url) ? null : url;
-}
-
 /**
  * "Join the call" surface. Three modes, picked off the props:
  *   1. Pair breakout URL set → primary CTA points at the breakout,
@@ -59,8 +37,8 @@ export function JoinCallCta({
   size = "lg",
 }: JoinCallCtaProps) {
   const big = size === "lg";
-  const breakout = usable(breakoutCallUrl);
-  const main = usable(videoCallUrl);
+  const breakout = usableCallUrl(breakoutCallUrl);
+  const main = usableCallUrl(videoCallUrl);
 
   if (!breakout && !main) {
     if (whiteboardUrl) {

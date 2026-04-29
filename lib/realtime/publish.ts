@@ -9,7 +9,8 @@ import { topicFor } from "./topic";
  * role key as auth.
  *
  * Failure mode: log + swallow. Realtime is a freshness layer; if it
- * goes down, the 30-second polling fallback takes over.
+ * goes down, the 10-second polling fallback in PlayContent /
+ * MasterContent takes over.
  */
 export async function publishGameEvent(
   game_id: string,

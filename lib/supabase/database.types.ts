@@ -145,7 +145,6 @@ export type Database = {
       games: {
         Row: {
           breakout_provider: string
-          breakouts_enabled: boolean
           builder_brief_custom: Json | null
           builder_brief_on: boolean
           builder_brief_source: Database["public"]["Enums"]["brief_source_t"]
@@ -176,7 +175,6 @@ export type Database = {
         }
         Insert: {
           breakout_provider?: string
-          breakouts_enabled?: boolean
           builder_brief_custom?: Json | null
           builder_brief_on?: boolean
           builder_brief_source?: Database["public"]["Enums"]["brief_source_t"]
@@ -207,7 +205,6 @@ export type Database = {
         }
         Update: {
           breakout_provider?: string
-          breakouts_enabled?: boolean
           builder_brief_custom?: Json | null
           builder_brief_on?: boolean
           builder_brief_source?: Database["public"]["Enums"]["brief_source_t"]
