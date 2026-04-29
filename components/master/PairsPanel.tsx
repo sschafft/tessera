@@ -9,6 +9,16 @@ export interface PairsPanelProps {
   participants: LobbyParticipant[];
   focusedPairId: string | null;
   onFocus: (id: string) => void;
+  /**
+   * True when a round is in flight. Disables pre-round-only actions
+   * like swap-roles on the pair rows.
+   */
+  roundRunning?: boolean;
+  /**
+   * Pre-round only — flips a pair's builder ↔ guider. Wired through
+   * to /api/games/[code]/pairs/[pair_id]/swap-roles.
+   */
+  onSwapRoles?: (pair_id: string) => void;
   /** Optional breakouts strip — shows mid-round Generate / Clear when
    * the game uses jitsi or google_meet. Hidden when provider='none'. */
   breakouts?: {
@@ -25,6 +35,8 @@ export function PairsPanel({
   participants,
   focusedPairId,
   onFocus,
+  roundRunning = false,
+  onSwapRoles,
   breakouts,
 }: PairsPanelProps) {
   const byId = new Map(participants.map((p) => [p.id, p]));
@@ -67,6 +79,13 @@ export function PairsPanel({
               observers={observersByPair.get(pair.id) ?? []}
               focused={focusedPairId === pair.id}
               onFocus={() => onFocus(pair.id)}
+              canSwapRoles={
+                !roundRunning &&
+                Boolean(onSwapRoles) &&
+                Boolean(pair.builder_id) &&
+                Boolean(pair.guider_id)
+              }
+              onSwapRoles={onSwapRoles ? () => onSwapRoles(pair.id) : undefined}
             />
           ))
         )}
@@ -194,6 +213,8 @@ function PairRow({
   observers,
   focused,
   onFocus,
+  canSwapRoles,
+  onSwapRoles,
 }: {
   pair: LobbyPair;
   builder?: LobbyParticipant;
@@ -201,6 +222,8 @@ function PairRow({
   observers: LobbyParticipant[];
   focused: boolean;
   onFocus: () => void;
+  canSwapRoles: boolean;
+  onSwapRoles?: () => void;
 }) {
   const progress = pair.progress;
   const isComplete = progress?.complete === true;
@@ -279,10 +302,25 @@ function PairRow({
           complete={isComplete}
         />
       )}
-      <div className="flex items-center justify-between text-[11px]">
+      <div className="flex items-center justify-between gap-2 text-[11px]">
         <span className="text-[var(--color-ink-3)]">
           builder · {builder?.display_name ?? "—"}
         </span>
+        {canSwapRoles && onSwapRoles && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSwapRoles();
+            }}
+            className="t-mono rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--color-ink-2)] hover:bg-[var(--color-paper-2)]"
+            style={{ border: "1.5px solid var(--color-line)" }}
+            title="Swap which player is builder vs guider for this pair (pre-round only)."
+            aria-label={`Swap builder and guider for ${builder?.display_name ?? "?"} ↔ ${guider?.display_name ?? "?"}`}
+          >
+            ⇄ swap
+          </button>
+        )}
         <span className="text-[var(--color-ink-3)]">
           guider · {guider?.display_name ?? "—"}
         </span>

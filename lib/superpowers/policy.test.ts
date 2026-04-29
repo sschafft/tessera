@@ -97,13 +97,16 @@ describe("checkPolicy — caps", () => {
   });
 
   it("uncapped kinds always allow", () => {
+    // change_builder_brief is uncapped (the 'change/add brief' super-power
+    // can fire as many times as the GM wants in a round). Verify the
+    // policy doesn't reject by count.
     const events: PriorEvent[] = Array.from({ length: 50 }, (_, i) =>
-      event("test_build", "pair", "p1", at(i * 10, now)),
+      event("change_builder_brief", "pair", "p1", at(i * 10, now)),
     );
-    expect(POLICIES.test_build.maxPerRound).toBeNull();
+    expect(POLICIES.change_builder_brief.maxPerRound).toBeNull();
     const r = checkPolicy({
       events,
-      kind: "test_build",
+      kind: "change_builder_brief",
       scope: "pair",
       pair_id: "p1",
       now,
@@ -179,12 +182,15 @@ describe("checkPolicy — cooldown", () => {
   });
 
   it("kinds with cooldown=0 don't gate even on identical-timestamp events", () => {
+    // reveal_briefs has cooldownSeconds=0; firing it twice with no
+    // gap is a per-round-cap problem (cap=1), not a cooldown problem.
+    // Use change_builder_brief which is uncapped + no cooldown.
     const events: PriorEvent[] = [
-      event("test_build", "pair", "p1", at(0, now)),
+      event("change_builder_brief", "pair", "p1", at(0, now)),
     ];
     const r = checkPolicy({
       events,
-      kind: "test_build",
+      kind: "change_builder_brief",
       scope: "pair",
       pair_id: "p1",
       now,

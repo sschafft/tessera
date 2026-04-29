@@ -323,6 +323,14 @@ export interface PairStore {
   findById(pair_id: string): Promise<PairRecord | null>;
 
   /**
+   * Swap a pair's builder ↔ guider. Flips the pair row's
+   * builder_id / guider_id and the two participants' role columns.
+   * Pre-round operation — the route handler refuses when the latest
+   * round is `running`.
+   */
+  swapRoles(pair_id: string): Promise<void>;
+
+  /**
    * Add a participant to an existing pair as an observer. Updates the
    * participant's role + pair_id; does not modify the pair row.
    */

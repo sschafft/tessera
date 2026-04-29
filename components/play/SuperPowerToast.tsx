@@ -30,7 +30,6 @@ const KIND_COPY: Record<string, { icon: string; label: string; tint: string }> =
 const SUPER_POWER_KINDS: Record<string, string> = {
   prototype: "🔮 Prototype unlock",
   reveal_briefs: "📖 Reveal briefs",
-  test_build: "✓ Test build enabled",
   agile_share: "↻ Agile share",
   time_pressure: "⏱ Time pressure",
   change_guider_brief: "✦ Change guider brief",

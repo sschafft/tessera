@@ -136,6 +136,7 @@ export class SupabaseGameRepository implements GameRepository {
       this.createPair(game_id, builder_id, guider_id),
     list: (game_id) => this.listPairs(game_id),
     findById: (pair_id) => this.findPairById(pair_id),
+    swapRoles: (pair_id) => this.swapPairRoles(pair_id),
     assignObserver: (pid, pair_id) => this.assignObserver(pid, pair_id),
     setDisplayName: (pair_id, name) => this.setPairDisplayName(pair_id, name),
     clearAllocations: (game_id) => this.clearAllocations(game_id),
@@ -335,6 +336,42 @@ export class SupabaseGameRepository implements GameRepository {
       })
       .eq("id", id);
     if (error) throw new Error(`releaseParticipant: ${error.message}`);
+  }
+
+  async swapPairRoles(pair_id: string): Promise<void> {
+    const supabase = getServiceClient();
+    const { data: pair, error: pairErr } = await supabase
+      .from("pairs")
+      .select("id, builder_id, guider_id")
+      .eq("id", pair_id)
+      .single();
+    if (pairErr || !pair) {
+      throw new Error(`swapPairRoles: pair lookup ${pairErr?.message ?? "unknown"}`);
+    }
+    const { builder_id, guider_id } = pair;
+    if (!builder_id || !guider_id) {
+      throw new Error("swapPairRoles: pair missing builder or guider");
+    }
+    // Flip the pair row + both participants' role columns. Three
+    // discrete updates; the GM is the only mutator pre-round so the
+    // window for racing is essentially zero.
+    const { error: pairUpdateErr } = await supabase
+      .from("pairs")
+      .update({ builder_id: guider_id, guider_id: builder_id })
+      .eq("id", pair_id);
+    if (pairUpdateErr) {
+      throw new Error(`swapPairRoles: pair update ${pairUpdateErr.message}`);
+    }
+    const { error: aErr } = await supabase
+      .from("participants")
+      .update({ role: "guider" })
+      .eq("id", builder_id);
+    if (aErr) throw new Error(`swapPairRoles: a ${aErr.message}`);
+    const { error: bErr } = await supabase
+      .from("participants")
+      .update({ role: "builder" })
+      .eq("id", guider_id);
+    if (bErr) throw new Error(`swapPairRoles: b ${bErr.message}`);
   }
 
   async createPair(

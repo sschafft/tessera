@@ -7,7 +7,6 @@
 export type SuperPowerKind =
   | "prototype"
   | "reveal_briefs"
-  | "test_build"
   | "agile_share"
   | "time_pressure"
   | "change_guider_brief"
@@ -36,7 +35,6 @@ export const POLICIES: Record<SuperPowerKind, SuperPowerPolicy> = {
   // (back-to-back glimpses give zero learning value).
   prototype: { maxPerRound: null, cooldownSeconds: 12, implemented: true },
   reveal_briefs: { maxPerRound: 1, cooldownSeconds: 0, implemented: true },
-  test_build: { maxPerRound: null, cooldownSeconds: 0, implemented: true },
   // Each fire grants the builder one more share unlock; uncapped so
   // the GM can keep granting them as the round evolves.
   agile_share: { maxPerRound: null, cooldownSeconds: 0, implemented: true },

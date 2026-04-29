@@ -204,6 +204,21 @@ export function MasterContent({
     [doAction, clearSelection],
   );
 
+  const swapPairRoles = useCallback(
+    (pairId: string) =>
+      doAction(
+        "swap-roles",
+        `/pairs/${pairId}/swap-roles`,
+        null,
+      ),
+    [doAction],
+  );
+
+  const pullBackToMain = useCallback(
+    () => doAction("return-to-main", "/return-to-main", null),
+    [doAction],
+  );
+
   const [geminiFallback, setGeminiFallback] = useState<{
     failedRole: "builder" | "guider" | null;
   } | null>(null);
@@ -600,6 +615,7 @@ export function MasterContent({
         onEnd={endRound}
         onEndGame={requestEndGame}
         onExtend={extendRound}
+        onPullBackToMain={pullBackToMain}
       />
       {hostSessionLost && (
         <div
@@ -701,6 +717,8 @@ export function MasterContent({
                     participants={participants}
                     focusedPairId={focusedPairId}
                     onFocus={setFocusedPairId}
+                    roundRunning={round?.status === "running"}
+                    onSwapRoles={swapPairRoles}
                   />
                 </SetupStep>
                 <SetupStep
@@ -795,6 +813,8 @@ export function MasterContent({
                 participants={participants}
                 focusedPairId={focusedPairId}
                 onFocus={setFocusedPairId}
+                roundRunning={round?.status === "running"}
+                onSwapRoles={swapPairRoles}
                 breakouts={
                   data?.breakouts
                     ? {

@@ -25,7 +25,6 @@ type TintColor = "blue" | "purple" | "green" | "orange" | "red" | "teal";
 const TRIGGER_LABELS: Partial<Record<SuperPowerKind, string>> = {
   prototype: "Show glimpse",
   reveal_briefs: "Reveal",
-  test_build: "Enable testing",
   agile_share: "Unlock share",
   time_pressure: "Squeeze",
   change_builder_brief: "Re-roll",
@@ -85,13 +84,6 @@ const BUTTONS: RailButtonSpec[] = [
     color: "orange",
     title: "Agile share",
     sub: "Unlock a builder snapshot for the guider (one per fire).",
-  },
-  {
-    kind: "test_build",
-    icon: "✓",
-    color: "green",
-    title: "Test build",
-    sub: "Flip per-piece correctness on for the builder + observers.",
   },
   {
     kind: "change_builder_brief",
