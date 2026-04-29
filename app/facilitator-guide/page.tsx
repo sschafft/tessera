@@ -105,10 +105,12 @@ export default function FacilitatorGuidePage() {
       </p>
       <ul className="ml-6 list-disc pl-2">
         <li>
-          <b>Frustrated pair?</b> 🔮 Prototype unlock (3–15 s glimpse) or
-          ✓ Test build relieves ambiguity. Test build also flips on the
-          mirrored correctness halos for the guider, so they can see
-          which directions are landing.
+          <b>Frustrated pair?</b> 🔮 Prototype unlock (3–15 s glimpse) gives
+          the builder a brief, deliberately-degraded peek at the goal.
+          Testing is on by default — when the builder hits Test
+          solution, the guider sees the same correctness halos
+          mirrored on the goal canvas, so directions that landed read
+          immediately.
         </li>
         <li>
           <b>Pair too confident?</b> ⏱ Time pressure, ✎ Requirement

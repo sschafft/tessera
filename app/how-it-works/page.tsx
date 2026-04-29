@@ -98,10 +98,6 @@ export default function HowItWorksPage() {
           (irreversible within the round).
         </li>
         <li>
-          <b>✓ Test build</b> — flips per-piece correctness markers on the
-          builder side, GM-fired.
-        </li>
-        <li>
           <b>↻ Agile share</b> — unlocks one snapshot for the builder to
           push their current canvas to the guider. GM-fired (off by
           default); each fire grants one more share.

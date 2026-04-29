@@ -14,6 +14,8 @@ import {
 import { useGameEvents } from "@/lib/realtime/useGameEvents";
 import { SuperPowerToast } from "./SuperPowerToast";
 import { WelcomeToast } from "./WelcomeToast";
+import { BriefsRevealedModal } from "./BriefsRevealedModal";
+import { ReturnToMainModal } from "./ReturnToMainModal";
 
 export interface PlacedPiece {
   id: string;
@@ -307,6 +309,14 @@ export function PlayContent({ code, initial }: PlayContentProps) {
       </main>
       <SuperPowerToast gameId={state.game_id} />
       <WelcomeToast code={code} />
+      <ReturnToMainModal gameId={state.game_id ?? null} />
+      {state.partner_brief && state.round?.id && (
+        <BriefsRevealedModal
+          roundId={state.round.id}
+          myBrief={state.brief}
+          partnerBrief={state.partner_brief}
+        />
+      )}
       {sessionLost && (
         <SessionLostBanner code={code} />
       )}

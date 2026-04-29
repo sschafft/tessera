@@ -123,15 +123,6 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       );
       break;
 
-    case "test_build":
-      await Promise.all(
-        targetedPairs.map(async (pair) => {
-          const pr = await repo.pairRounds.find(round.id, pair.id);
-          if (pr) await repo.pairRounds.setTestEnabled(pr.id, true);
-        }),
-      );
-      break;
-
     case "time_pressure": {
       const raw = body.payload?.delta_seconds;
       const delta = typeof raw === "number" ? raw : 180; // default −3:00

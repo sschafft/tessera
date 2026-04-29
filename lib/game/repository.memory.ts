@@ -104,6 +104,7 @@ class MemoryGameRepository implements GameRepository {
       this.createPair(game_id, builder_id, guider_id),
     list: (game_id) => this.listPairs(game_id),
     findById: (pair_id) => this.findPairById(pair_id),
+    swapRoles: (pair_id) => this.swapPairRoles(pair_id),
     assignObserver: (pid, pair_id) => this.assignObserver(pid, pair_id),
     setDisplayName: (pair_id, name) => this.setPairDisplayName(pair_id, name),
     clearAllocations: (game_id) => this.clearAllocations(game_id),
@@ -254,6 +255,21 @@ class MemoryGameRepository implements GameRepository {
     p.released_at = new Date().toISOString();
     p.pair_id = null;
     p.role = "lobby";
+  }
+
+  async swapPairRoles(pair_id: string): Promise<void> {
+    const pair = this._pairTable.get(pair_id);
+    if (!pair) throw new Error("swapPairRoles: pair not found");
+    if (!pair.builder_id || !pair.guider_id) {
+      throw new Error("swapPairRoles: pair missing builder or guider");
+    }
+    const oldBuilder = this._participantTable.get(pair.builder_id);
+    const oldGuider = this._participantTable.get(pair.guider_id);
+    if (oldBuilder) oldBuilder.role = "guider";
+    if (oldGuider) oldGuider.role = "builder";
+    const swapped = pair.builder_id;
+    pair.builder_id = pair.guider_id;
+    pair.guider_id = swapped;
   }
 
   async createPair(

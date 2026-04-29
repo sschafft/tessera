@@ -28,6 +28,13 @@ export interface TopBarControlsProps {
   onEndGame: () => void;
   /** Add seconds to the running round timer. */
   onExtend: (deltaSeconds: number) => void;
+  /**
+   * GM-fired "everyone back to the main room" action — broadcasts a
+   * realtime event that all player tabs surface as a modal pointing
+   * at the workshop's main video URL. Useful for regrouping after
+   * pairs have wandered into their breakouts.
+   */
+  onPullBackToMain: () => void;
 }
 
 const ERROR_COPY: Record<string, string> = {
@@ -55,6 +62,7 @@ export function TopBarControls({
   onEnd,
   onEndGame,
   onExtend,
+  onPullBackToMain,
 }: TopBarControlsProps) {
   const remaining = useTimer(round, durationSeconds);
   const isRunning = round?.status === "running";
@@ -191,6 +199,24 @@ export function TopBarControls({
               </button>
             ))}
           </div>
+        )}
+
+        {!gameEnded && (
+          <button
+            type="button"
+            onClick={onPullBackToMain}
+            disabled={busy}
+            className="t-mono rounded-full px-3 py-1.5 text-[11px] font-bold disabled:opacity-50"
+            style={{
+              background: "var(--color-tint-yellow)",
+              color: "#7a5b00",
+              border: "1.5px solid var(--color-t-yellow)",
+            }}
+            title="Pop a 'come back to the main room' modal on every player tab. Useful for regrouping when pairs are off in their breakouts."
+            aria-label="Pull all players back to the main room"
+          >
+            📣 Pull back to main
+          </button>
         )}
 
         {gameEnded ? (
