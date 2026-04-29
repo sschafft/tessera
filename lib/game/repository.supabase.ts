@@ -76,7 +76,6 @@ function toGameRecord(row: DbGame): GameRecord {
     gm_participant_id: row.gm_participant_id,
     scoring_correct_pts: row.scoring_correct_pts,
     scoring_wrong_pts: row.scoring_wrong_pts,
-    breakouts_enabled: row.breakouts_enabled,
     meeting_mode: (row.meeting_mode as "remote" | "in_person") ?? "remote",
     breakout_provider:
       (row.breakout_provider as "none" | "google_meet" | "jitsi") ?? "none",
@@ -127,7 +126,6 @@ export class SupabaseGameRepository implements GameRepository {
         round_duration_seconds: input.round_duration_seconds,
         participant_cap: input.participant_cap,
         sound_on: input.sound_on,
-        breakouts_enabled: input.breakouts_enabled ?? false,
         meeting_mode: input.meeting_mode ?? "remote",
         breakout_provider: input.breakout_provider ?? "none",
         host_token_hash: input.host_token_hash,
@@ -474,18 +472,6 @@ export class SupabaseGameRepository implements GameRepository {
       .update(update)
       .eq("id", game_id);
     if (error) throw new Error(`setBriefOn: ${error.message}`);
-  }
-
-  async setBreakoutsEnabled(
-    game_id: string,
-    enabled: boolean,
-  ): Promise<void> {
-    const supabase = getServiceClient();
-    const { error } = await supabase
-      .from("games")
-      .update({ breakouts_enabled: enabled })
-      .eq("id", game_id);
-    if (error) throw new Error(`setBreakoutsEnabled: ${error.message}`);
   }
 
   async setPairBreakout(

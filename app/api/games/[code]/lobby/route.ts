@@ -4,6 +4,8 @@ import { readSessionForGame } from "@/lib/auth/session";
 import { getRepository } from "@/lib/game/getRepository";
 import { scorePlacements } from "@/lib/scoring/score";
 import type { GoalPattern } from "@/lib/pattern/types";
+import type { LobbyResponse } from "@/lib/game/lobby-response";
+import type { TileColor } from "@/components/canvas/Tile";
 import { isGoogleConfigured } from "@/lib/google/oauth";
 import { getSession as getGoogleSession } from "@/lib/google/tokenStore";
 
@@ -128,11 +130,14 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     display_name: p.display_name,
     role: p.role,
     pair_id: p.pair_id,
-    color: p.color,
+    // p.color comes back as a free `text` from the DB. The
+    // canonical writer (lib/game/colors.colorFor) only ever picks
+    // from the TileColor palette, so this cast is safe.
+    color: p.color as TileColor,
     joined_at: p.joined_at,
   }));
 
-  return NextResponse.json({
+  const body: LobbyResponse = {
     code,
     game_id: game.id,
     workshop_name: game.workshop_name,
@@ -200,5 +205,6 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
         pair_id: e.pair_id,
         triggered_at: e.triggered_at,
       })),
-  });
+  };
+  return NextResponse.json(body);
 }

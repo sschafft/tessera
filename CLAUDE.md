@@ -93,12 +93,12 @@ npm run lint         # eslint
 npx tsc --noEmit     # type-check (no formal `check` script yet)
 ```
 
-There is no unit/integration test suite. UX verification flows through:
-- `tessera-playtest-scenario` (single-scenario, multi-role browser playtest via Jetty)
+Vitest is set up (`npm run test` / `test:watch` / `test:coverage`). Coverage is currently small — `lib/scoring/score.test.ts`, `lib/superpowers/policy.test.ts`, `lib/briefs/orchestrator.test.ts` — but the hooks are wired. **Add a test alongside any change to `lib/scoring`, `lib/pattern`, `lib/grid`, `lib/superpowers`, or `lib/briefs`** — those are the deterministic-pure-function modules where coverage pays off most.
+
+UX verification (cross-browser, multi-role flows) runs through Jetty:
+- `tessera-playtest-scenario` (single-scenario, multi-role browser playtest)
 - `tessera-playtest-orchestrator` (10-player concurrent simulation)
 - `tessera-tl` (codebase review)
-
-Adding a real `vitest` suite is on the tech-debt register; if you touch `lib/scoring`, `lib/pattern`, or `lib/grid`, those are the highest-leverage places to start.
 
 ---
 

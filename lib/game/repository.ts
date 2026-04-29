@@ -36,11 +36,6 @@ export interface CreateGameInput {
   video_call_url?: string | null;
   whiteboard_url?: string | null;
   /**
-   * Vestigial: kept for backward compatibility. The canonical check
-   * is `breakout_provider !== 'none'`.
-   */
-  breakouts_enabled?: boolean;
-  /**
    * "remote" → players join via video; the GM may also enable
    * automated per-pair breakouts. "in_person" → everyone is in the
    * same room; video-call URL + whiteboard URL + breakouts are
@@ -469,13 +464,6 @@ export interface GameRepository {
     role: "builder" | "guider",
     on: boolean,
   ): Promise<void>;
-
-  /**
-   * Toggle the per-pair breakouts feature. Hidden in the host form
-   * on deployments without GOOGLE_OAUTH_CLIENT_ID; flipped on via the
-   * host form or the GM dashboard when configured.
-   */
-  setBreakoutsEnabled(game_id: string, enabled: boolean): Promise<void>;
 
   /**
    * Persist the per-pair breakout link + originating calendar event.

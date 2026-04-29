@@ -87,7 +87,6 @@ class MemoryGameRepository implements GameRepository {
       guider_brief_custom: input.guider_brief_custom ?? null,
       scoring_correct_pts: 10,
       scoring_wrong_pts: 0,
-      breakouts_enabled: input.breakouts_enabled ?? false,
       meeting_mode: input.meeting_mode ?? "remote",
       breakout_provider: input.breakout_provider ?? "none",
     };
@@ -375,12 +374,6 @@ class MemoryGameRepository implements GameRepository {
         if (role === "builder") g.builder_brief_on = on;
         else g.guider_brief_on = on;
       }
-    }
-  }
-
-  async setBreakoutsEnabled(game_id: string, enabled: boolean): Promise<void> {
-    for (const g of this.games.values()) {
-      if (g.id === game_id) g.breakouts_enabled = enabled;
     }
   }
 

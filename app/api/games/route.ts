@@ -176,7 +176,6 @@ function validate(payload: CreateGamePayload): CreateGameInput | { error: string
     sound_on: payload.sound_on ?? true,
     meeting_mode: meetingMode,
     breakout_provider: provider,
-    breakouts_enabled: provider !== "none",
   };
 }
 

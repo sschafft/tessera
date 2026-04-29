@@ -1061,9 +1061,9 @@ Cross-provider:
   CTA = breakout (purple badge, "Join your pair's call · breakout");
   workshop-level `video_call_url` demotes to a small `↗ Main room`
   secondary link. `PlayTopBar`'s LinksBar mirrors the same hierarchy.
-- **Diagnostic** — `GET /api/diag/clerk` (path kept from a brief
-  Clerk pivot) returns env-var presence (not values) so a maintainer
-  can verify Vercel scope settings without exposing secrets.
+- **Diagnostic** — `GET /api/diag/env` returns env-var presence (not
+  values) so a maintainer can verify Vercel scope settings without
+  exposing secrets.
 
 Free-tier impact: zero. Google Meet path: Calendar API has 1M
 queries/day; Tessera generates ≤2 per pair (create + delete) so

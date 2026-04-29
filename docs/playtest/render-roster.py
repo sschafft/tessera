@@ -315,6 +315,89 @@ for i, entry in enumerate(ROSTER):
     )
     body += ux_copy_lens
 
+    # v1.5 lenses — three role-distributed evaluation frames so the
+    # 10-role roster surfaces structural, pedagogical, and simplification
+    # concerns at once. Mapping (role index → lens) is fixed for
+    # reproducibility:
+    #
+    #   0 GM           → pedagogical (facilitator role aligns with adult
+    #                    learning theory)
+    #   1 Avery        → adversarial PM
+    #   2 Bri          → simplification
+    #   3 Cameron      → adversarial PM
+    #   4 Drew         → pedagogical
+    #   5 Ellis        → simplification
+    #   6 Finley       → adversarial PM
+    #   7 Gray         → pedagogical
+    #   8 Harper       → simplification
+    #   9 Indigo       → adversarial PM
+    #
+    # Net: 4 adversarial PM, 3 pedagogical, 3 simplification.
+    LENS_BY_INDEX = {
+        0: "pedagogical",
+        1: "adversarial_pm",
+        2: "simplification",
+        3: "adversarial_pm",
+        4: "pedagogical",
+        5: "simplification",
+        6: "adversarial_pm",
+        7: "pedagogical",
+        8: "simplification",
+        9: "adversarial_pm",
+    }
+    lens = LENS_BY_INDEX.get(i, "adversarial_pm")
+
+    if lens == "adversarial_pm":
+        lens_segment = (
+            "\n\n## v1.5 lens — adversarial product manager (PRIMARY for this run)\n"
+            "**Switch posture.** You're a skeptical product manager evaluating Tessera as a candidate to invest in or kill. You want to find reasons it's NOT well built — feature gaps, brittle states, edge cases, IA confusion, bad defaults, vague value propositions, things that look polished but break under stress. Be uncharitable. Imagine demoing this to a CEO who'll cut it for fluff and asking what they'd zero in on.\n"
+            "\n"
+            "**Specifically attack:**\n"
+            "- Where does the product feel half-finished? What workflow ends in a dead-end or implies a feature that doesn't actually exist?\n"
+            "- What is poorly defaulted? What setting forces a decision you have no basis for making?\n"
+            "- What's the IA equivalent of leaky abstractions — a label that means one thing on screen X and a different thing on screen Y?\n"
+            "- What's the WORST thing a user could do (intentionally or accidentally) and how does the product handle it?\n"
+            "- What's the value prop in one sentence? Does the product ACTUALLY deliver that within the first 90 seconds of use?\n"
+            "- Where's brittle state — anything that looks fine on the happy path but corrupts under refresh / network jitter / disconnect?\n"
+            "- What feels like vanity feature (animation, copy flourish, super-power) vs core to the value? Anything you'd cut?\n"
+            "\n"
+            "**Surface findings under `category: dynamics` or `bug` and prefix titles with `[adv-pm]` so they're easy to filter.** AND in `experience.what_to_change`, summarise the single biggest reason a CEO would kill this product as you experienced it.\n"
+        )
+    elif lens == "pedagogical":
+        lens_segment = (
+            "\n\n## v1.5 lens — adult learning + facilitation review (PRIMARY for this run)\n"
+            "**Switch posture.** You're an adult-learning specialist evaluating whether Tessera teaches what it claims to teach (communication, shared context, prototyping, asymmetric information). Apply principles from adult learning theory: relevance to the learner's existing experience, active vs passive engagement, scaffolding for first-time players, immediate feedback, transfer of learning to the workplace, debrief structure that supports reflection.\n"
+            "\n"
+            "**Specifically evaluate:**\n"
+            "- Does the game produce a 'so what?' moment a participant could carry into Monday morning? Or does it stay self-contained as a puzzle?\n"
+            "- Do the briefs map to recognisable workplace dynamics (translation drift, secret-rule constraints, asymmetric information) — or do they feel like arbitrary game mechanics?\n"
+            "- Is there scaffolding for first-time players? How much of the affordance is implicit vs explicit?\n"
+            "- Cognitive load: in any one round, how many threads is the learner tracking simultaneously? Is that level appropriate for a learning experience or oppressive?\n"
+            "- Does the debrief structure SUPPORT reflection (open prompts, time pressure off, both sides of the asymmetry surfaced) or short-circuit it (rushed, generic prompts, score-anchored)?\n"
+            "- Active vs passive: how much of the round is the player DOING something vs waiting? For each role separately.\n"
+            "- Transfer: would a learner finish this and have a vocabulary or framework they could use next time they're in a hard cross-functional conversation?\n"
+            "\n"
+            "**Surface findings under `category: dynamics` and prefix titles with `[pedagogy]` so they're easy to filter.** In `experience.what_to_change`, name the single biggest pedagogical move that would make Tessera produce more learning per minute spent.\n"
+        )
+    else:  # simplification
+        lens_segment = (
+            "\n\n## v1.5 lens — simplification audit (PRIMARY for this run)\n"
+            "**Switch posture.** You're an interaction designer who believes every product is too complicated. Your job is to count the actions and identify what could be defaulted, collapsed, or deferred without losing value. The user said the product can feel daunting; your job is to find where.\n"
+            "\n"
+            "**Specifically attack:**\n"
+            "- For your role, count the clicks/decisions from the moment you arrived to the moment you're 'fully in the game'. Number of distinct decisions, modals, screens. Where could that count be cut in half?\n"
+            "- Which form fields look required but are actually optional? Which optional fields could be smart-defaulted?\n"
+            "- Which modals interrupt flow? Could any of them be inline state changes or just notifications?\n"
+            "- Which settings have a 'right answer' for 90% of users? (Those should be the default; the option should hide.)\n"
+            "- For the GM specifically: how many decisions does the host form make you take BEFORE you can share the join code with players? Could any of those be moved to mid-round, or hidden behind 'advanced'?\n"
+            "- Which UI surfaces show information you didn't actually use? (Those are noise.)\n"
+            "- The 'first-90-seconds' test: from the moment a user lands on the home page, how many actions until they're either (a) hosting a game OR (b) in the game as a player? Each extra action is a churn point.\n"
+            "\n"
+            "**Surface findings under `category: ux-confusion` or `dynamics` and prefix titles with `[simplify]` so they're easy to filter.** In `experience.what_to_change`, name THE ONE thing — the single button, screen, decision, or modal — you would remove or merge first.\n"
+        )
+
+    body += lens_segment
+
     setup = (
         f"You are playing one role in a live Tessera workshop running at {TESSERA_URL} (code: {CODE}).\n\n"
         f"Your role: {role}\n"
