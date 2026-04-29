@@ -205,7 +205,7 @@ export async function POST(req: NextRequest) {
     gm_participant_id: gmParticipantId,
   });
   // Insert a corresponding participants row so the GM can satisfy
-  // foreign-key references (accelerant_events.triggered_by, etc.).
+  // foreign-key references (super_power_events.triggered_by, etc.).
   // The lobby UI filters by role='lobby', so this row never appears
   // in the player-facing list.
   await repo.createParticipant({

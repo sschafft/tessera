@@ -15,7 +15,7 @@ interface RouteParams {
  * Agile share — the builder captures a snapshot of their current
  * placements and sends it to the guider's preview thumbnail. Gated by
  * pair_round.shares_remaining > 0; the GM unlocks the first share via
- * the Agile share accelerant (which triggers the policy event but
+ * the Agile share super-power (which triggers the policy event but
  * doesn't itself capture). Each capture decrements shares_remaining.
  */
 export async function POST(req: NextRequest, { params }: RouteParams) {

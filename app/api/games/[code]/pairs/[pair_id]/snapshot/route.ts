@@ -16,7 +16,7 @@ interface RouteParams {
  * canvas state (goal + placements + per-piece correctness), both
  * briefs, and round info, so the master dashboard can show a live
  * preview of what the pair is doing without the GM losing access to
- * their accelerant rail.
+ * their super-power rail.
  */
 export async function GET(req: NextRequest, { params }: RouteParams) {
   const { code, pair_id } = await params;

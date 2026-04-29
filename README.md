@@ -173,7 +173,7 @@ tessera/
 │   ├── sound/                 # Tone.js wrappers
 │   └── superpowers/           # Per-super-power policy + cooldown enforcement
 ├── styles/                    # globals.css + tessera.css design tokens
-├── supabase/migrations/       # 19 SQL migrations applied to tessera-dev
+├── supabase/migrations/       # 21 SQL migrations applied to tessera-dev
 ├── public/                    # Static assets
 └── design/                    # PRD, TDD, design_patterns, Claude Design handoff bundle
 ```

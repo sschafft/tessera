@@ -20,7 +20,7 @@ export interface BriefEnvelopeProps {
   emphasize?: boolean;
   /**
    * Marks this brief as the *partner's* brief, intentionally surfaced
-   * by the Reveal-briefs accelerant. Swaps the "CONFIDENTIAL" header
+   * by the Reveal-briefs super-power. Swaps the "CONFIDENTIAL" header
    * + the "don't read this aloud" footer for "SHARED · partner's
    * brief" + a friendlier note. Without this flag, playtest agents
    * read the partner brief and worried they'd seen a leak (it said
@@ -83,7 +83,7 @@ export function BriefEnvelope({
 
   // Outside-click sealing: when the open card is up AND this envelope
   // owns an onClose callback (i.e. it's the player's own brief, not a
-  // partner brief revealed by the accelerant), treat a click anywhere
+  // partner brief revealed by the super-power), treat a click anywhere
   // outside it as a re-seal. Mirrors the × button so the pair-name
   // nudge that GuiderView/BuilderView wire onto onClose fires on
   // either gesture. Playtest 2026-04-27 surfaced the gap — players

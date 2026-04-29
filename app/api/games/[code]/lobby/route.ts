@@ -47,10 +47,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
   ]);
 
   // Super-power events for the current round (used to render usage
-  // counters + cooldowns on the dashboard rail). The DB-side
-  // `accelerant_events` table keeps its historic name for stable
-  // persistence — the repository surfaces them as super-power events
-  // here.
+  // counters + cooldowns on the dashboard rail).
   const superpowerEvents = round
     ? await repo.listSuperPowerEvents(round.id)
     : [];
@@ -152,7 +149,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     // Drives the "Add vs Change brief" relabel + the
     // reveal-briefs disable on the GM dashboard's super-power rail.
     // The flags are mutated by the change-brief super-power when
-    // either side was originally off — see the accelerants route.
+    // either side was originally off — see the super-powers route.
     briefs_enabled: {
       builder: game.builder_brief_on,
       guider: game.guider_brief_on,

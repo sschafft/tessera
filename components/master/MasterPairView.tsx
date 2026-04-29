@@ -61,7 +61,7 @@ export interface MasterPairViewProps {
  * GM-as-observer view of a single focused pair. Two canvases side-by-
  * side (builder build + goal), accuracy gauge, both briefs as cards
  * with re-roll. Lives in the master dashboard's centre column; the
- * accelerant rail on the right is unaffected.
+ * super-power rail on the right is unaffected.
  */
 export function MasterPairView({
   code,

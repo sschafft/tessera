@@ -29,7 +29,7 @@ const TRIGGER_LABELS: Partial<Record<SuperPowerKind, string>> = {
   agile_share: "Unlock share",
   time_pressure: "Squeeze",
   change_builder_brief: "Re-roll",
-  vocab_swap: "Re-roll",
+  change_guider_brief: "Re-roll",
   randomizer: "Re-roll goal",
   requirement_change: "Mutate one",
   harder: "Harder",
@@ -101,7 +101,7 @@ const BUTTONS: RailButtonSpec[] = [
     sub: "Re-roll the builder's hidden constraint.",
   },
   {
-    kind: "vocab_swap",
+    kind: "change_guider_brief",
     icon: "✦",
     color: "teal",
     title: "Change guider brief",
@@ -272,10 +272,10 @@ export function SuperPowersRail({
 
   const renderButton = (b: RailButtonSpec) => {
     // Brief on/off conditionals.
-    //   - change_builder_brief / vocab_swap (Change guider brief)
-    //     relabel to "Add ... brief" when that side is currently off.
-    //     The route handler flips the flag on first trigger so future
-    //     rounds keep the brief on.
+    //   - change_builder_brief / change_guider_brief relabel to "Add
+    //     ... brief" when that side is currently off. The route handler
+    //     flips the flag on first trigger so future rounds keep the
+    //     brief on.
     //   - reveal_briefs disables when BOTH sides are off — there's
     //     nothing to reveal.
     let spec: RailButtonSpec = b;
@@ -289,7 +289,7 @@ export function SuperPowersRail({
         sub: "Builder brief was off at game-create. Trigger to roll one in for this round and keep it on for future rounds.",
       };
       triggerLabel = "Add brief";
-    } else if (b.kind === "vocab_swap" && !briefsEnabled.guider) {
+    } else if (b.kind === "change_guider_brief" && !briefsEnabled.guider) {
       spec = {
         ...b,
         title: "Add guider brief",

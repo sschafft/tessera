@@ -100,7 +100,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
   // What the player can see — role-gated:
   //   builder: never sees the goal; sees own placements
   //   guider:  always sees the goal once the round exists; placements
-  //            gated by Agile share accelerant (M6) — empty for now
+  //            gated by Agile share super-power (M6) — empty for now
   //   observer: always sees the goal + builder's placements live
   // After the round ends, everyone sees the goal + everyone's
   // placements + everyone's brief, so the pair can debrief together.
@@ -205,7 +205,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
   // full array for rendering on their canvas.
   const visiblePlacements = showPlacements ? placements : [];
 
-  // Test-build accelerant: builder + observer get per-placement
+  // Test-build super-power: builder + observer get per-placement
   // correctness flags computed against the goal. After the round ends,
   // we surface correctness to everyone for the debrief regardless of
   // whether Test Build was triggered.

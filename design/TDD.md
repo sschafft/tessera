@@ -903,6 +903,18 @@ In dependency order (17 total as of 2026-04-28):
     only when the game's provider is `google_meet`). Backs the
     in-person/remote toggle and the Jitsi provider option in the
     host form.
+20. `drop_breakouts_enabled` — drops the vestigial
+    `games.breakouts_enabled` column. Was set on game-create but
+    never read; canonical check is `breakout_provider != 'none'`.
+21. `rename_accelerant_to_super_power` — renames the
+    `accelerant_events` table → `super_power_events`, the enums
+    `accelerant_t` → `super_power_kind` and `accelerant_scope_t` →
+    `super_power_scope`, and the enum value `vocab_swap` →
+    `change_guider_brief`. Pure rename — no data motion. Aligns the
+    schema with the user-visible product terminology that's been in
+    place since v1.1.
+
+(legacy entries below kept for context — counts haven't shifted.)
 19. `brief_library_v2` — adds 8 briefs in the styles surfaced by
     the 2026-04-28 playtest (silly invented vocabularies, acronym
     shorthand, themed jargon — pirate's log, star captain, cooking
