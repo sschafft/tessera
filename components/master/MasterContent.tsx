@@ -851,6 +851,9 @@ export function MasterContent({
         total={cleanup.total}
         deleted={cleanup.deleted}
         warning={cleanup.warning}
+        provider={
+          data?.breakouts.provider === "jitsi" ? "jitsi" : "google_meet"
+        }
       />
     </>
   );

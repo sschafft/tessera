@@ -356,27 +356,52 @@ export interface BreakoutsCleanupModalProps {
   /** Warning string from /end (e.g. "google_session_lost") — surfaced
    *  but doesn't block the modal from closing. */
   warning: string | null;
+  /**
+   * Provider the game used. Drives the cleanup copy: Google Meet
+   * deletes calendar events + revokes the OAuth grant; Jitsi just
+   * forgets the per-pair URLs (rooms are stateless). Defaults to
+   * google_meet for backwards-compat with callers that haven't been
+   * updated yet.
+   */
+  provider?: "google_meet" | "jitsi";
 }
 
 /**
- * Modal that pops up while the /end route is running its calendar
- * cleanup. The /end POST blocks until cleanup finishes, so this is
- * mostly a "we're working on it" state — but a visible one, since
- * the user explicitly asked for the calendar wipe to be observable.
+ * Modal that pops up while the /end route is finishes cleaning up
+ * any per-pair breakout state. For Google Meet that's a Calendar
+ * delete + OAuth revoke; for Jitsi it's just clearing the local
+ * pair URLs (rooms are stateless on the public Jitsi server). Copy
+ * branches accordingly so a Jitsi facilitator never reads about
+ * Google Calendar / Google access — that confused playtest GMs.
  */
 export function BreakoutsCleanupModal({
   active,
   total,
   deleted,
   warning,
+  provider = "google_meet",
 }: BreakoutsCleanupModalProps) {
   if (!active && total === 0) return null;
   const done = !active && deleted >= 0;
+  const isGoogle = provider === "google_meet";
+  const headerLabel = active
+    ? "Cleaning up…"
+    : done
+      ? isGoogle
+        ? "Calendar cleaned"
+        : "Pair calls cleaned up"
+      : "";
+  const titleActive = isGoogle
+    ? `Deleting ${total} breakout calendar event${total === 1 ? "" : "s"}…`
+    : `Tearing down ${total} pair call${total === 1 ? "" : "s"}…`;
+  const titleDone = isGoogle
+    ? `Done — ${total} event${total === 1 ? "" : "s"} removed from your calendar.`
+    : `Done — ${total} pair call${total === 1 ? "" : "s"} cleared.`;
   return (
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Cleaning up breakout calendar events"
+      aria-label={isGoogle ? "Cleaning up breakout calendar events" : "Cleaning up pair calls"}
       className="fixed inset-0 z-[80] flex items-center justify-center px-4"
       style={{ background: "rgba(31,26,20,0.62)" }}
     >
@@ -388,29 +413,37 @@ export function BreakoutsCleanupModal({
           className="t-mono mx-auto text-[11px] font-bold uppercase tracking-widest"
           style={{ color: "var(--color-t-purple)", letterSpacing: ".15em" }}
         >
-          {active ? "Cleaning up…" : done ? "Calendar cleaned" : ""}
+          {headerLabel}
         </div>
         <h3
           className="t-display text-[20px] leading-tight"
           style={{ color: "var(--color-ink)" }}
         >
           {active
-            ? `Deleting ${total} breakout calendar event${total === 1 ? "" : "s"}…`
+            ? titleActive
             : warning
-              ? `${deleted} of ${total} events deleted`
-              : `Done — ${total} event${total === 1 ? "" : "s"} removed from your calendar.`}
+              ? isGoogle
+                ? `${deleted} of ${total} events deleted`
+                : `${deleted} of ${total} pair calls cleared`
+              : titleDone}
         </h3>
         <p
           className="text-[13px] leading-snug"
           style={{ color: "var(--color-ink-2)" }}
         >
           {active
-            ? "Tessera is deleting every breakout calendar event we created for this game and revoking its Google access on your behalf."
+            ? isGoogle
+              ? "Tessera is deleting every breakout calendar event we created for this game and revoking its Google access on your behalf."
+              : "Tessera is forgetting the per-pair Jitsi links. The rooms themselves are stateless — nothing to delete on Jitsi's side."
             : warning === "google_session_lost"
               ? "Your Google session expired before we finished. The remaining events are still on your calendar — search for \"Tessera breakout\" to remove them."
               : warning
-                ? "Some events couldn't be deleted automatically. Search your calendar for \"Tessera breakout\" to clean up any leftovers."
-                : "Per-pair breakout links are gone, the calendar events are deleted, and Tessera no longer has access to your Google account."}
+                ? isGoogle
+                  ? "Some events couldn't be deleted automatically. Search your calendar for \"Tessera breakout\" to clean up any leftovers."
+                  : "Some pair calls couldn't be cleared automatically. The rooms themselves are stateless and will close on their own."
+                : isGoogle
+                  ? "Per-pair breakout links are gone, the calendar events are deleted, and Tessera no longer has access to your Google account."
+                  : "Per-pair Jitsi links are gone."}
         </p>
       </div>
     </div>
