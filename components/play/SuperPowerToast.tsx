@@ -33,7 +33,7 @@ const SUPER_POWER_KINDS: Record<string, string> = {
   test_build: "✓ Test build enabled",
   agile_share: "↻ Agile share",
   time_pressure: "⏱ Time pressure",
-  vocab_swap: "✦ Change guider brief",
+  change_guider_brief: "✦ Change guider brief",
   change_builder_brief: "✦ Change builder brief",
   randomizer: "🎲 Randomizer",
   requirement_change: "✎ Requirement change",

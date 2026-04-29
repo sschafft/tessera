@@ -39,7 +39,7 @@ export type {
 // for cases where the WS drops, the browser tab is backgrounded, or
 // NEXT_PUBLIC_SUPABASE_ANON_KEY is missing client-side. Was 30s —
 // playtest 2026-04-28 surfaced a 90s lag on the GM dashboard's
-// accelerant counter (3× polling cycles for a missed broadcast),
+// super-power counter (3× polling cycles for a missed broadcast),
 // which made super-power triggers feel ambiguous in the moment.
 // 10s matches PlayContent.POLL_MS and keeps the load trivial (one
 // /lobby hit per 10s, single tab).

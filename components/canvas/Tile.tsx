@@ -53,7 +53,7 @@ export interface TileProps {
   rotate?: number;
   /** Render as a translucent ghost (drag preview / "next piece" hint). */
   ghost?: boolean;
-  /** Render in muted greyscale-tinted form (Prototype accelerant). */
+  /** Render in muted greyscale-tinted form (Prototype super-power). */
   prototype?: boolean;
   /** When non-null, renders a small green/red badge at top-right indicating correctness. */
   correct?: boolean | null;

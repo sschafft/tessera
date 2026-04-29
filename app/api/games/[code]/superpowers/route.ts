@@ -139,7 +139,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       break;
     }
 
-    case "vocab_swap":
+    case "change_guider_brief":
     case "change_builder_brief": {
       const role: "builder" | "guider" =
         body.kind === "change_builder_brief" ? "builder" : "guider";

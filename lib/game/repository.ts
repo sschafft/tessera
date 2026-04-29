@@ -488,10 +488,8 @@ export interface GameRepository {
   >;
 
   // ─── Super-power events ───────────────────────────────────────────
-  // Persisted in the historic `accelerant_events` table; the repo
-  // layer presents them as super-power events to align with the
-  // product surface. (Renaming the DB table would require a migration
-  // we've decided not to ship — see TDD §15.4.)
+  // Persisted in the `super_power_events` table (renamed from
+  // `accelerant_events` in migration 21).
   createSuperPowerEvent(input: {
     round_id: string;
     scope: "pair" | "all";

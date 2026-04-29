@@ -19,54 +19,54 @@ export type Database = {
   }
   public: {
     Tables: {
-      accelerant_events: {
+      super_power_events: {
         Row: {
           id: string
-          kind: Database["public"]["Enums"]["accelerant_t"]
+          kind: Database["public"]["Enums"]["super_power_kind"]
           pair_id: string | null
           payload: Json
           round_id: string
-          scope: Database["public"]["Enums"]["accelerant_scope_t"]
+          scope: Database["public"]["Enums"]["super_power_scope"]
           triggered_at: string
           triggered_by: string
         }
         Insert: {
           id?: string
-          kind: Database["public"]["Enums"]["accelerant_t"]
+          kind: Database["public"]["Enums"]["super_power_kind"]
           pair_id?: string | null
           payload?: Json
           round_id: string
-          scope: Database["public"]["Enums"]["accelerant_scope_t"]
+          scope: Database["public"]["Enums"]["super_power_scope"]
           triggered_at?: string
           triggered_by: string
         }
         Update: {
           id?: string
-          kind?: Database["public"]["Enums"]["accelerant_t"]
+          kind?: Database["public"]["Enums"]["super_power_kind"]
           pair_id?: string | null
           payload?: Json
           round_id?: string
-          scope?: Database["public"]["Enums"]["accelerant_scope_t"]
+          scope?: Database["public"]["Enums"]["super_power_scope"]
           triggered_at?: string
           triggered_by?: string
         }
         Relationships: [
           {
-            foreignKeyName: "accelerant_events_pair_id_fkey"
+            foreignKeyName: "super_power_events_pair_id_fkey"
             columns: ["pair_id"]
             isOneToOne: false
             referencedRelation: "pairs"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "accelerant_events_round_id_fkey"
+            foreignKeyName: "super_power_events_round_id_fkey"
             columns: ["round_id"]
             isOneToOne: false
             referencedRelation: "rounds"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "accelerant_events_triggered_by_fkey"
+            foreignKeyName: "super_power_events_triggered_by_fkey"
             columns: ["triggered_by"]
             isOneToOne: false
             referencedRelation: "participants"
@@ -596,14 +596,14 @@ export type Database = {
       }
     }
     Enums: {
-      accelerant_scope_t: "pair" | "all"
-      accelerant_t:
+      super_power_scope: "pair" | "all"
+      super_power_kind:
         | "prototype"
         | "reveal_briefs"
         | "test_build"
         | "agile_share"
         | "time_pressure"
-        | "vocab_swap"
+        | "change_guider_brief"
         | "change_builder_brief"
         | "randomizer"
         | "requirement_change"
@@ -741,14 +741,14 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      accelerant_scope_t: ["pair", "all"],
-      accelerant_t: [
+      super_power_scope: ["pair", "all"],
+      super_power_kind: [
         "prototype",
         "reveal_briefs",
         "test_build",
         "agile_share",
         "time_pressure",
-        "vocab_swap",
+        "change_guider_brief",
         "change_builder_brief",
         "randomizer",
         "requirement_change",

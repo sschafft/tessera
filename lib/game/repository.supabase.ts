@@ -335,7 +335,7 @@ export class SupabaseGameRepository implements GameRepository {
 
   async deleteRound(round_id: string): Promise<void> {
     const supabase = getServiceClient();
-    // FK CASCADE on pair_rounds → briefs / placements / accelerant_events
+    // FK CASCADE on pair_rounds → briefs / placements / super_power_events
     // (configured in the schema migration) handles the dependent rows.
     const { error } = await supabase
       .from("rounds")
@@ -692,7 +692,7 @@ export class SupabaseGameRepository implements GameRepository {
   }): Promise<{ id: string; triggered_at: string }> {
     const supabase = getServiceClient();
     const { data, error } = await supabase
-      .from("accelerant_events")
+      .from("super_power_events")
       .insert({
         round_id: input.round_id,
         scope: input.scope,
@@ -720,7 +720,7 @@ export class SupabaseGameRepository implements GameRepository {
   > {
     const supabase = getServiceClient();
     const { data, error } = await supabase
-      .from("accelerant_events")
+      .from("super_power_events")
       .select("id, kind, scope, pair_id, triggered_at")
       .eq("round_id", round_id);
     if (error) throw new Error(`listSuperPowerEvents: ${error.message}`);

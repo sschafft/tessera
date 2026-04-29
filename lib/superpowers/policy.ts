@@ -2,11 +2,6 @@
  * Per-super-power policy: caps per round and cooldown windows. The
  * super-power route handler queries existing trigger-event rows and
  * rejects new triggers that would exceed these limits.
- *
- * Note: the storage layer (DB table `accelerant_events`, enum
- * `accelerant_t`) keeps the historic "accelerant" name for stable
- * persistence — we map at the repository boundary so the rest of the
- * codebase reads in product-aligned "super-power" terms.
  */
 
 export type SuperPowerKind =
@@ -15,10 +10,7 @@ export type SuperPowerKind =
   | "test_build"
   | "agile_share"
   | "time_pressure"
-  // vocab_swap is the historic kind name for "Change guider brief";
-  // kept for backward compatibility with already-logged events. The UI
-  // surfaces it alongside change_builder_brief as paired buttons.
-  | "vocab_swap"
+  | "change_guider_brief"
   | "change_builder_brief"
   | "randomizer"
   | "requirement_change"
@@ -49,7 +41,7 @@ export const POLICIES: Record<SuperPowerKind, SuperPowerPolicy> = {
   // the GM can keep granting them as the round evolves.
   agile_share: { maxPerRound: null, cooldownSeconds: 0, implemented: true },
   time_pressure: { maxPerRound: 2, cooldownSeconds: 0, implemented: true },
-  vocab_swap: { maxPerRound: null, cooldownSeconds: 0, implemented: true },
+  change_guider_brief: { maxPerRound: null, cooldownSeconds: 0, implemented: true },
   change_builder_brief: {
     maxPerRound: null,
     cooldownSeconds: 0,
