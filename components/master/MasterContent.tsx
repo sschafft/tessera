@@ -129,55 +129,36 @@ export function MasterContent({
   }, []);
   const clearSelection = useCallback(() => setSelected(new Set()), []);
 
-  const allocate = useCallback(
-    async (body: object) => {
-      setBusy(true);
-      setActionError(null);
-      try {
-        const res = await fetch(`/api/games/${code}/lobby/allocate`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        if (!res.ok) {
-          const j = await res.json().catch(() => ({}));
-          throw new Error(j.error || `status ${res.status}`);
-        }
-        clearSelection();
-        await fetchSnapshot();
-      } catch (err) {
-        setActionError(err instanceof Error ? err.message : "allocate failed");
-      } finally {
-        setBusy(false);
-      }
-    },
-    [code, clearSelection, fetchSnapshot],
-  );
-
-  const triggerAccelerant = useCallback(
+  // Shared "POST → on-success refetch / on-error setActionError" helper.
+  // ~80% of the GM dashboard's mutations follow this shape — without
+  // the helper, each one re-implements the busy/error/refetch ceremony
+  // and the file's hook count balloons. The handful of mutations that
+  // need extra logic (Gemini fallback on /rounds/start, end-game cleanup
+  // modal, optimistic-then-confirm scoring) keep their own callbacks
+  // below.
+  const doAction = useCallback(
     async (
-      kind: string,
-      scope: "pair" | "all",
-      pairId: string | null,
-      payload?: Record<string, unknown>,
+      label: string,
+      path: string,
+      body: object | null = null,
+      onSuccess?: () => void,
     ) => {
       setBusy(true);
       setActionError(null);
       try {
-        const res = await fetch(`/api/games/${code}/superpowers`, {
+        const res = await fetch(`/api/games/${code}${path}`, {
           method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ kind, scope, pair_id: pairId, payload }),
+          headers: body !== null ? { "content-type": "application/json" } : {},
+          body: body !== null ? JSON.stringify(body) : undefined,
         });
         if (!res.ok) {
           const j = await res.json().catch(() => ({}));
           throw new Error(j.error || `status ${res.status}`);
         }
+        onSuccess?.();
         await fetchSnapshot();
       } catch (err) {
-        setActionError(
-          err instanceof Error ? err.message : "accelerant failed",
-        );
+        setActionError(err instanceof Error ? err.message : `${label} failed`);
       } finally {
         setBusy(false);
       }
@@ -185,28 +166,31 @@ export function MasterContent({
     [code, fetchSnapshot],
   );
 
+  const allocate = useCallback(
+    (body: object) => doAction("allocate", "/lobby/allocate", body, clearSelection),
+    [doAction, clearSelection],
+  );
+
+  const triggerAccelerant = useCallback(
+    (
+      kind: string,
+      scope: "pair" | "all",
+      pairId: string | null,
+      payload?: Record<string, unknown>,
+    ) =>
+      doAction("super-power", "/superpowers", {
+        kind,
+        scope,
+        pair_id: pairId,
+        payload,
+      }),
+    [doAction],
+  );
+
   const rerollBrief = useCallback(
-    async (pairId: string, role: "builder" | "guider") => {
-      setBusy(true);
-      setActionError(null);
-      try {
-        const res = await fetch(`/api/games/${code}/briefs/reroll`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ pair_id: pairId, role }),
-        });
-        if (!res.ok) {
-          const j = await res.json().catch(() => ({}));
-          throw new Error(j.error || `status ${res.status}`);
-        }
-        await fetchSnapshot();
-      } catch (err) {
-        setActionError(err instanceof Error ? err.message : "reroll failed");
-      } finally {
-        setBusy(false);
-      }
-    },
-    [code, fetchSnapshot],
+    (pairId: string, role: "builder" | "guider") =>
+      doAction("reroll", "/briefs/reroll", { pair_id: pairId, role }),
+    [doAction],
   );
 
   const [geminiFallback, setGeminiFallback] = useState<{
@@ -273,26 +257,10 @@ export function MasterContent({
     setGeminiFallback(null);
   }, []);
 
-  const endRound = useCallback(async () => {
-    setBusy(true);
-    setActionError(null);
-    try {
-      const res = await fetch(`/api/games/${code}/rounds/end`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({}),
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.error || `status ${res.status}`);
-      }
-      await fetchSnapshot();
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : "end failed");
-    } finally {
-      setBusy(false);
-    }
-  }, [code, fetchSnapshot]);
+  const endRound = useCallback(
+    () => doAction("end", "/rounds/end", {}),
+    [doAction],
+  );
 
   const [endGameModalOpen, setEndGameModalOpen] = useState(false);
   // End-game cleanup observability — populated by /end's response.
@@ -424,47 +392,15 @@ export function MasterContent({
     }
   }, [code, fetchSnapshot]);
 
-  const clearBreakouts = useCallback(async () => {
-    setBusy(true);
-    setActionError(null);
-    try {
-      const res = await fetch(`/api/games/${code}/breakouts/clear`, {
-        method: "POST",
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.error || `status ${res.status}`);
-      }
-      await fetchSnapshot();
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : "clear_failed");
-    } finally {
-      setBusy(false);
-    }
-  }, [code, fetchSnapshot]);
+  const clearBreakouts = useCallback(
+    () => doAction("clear-breakouts", "/breakouts/clear"),
+    [doAction],
+  );
 
   const extendRound = useCallback(
-    async (deltaSeconds: number) => {
-      setBusy(true);
-      setActionError(null);
-      try {
-        const res = await fetch(`/api/games/${code}/rounds/extend`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ delta_seconds: deltaSeconds }),
-        });
-        if (!res.ok) {
-          const j = await res.json().catch(() => ({}));
-          throw new Error(j.error || `status ${res.status}`);
-        }
-        await fetchSnapshot();
-      } catch (err) {
-        setActionError(err instanceof Error ? err.message : "extend failed");
-      } finally {
-        setBusy(false);
-      }
-    },
-    [code, fetchSnapshot],
+    (deltaSeconds: number) =>
+      doAction("extend", "/rounds/extend", { delta_seconds: deltaSeconds }),
+    [doAction],
   );
 
   const updateScoring = useCallback(

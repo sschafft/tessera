@@ -10,29 +10,21 @@ import {
 } from "react";
 import { Tile, type TileColor, type TileShape } from "@/components/canvas/Tile";
 import { InteractiveCanvas } from "@/components/canvas/InteractiveCanvas";
-import { PlayCanvas } from "@/components/canvas/PlayCanvas";
 import { BriefEnvelope } from "./BriefEnvelope";
 import { Confetti } from "./Confetti";
-import { JoinCallCta } from "./JoinCallCta";
 import { BUILDER_SHAPES, paletteColorsFor } from "@/lib/pattern/palette";
 import { playSolved, playTestSolution } from "@/lib/sound";
 import { BriefGate } from "./BriefGate";
 import { PairNameBadge } from "./PairNameBadge";
 import { PairNameModal } from "./PairNameModal";
 import { SolvedBanner } from "./SolvedBanner";
+import {
+  TestSolutionCTA,
+  type TestResult,
+} from "./builder/TestSolutionCTA";
+import { WaitingForRound } from "./builder/WaitingForRound";
+import { PrototypeOverlay } from "./builder/PrototypeOverlay";
 import type { PlacedPiece, PlayState } from "./PlayContent";
-
-interface TestResult {
-  correct: number;
-  wrong: number;
-  total: number;
-  score: number;
-  penaltyApplied: boolean;
-  correctPts: number;
-  wrongPts: number;
-  /** ms timestamp — used to drive the celebration animation. */
-  at: number;
-}
 
 const SHAPE_LABEL: Record<TileShape, string> = {
   "tri-up": "triangle",
@@ -881,118 +873,6 @@ function BuilderInteractive({ state }: { state: PlayState }) {
   );
 }
 
-function TestSolutionCTA({
-  disabled,
-  testing,
-  result,
-  liveScore,
-  onTest,
-}: {
-  disabled: boolean;
-  testing: boolean;
-  result: TestResult | null;
-  /** Latest server-side score from realtime — used to spot when scoring
-   * config moved out from under the test result (e.g. GM toggled wrong
-   * penalty mid-round, retroactively recomputing scores). */
-  liveScore: number | null;
-  onTest: () => void;
-}) {
-  // The result chip pulses on every Test-solution submission. The
-  // pulse is React-keyed by the result.at timestamp so a fresh result
-  // remounts the div and replays the CSS animation — no need for a
-  // counter-in-effect to drive the remount.
-  const anyCorrect = (result?.correct ?? 0) > 0;
-  const scoreShifted =
-    result !== null && liveScore !== null && liveScore !== result.score;
-  return (
-    <div className="mt-2 flex w-full max-w-[640px] flex-col items-center gap-3">
-      {result && (
-        <div
-          key={result.at}
-          className="t-card flex w-full items-center gap-3 px-4 py-3"
-          style={{
-            background: anyCorrect
-              ? "var(--color-tint-green)"
-              : "var(--color-paper-2)",
-            borderColor: anyCorrect
-              ? "var(--color-t-green)"
-              : "var(--color-line)",
-            animation: "tessera-pulse 600ms ease-out",
-          }}
-          role="status"
-          aria-live="polite"
-        >
-          <span
-            aria-hidden="true"
-            className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-full text-[20px]"
-            style={{
-              background: anyCorrect ? "var(--color-t-green)" : "#fff",
-              color: anyCorrect ? "#fff" : "var(--color-ink-3)",
-              boxShadow: "inset 0 0 0 1.5px rgba(0,0,0,.10)",
-            }}
-          >
-            {anyCorrect ? "✓" : "—"}
-          </span>
-          <div className="flex flex-1 flex-col gap-0.5">
-            <span
-              className="t-display text-[18px] font-bold"
-              style={{
-                color: anyCorrect
-                  ? "var(--color-t-green)"
-                  : "var(--color-ink)",
-              }}
-            >
-              {result.score >= 0 ? `+${result.score}` : `${result.score}`}{" "}
-              point{Math.abs(result.score) === 1 ? "" : "s"}
-            </span>
-            <span className="text-[12px] text-[var(--color-ink-2)]">
-              {result.correct} right · {result.wrong} wrong
-              {result.penaltyApplied
-                ? ` · penalty ${result.wrongPts} applied`
-                : ""}
-            </span>
-            {scoreShifted && (
-              <span
-                className="t-mono text-[10px] font-bold uppercase tracking-wide"
-                style={{ color: "var(--color-t-purple)" }}
-                aria-live="polite"
-              >
-                ↻ scoring rules changed · current total: {liveScore} pts
-              </span>
-            )}
-          </div>
-          <span className="t-mono text-[10px] uppercase tracking-widest text-[var(--color-ink-3)]">
-            tap test again any time
-          </span>
-        </div>
-      )}
-
-      <button
-        type="button"
-        onClick={onTest}
-        disabled={disabled || testing}
-        className="t-btn t-btn--primary w-full disabled:opacity-50"
-        style={{ padding: "16px 22px", fontSize: 16 }}
-        title={
-          disabled
-            ? "Place at least one piece to test."
-            : "Score the current placements against the goal."
-        }
-      >
-        {testing ? "Testing…" : "✓ Test solution"}
-      </button>
-
-      <style>{`
-        @keyframes tessera-pulse {
-          0% { transform: scale(0.96); opacity: 0; }
-          60% { transform: scale(1.03); opacity: 1; }
-          100% { transform: scale(1); opacity: 1; }
-        }
-      `}</style>
-    </div>
-  );
-}
-
 function ModeBanner({
   shape,
   color,
@@ -1366,121 +1246,4 @@ function Tools({
   );
 }
 
-function PrototypeOverlay({
-  prototype,
-  complexity,
-}: {
-  prototype: PlayState["prototype"];
-  complexity: number;
-}) {
-  // SSR-safe: `now` is null until the client mounts. Without this, the
-  // useState(() => Date.now()) initialiser produced different values
-  // between SSR and hydration, contributing to React error #418 on
-  // /play reloads when a prototype window happened to be active.
-  const [now, setNow] = useState<number | null>(null);
-  useEffect(() => {
-    if (!prototype) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional one-shot mount sync; same SSR-mismatch reason as PlayTopBar.useTimer.
-    setNow(Date.now());
-    const id = setInterval(() => setNow(Date.now()), 250);
-    return () => clearInterval(id);
-  }, [prototype]);
 
-  if (!prototype) return null;
-  if (now === null) return null;
-  const endsMs = new Date(prototype.ends_at).getTime();
-  const remaining = Math.max(0, Math.ceil((endsMs - now) / 1000));
-  if (remaining === 0) return null;
-
-  return (
-    <div className="flex flex-col items-center gap-2">
-      <span
-        className="t-mono inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest"
-        style={{
-          background: "var(--color-tint-blue)",
-          color: "var(--color-t-blue)",
-          boxShadow: "inset 0 0 0 1.5px var(--color-t-blue)",
-        }}
-      >
-        🔮 Prototype glimpse · {remaining}s
-      </span>
-      <div
-        className="rounded-[var(--radius-lg)]"
-        style={{
-          filter: "saturate(0.55) opacity(0.85)",
-          border: "2px dashed var(--color-t-blue)",
-          padding: 4,
-        }}
-      >
-        <PlayCanvas pieces={prototype.goal} complexity={complexity} />
-      </div>
-      <span
-        className="t-mono text-[10px] text-[var(--color-ink-3)]"
-        style={{ letterSpacing: ".1em" }}
-      >
-        approximate · expect ~25% wrong
-      </span>
-    </div>
-  );
-}
-
-function WaitingForRound({ state }: { state: PlayState }) {
-  const partnerName = state.partner?.display_name;
-  return (
-    <section className="m-auto flex max-w-[520px] flex-col items-center gap-5 px-6 text-center">
-      <div className="t-mono text-[11px] tracking-widest text-[var(--color-ink-3)]">
-        BUILDER · READY
-      </div>
-      <h1 className="t-display text-3xl">Hop on the call.</h1>
-      {partnerName ? (
-        <PartnerReadyChip name={partnerName} role="guider" />
-      ) : null}
-      <p className="text-[15px] text-[var(--color-ink-2)]">
-        {partnerName
-          ? `${partnerName} can see the goal pattern. As soon as the facilitator hits Start, your canvas + brief unlock and you'll be rebuilding from their descriptions.`
-          : "Your guider has the goal pattern. As soon as the facilitator hits Start, your canvas comes alive — and you'll need the call open to hear the descriptions."}
-      </p>
-      <JoinCallCta
-        videoCallUrl={state.video_call_url}
-        whiteboardUrl={state.whiteboard_url}
-      />
-    </section>
-  );
-}
-
-function PartnerReadyChip({
-  name,
-  role,
-}: {
-  name: string;
-  role: "builder" | "guider";
-}) {
-  return (
-    <div
-      className="t-mono flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[12px] font-bold"
-      style={{
-        background: "var(--color-tint-green)",
-        color: "var(--color-t-green)",
-        boxShadow: "inset 0 0 0 1.5px var(--color-t-green)",
-      }}
-    >
-      <span
-        aria-hidden="true"
-        className="inline-block h-2 w-2 rounded-full"
-        style={{
-          background: "var(--color-t-green)",
-          animation: "tessera-pulse-dot 1400ms ease-in-out infinite",
-        }}
-      />
-      <span>
-        {name} <span style={{ opacity: 0.7 }}>· {role} ready</span>
-      </span>
-      <style>{`
-        @keyframes tessera-pulse-dot {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.5; transform: scale(0.85); }
-        }
-      `}</style>
-    </div>
-  );
-}
