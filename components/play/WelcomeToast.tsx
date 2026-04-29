@@ -50,7 +50,7 @@ export function WelcomeToast({ code }: { code: string }) {
         ✓
       </span>
       <div className="flex-1 text-[13px]" style={{ color: "var(--color-t-green)", lineHeight: 1.45 }}>
-        <b>You&apos;re in.</b> Your seat is saved on this device — close the
+        <b>You&apos;re in.</b>{" "}Your seat is saved on this device — close the
         tab and you&apos;ll see it on the home page&apos;s{" "}
         <i>Resume game</i> pill if you ever need to come back.
       </div>
