@@ -140,14 +140,14 @@ export default function HowItWorksPage() {
         Remote, in-person, or hybrid
       </h2>
       <p>
-        At game-create, the GM picks <b>remote</b> (default) or
-        <b> in-person</b>. Remote workshops can also opt into per-pair{" "}
+        At game-create, the GM picks <b>remote</b> (default) or{" "}
+        <b>in-person</b>. Remote workshops can also opt into per-pair{" "}
         <b>breakout calls</b> via Google Meet (with participant emails as
-        attendees) or Jitsi (free, no sign-in for anyone). Each pair gets a
-        private call link to talk on while they build, and the workshop&apos;s
-        main video link demotes to a small &ldquo;Main room ↗&rdquo;
-        secondary chip. In-person mode hides video and breakouts entirely —
-        everyone&apos;s already in the room.
+        attendees) or Jitsi (free, no sign-in for anyone). Each pair gets
+        a private call link to talk on while they build, and the
+        workshop&apos;s main video link demotes to a small &ldquo;Main
+        room&nbsp;↗&rdquo; secondary chip. In-person mode hides video and
+        breakouts entirely — everyone&apos;s already in the room.
       </p>
 
       <h2 className="t-display mt-6 text-[28px] font-bold tracking-tight">
