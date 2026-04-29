@@ -39,11 +39,11 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   if (!me.pair_id) {
     return NextResponse.json({ error: "not_in_pair" }, { status: 400 });
   }
-  const round = await repo.findLatestRound(session.claims.game_id);
+  const round = await repo.rounds.findLatest(session.claims.game_id);
   if (!round || round.status !== "running") {
     return NextResponse.json({ error: "round_not_running" }, { status: 400 });
   }
-  const pairRound = await repo.findPairRound(round.id, me.pair_id);
+  const pairRound = await repo.pairRounds.find(round.id, me.pair_id);
   if (!pairRound) {
     return NextResponse.json({ error: "no_pair_round" }, { status: 400 });
   }
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     );
   }
 
-  const placements = await repo.listPlacements(pairRound.id);
+  const placements = await repo.placements.list(pairRound.id);
   const snapshot = placements.map((p) => ({
     shape: p.shape,
     color: p.color,
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
   let remaining: number;
   try {
-    remaining = await repo.captureBuilderSnapshot(pairRound.id, snapshot);
+    remaining = await repo.pairRounds.captureBuilderSnapshot(pairRound.id, snapshot);
   } catch (err) {
     if (err instanceof SnapshotShareCapError) {
       return NextResponse.json(

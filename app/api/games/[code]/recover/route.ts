@@ -45,7 +45,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
 
   const repo = getRepository();
-  const game = await repo.findGameByCode(code);
+  const game = await repo.games.findByCode(code);
   if (!game) {
     return NextResponse.json({ error: "game_not_found" }, { status: 404 });
   }
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "game_closed" }, { status: 410 });
   }
 
-  const participant = await repo.findParticipantById(body.participant_id);
+  const participant = await repo.participants.findById(body.participant_id);
   if (!participant || participant.game_id !== game.id) {
     return NextResponse.json(
       { error: "participant_not_found" },
@@ -84,7 +84,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "invalid_token" }, { status: 401 });
   }
 
-  await repo.touchParticipant(participant.id);
+  await repo.participants.touch(participant.id);
 
   const token = await mintSession({
     sub: participant.id,

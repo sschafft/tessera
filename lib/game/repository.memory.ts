@@ -2,16 +2,24 @@ import type {
   BriefRecord,
   BriefRole,
   BriefSource,
+  BriefStore,
   CreateGameInput,
   CreateParticipantInput,
   GameRecord,
   GameRepository,
+  GameStore,
   LibraryBriefRecord,
   PairRecord,
   PairRoundRecord,
+  PairRoundStore,
+  PairStore,
   ParticipantRecord,
+  ParticipantStore,
   PlacementRecord,
+  PlacementStore,
   RoundRecord,
+  RoundStore,
+  SuperPowerStore,
 } from "./repository";
 
 export class DuplicateNameError extends Error {
@@ -48,14 +56,16 @@ export class SnapshotShareCapError extends Error {
  * env vars are set. Per-process, no persistence across server restarts.
  */
 class MemoryGameRepository implements GameRepository {
-  private games = new Map<string, GameRecord>();
-  private participants = new Map<string, ParticipantRecord>();
-  private pairs = new Map<string, PairRecord>();
-  private rounds = new Map<string, RoundRecord>();
-  private pairRounds = new Map<string, PairRoundRecord>();
-  private placements = new Map<string, PlacementRecord>();
-  private briefs = new Map<string, BriefRecord>();
-  private superPowerEvents = new Map<
+  // Internal Maps. Renamed `_<name>Table` so the sub-store facade
+  // properties below can use the unprefixed names without colliding.
+  private _gameTable = new Map<string, GameRecord>();
+  private _participantTable = new Map<string, ParticipantRecord>();
+  private _pairTable = new Map<string, PairRecord>();
+  private _roundTable = new Map<string, RoundRecord>();
+  private _pairRoundTable = new Map<string, PairRoundRecord>();
+  private _placementTable = new Map<string, PlacementRecord>();
+  private _briefTable = new Map<string, BriefRecord>();
+  private _superPowerTable = new Map<
     string,
     {
       id: string;
@@ -66,6 +76,87 @@ class MemoryGameRepository implements GameRepository {
       triggered_at: string;
     }
   >();
+
+  // ─── Sub-store facades ──────────────────────────────────────────
+  // Same regrouping as the Supabase backend. Existing method bodies
+  // are unchanged; the facades delegate to them so callers can use
+  // the new repo.games.findByCode(c) shape.
+  games: GameStore = {
+    create: (input) => this.createGame(input),
+    findByCode: (code) => this.findGameByCode(code),
+    setStatus: (id, status) => this.setGameStatus(id, status),
+    updateScoring: (id, patch) => this.updateScoring(id, patch),
+    setBriefOn: (id, role, on) => this.setBriefOn(id, role, on),
+    reserveGeminiCall: (input) => this.reserveGeminiCall(input),
+  };
+
+  participants: ParticipantStore = {
+    create: (input) => this.createParticipant(input),
+    listActive: (game_id) => this.listActiveParticipants(game_id),
+    findByName: (game_id, name) => this.findParticipantByName(game_id, name),
+    findById: (id) => this.findParticipantById(id),
+    touch: (id) => this.touchParticipant(id),
+    release: (id) => this.releaseParticipant(id),
+  };
+
+  pairs: PairStore = {
+    create: (game_id, builder_id, guider_id) =>
+      this.createPair(game_id, builder_id, guider_id),
+    list: (game_id) => this.listPairs(game_id),
+    findById: (pair_id) => this.findPairById(pair_id),
+    assignObserver: (pid, pair_id) => this.assignObserver(pid, pair_id),
+    setDisplayName: (pair_id, name) => this.setPairDisplayName(pair_id, name),
+    clearAllocations: (game_id) => this.clearAllocations(game_id),
+    setBreakout: (pair_id, breakout) => this.setPairBreakout(pair_id, breakout),
+    clearBreakout: (pair_id) => this.clearPairBreakout(pair_id),
+    listWithBreakouts: (game_id) => this.listPairsWithBreakouts(game_id),
+  };
+
+  rounds: RoundStore = {
+    create: (input) => this.createRound(input),
+    start: (round_id) => this.startRound(round_id),
+    end: (round_id) => this.endRound(round_id),
+    delete: (round_id) => this.deleteRound(round_id),
+    findLatest: (game_id) => this.findLatestRound(game_id),
+    list: (game_id) => this.listRounds(game_id),
+    decrementDuration: (round_id, delta) =>
+      this.decrementRoundDuration(round_id, delta),
+  };
+
+  pairRounds: PairRoundStore = {
+    create: (input) => this.createPairRound(input),
+    listForRound: (round_id) => this.listPairRoundsForRound(round_id),
+    find: (round_id, pair_id) => this.findPairRound(round_id, pair_id),
+    setBriefsRevealed: (pr_id) => this.setBriefsRevealed(pr_id),
+    incrementSharesRemaining: (pr_id) => this.incrementSharesRemaining(pr_id),
+    setTestEnabled: (pr_id, enabled) => this.setTestEnabled(pr_id, enabled),
+    updateGoalPattern: (pr_id, pattern, seed) =>
+      this.updateGoalPattern(pr_id, pattern, seed),
+    setPrototypeUntil: (pr_id, until) => this.setPrototypeUntil(pr_id, until),
+    captureBuilderSnapshot: (pr_id, snapshot) =>
+      this.captureBuilderSnapshot(pr_id, snapshot),
+  };
+
+  placements: PlacementStore = {
+    create: (input) => this.createPlacement(input),
+    list: (pr_id) => this.listPlacements(pr_id),
+    find: (id) => this.findPlacement(id),
+    delete: (id) => this.deletePlacement(id),
+    clear: (pr_id) => this.clearPlacements(pr_id),
+    update: (id, patch) => this.updatePlacement(id, patch),
+  };
+
+  briefs: BriefStore = {
+    upsert: (input) => this.upsertBrief(input),
+    find: (pr_id, role) => this.findBrief(pr_id, role),
+    listForPairRound: (pr_id) => this.listBriefsForPairRound(pr_id),
+    listLibrary: (input) => this.listLibraryBriefs(input),
+  };
+
+  superPowers: SuperPowerStore = {
+    createEvent: (input) => this.createSuperPowerEvent(input),
+    listEvents: (round_id) => this.listSuperPowerEvents(round_id),
+  };
 
   async createGame(
     input: CreateGameInput & {
@@ -90,12 +181,12 @@ class MemoryGameRepository implements GameRepository {
       meeting_mode: input.meeting_mode ?? "remote",
       breakout_provider: input.breakout_provider ?? "none",
     };
-    this.games.set(record.code, record);
+    this._gameTable.set(record.code, record);
     return record;
   }
 
   async findGameByCode(code: string): Promise<GameRecord | null> {
-    return this.games.get(code) ?? null;
+    return this._gameTable.get(code) ?? null;
   }
 
   async createParticipant(
@@ -121,12 +212,12 @@ class MemoryGameRepository implements GameRepository {
       recovery_token_hash: input.recovery_token_hash ?? null,
       email: input.email ?? null,
     };
-    this.participants.set(record.id, record);
+    this._participantTable.set(record.id, record);
     return record;
   }
 
   async listActiveParticipants(game_id: string): Promise<ParticipantRecord[]> {
-    return [...this.participants.values()]
+    return [...this._participantTable.values()]
       .filter((p) => p.game_id === game_id && p.released_at === null)
       .sort((a, b) => a.joined_at.localeCompare(b.joined_at));
   }
@@ -136,7 +227,7 @@ class MemoryGameRepository implements GameRepository {
     display_name: string,
   ): Promise<ParticipantRecord | null> {
     const target = display_name.toLowerCase();
-    for (const p of this.participants.values()) {
+    for (const p of this._participantTable.values()) {
       if (
         p.game_id === game_id &&
         p.released_at === null &&
@@ -149,16 +240,16 @@ class MemoryGameRepository implements GameRepository {
   }
 
   async findParticipantById(id: string): Promise<ParticipantRecord | null> {
-    return this.participants.get(id) ?? null;
+    return this._participantTable.get(id) ?? null;
   }
 
   async touchParticipant(id: string): Promise<void> {
-    const p = this.participants.get(id);
+    const p = this._participantTable.get(id);
     if (p) p.last_seen_at = new Date().toISOString();
   }
 
   async releaseParticipant(id: string): Promise<void> {
-    const p = this.participants.get(id);
+    const p = this._participantTable.get(id);
     if (!p) return;
     p.released_at = new Date().toISOString();
     p.pair_id = null;
@@ -170,8 +261,8 @@ class MemoryGameRepository implements GameRepository {
     builder_id: string,
     guider_id: string,
   ): Promise<PairRecord> {
-    const builder = this.participants.get(builder_id);
-    const guider = this.participants.get(guider_id);
+    const builder = this._participantTable.get(builder_id);
+    const guider = this._participantTable.get(guider_id);
     if (!builder || builder.game_id !== game_id) {
       throw new Error("builder_not_in_game");
     }
@@ -188,7 +279,7 @@ class MemoryGameRepository implements GameRepository {
       breakout_call_url: null,
       breakout_event_id: null,
     };
-    this.pairs.set(pair.id, pair);
+    this._pairTable.set(pair.id, pair);
     builder.role = "builder";
     builder.pair_id = pair.id;
     guider.role = "guider";
@@ -197,7 +288,7 @@ class MemoryGameRepository implements GameRepository {
   }
 
   async listPairs(game_id: string): Promise<PairRecord[]> {
-    return [...this.pairs.values()]
+    return [...this._pairTable.values()]
       .filter((p) => p.game_id === game_id)
       .sort((a, b) => a.created_at.localeCompare(b.created_at));
   }
@@ -206,8 +297,8 @@ class MemoryGameRepository implements GameRepository {
     participant_id: string,
     pair_id: string,
   ): Promise<void> {
-    const p = this.participants.get(participant_id);
-    const pair = this.pairs.get(pair_id);
+    const p = this._participantTable.get(participant_id);
+    const pair = this._pairTable.get(pair_id);
     if (!p) throw new Error("participant_not_found");
     if (!pair || pair.game_id !== p.game_id) {
       throw new Error("pair_not_in_game");
@@ -220,19 +311,19 @@ class MemoryGameRepository implements GameRepository {
     pair_id: string,
     name: string | null,
   ): Promise<void> {
-    const p = this.pairs.get(pair_id);
+    const p = this._pairTable.get(pair_id);
     if (p) p.display_name = name;
   }
 
   async clearAllocations(game_id: string): Promise<void> {
-    for (const p of this.participants.values()) {
+    for (const p of this._participantTable.values()) {
       if (p.game_id === game_id && p.role !== "gm") {
         p.role = "lobby";
         p.pair_id = null;
       }
     }
-    for (const [id, pair] of this.pairs.entries()) {
-      if (pair.game_id === game_id) this.pairs.delete(id);
+    for (const [id, pair] of this._pairTable.entries()) {
+      if (pair.game_id === game_id) this._pairTable.delete(id);
     }
   }
 
@@ -252,12 +343,12 @@ class MemoryGameRepository implements GameRepository {
       started_at: null,
       ended_at: null,
     };
-    this.rounds.set(round.id, round);
+    this._roundTable.set(round.id, round);
     return round;
   }
 
   async startRound(round_id: string): Promise<void> {
-    const r = this.rounds.get(round_id);
+    const r = this._roundTable.get(round_id);
     if (r) {
       r.status = "running";
       r.started_at = new Date().toISOString();
@@ -265,7 +356,7 @@ class MemoryGameRepository implements GameRepository {
   }
 
   async endRound(round_id: string): Promise<void> {
-    const r = this.rounds.get(round_id);
+    const r = this._roundTable.get(round_id);
     if (r && r.status !== "ended") {
       r.status = "ended";
       r.ended_at = new Date().toISOString();
@@ -274,33 +365,33 @@ class MemoryGameRepository implements GameRepository {
 
   async deleteRound(round_id: string): Promise<void> {
     const pairRoundIds = new Set<string>();
-    for (const [id, pr] of this.pairRounds.entries()) {
+    for (const [id, pr] of this._pairRoundTable.entries()) {
       if (pr.round_id === round_id) {
         pairRoundIds.add(id);
-        this.pairRounds.delete(id);
+        this._pairRoundTable.delete(id);
       }
     }
-    for (const [id, b] of this.briefs.entries()) {
-      if (pairRoundIds.has(b.pair_round_id)) this.briefs.delete(id);
+    for (const [id, b] of this._briefTable.entries()) {
+      if (pairRoundIds.has(b.pair_round_id)) this._briefTable.delete(id);
     }
-    for (const [id, p] of this.placements.entries()) {
-      if (pairRoundIds.has(p.pair_round_id)) this.placements.delete(id);
+    for (const [id, p] of this._placementTable.entries()) {
+      if (pairRoundIds.has(p.pair_round_id)) this._placementTable.delete(id);
     }
-    for (const [id, e] of this.superPowerEvents.entries()) {
-      if (e.round_id === round_id) this.superPowerEvents.delete(id);
+    for (const [id, e] of this._superPowerTable.entries()) {
+      if (e.round_id === round_id) this._superPowerTable.delete(id);
     }
-    this.rounds.delete(round_id);
+    this._roundTable.delete(round_id);
   }
 
   async findLatestRound(game_id: string): Promise<RoundRecord | null> {
-    const rs = [...this.rounds.values()]
+    const rs = [...this._roundTable.values()]
       .filter((r) => r.game_id === game_id)
       .sort((a, b) => b.index - a.index);
     return rs[0] ?? null;
   }
 
   async listRounds(game_id: string): Promise<RoundRecord[]> {
-    return [...this.rounds.values()]
+    return [...this._roundTable.values()]
       .filter((r) => r.game_id === game_id)
       .sort((a, b) => a.index - b.index);
   }
@@ -323,12 +414,12 @@ class MemoryGameRepository implements GameRepository {
       prototype_until: null,
       builder_snapshot: null,
     };
-    this.pairRounds.set(pr.id, pr);
+    this._pairRoundTable.set(pr.id, pr);
     return pr;
   }
 
   async listPairRoundsForRound(round_id: string): Promise<PairRoundRecord[]> {
-    return [...this.pairRounds.values()].filter(
+    return [...this._pairRoundTable.values()].filter(
       (pr) => pr.round_id === round_id,
     );
   }
@@ -337,21 +428,21 @@ class MemoryGameRepository implements GameRepository {
     round_id: string,
     pair_id: string,
   ): Promise<PairRoundRecord | null> {
-    for (const pr of this.pairRounds.values()) {
+    for (const pr of this._pairRoundTable.values()) {
       if (pr.round_id === round_id && pr.pair_id === pair_id) return pr;
     }
     return null;
   }
 
   async findPairById(pair_id: string): Promise<PairRecord | null> {
-    return this.pairs.get(pair_id) ?? null;
+    return this._pairTable.get(pair_id) ?? null;
   }
 
   async setGameStatus(
     game_id: string,
     status: "lobby" | "running" | "ended" | "purged",
   ): Promise<void> {
-    for (const g of this.games.values()) {
+    for (const g of this._gameTable.values()) {
       if (g.id === game_id) g.status = status;
     }
   }
@@ -360,7 +451,7 @@ class MemoryGameRepository implements GameRepository {
     game_id: string,
     patch: { scoring_correct_pts?: number; scoring_wrong_pts?: number },
   ): Promise<void> {
-    for (const g of this.games.values()) {
+    for (const g of this._gameTable.values()) {
       if (g.id === game_id) {
         if (patch.scoring_correct_pts !== undefined) {
           g.scoring_correct_pts = patch.scoring_correct_pts;
@@ -377,7 +468,7 @@ class MemoryGameRepository implements GameRepository {
     role: "builder" | "guider",
     on: boolean,
   ): Promise<void> {
-    for (const g of this.games.values()) {
+    for (const g of this._gameTable.values()) {
       if (g.id === game_id) {
         if (role === "builder") g.builder_brief_on = on;
         else g.guider_brief_on = on;
@@ -389,14 +480,14 @@ class MemoryGameRepository implements GameRepository {
     pair_id: string,
     breakout: { call_url: string; event_id: string },
   ): Promise<void> {
-    const p = this.pairs.get(pair_id);
+    const p = this._pairTable.get(pair_id);
     if (!p) return;
     p.breakout_call_url = breakout.call_url;
     p.breakout_event_id = breakout.event_id;
   }
 
   async clearPairBreakout(pair_id: string): Promise<void> {
-    const p = this.pairs.get(pair_id);
+    const p = this._pairTable.get(pair_id);
     if (!p) return;
     p.breakout_call_url = null;
     p.breakout_event_id = null;
@@ -405,7 +496,7 @@ class MemoryGameRepository implements GameRepository {
   async listPairsWithBreakouts(
     game_id: string,
   ): Promise<Array<{ id: string; event_id: string; call_url: string }>> {
-    return [...this.pairs.values()]
+    return [...this._pairTable.values()]
       .filter(
         (p) =>
           p.game_id === game_id &&
@@ -428,7 +519,7 @@ class MemoryGameRepository implements GameRepository {
     rot: number;
     placed_by: string;
   }): Promise<PlacementRecord> {
-    for (const p of this.placements.values()) {
+    for (const p of this._placementTable.values()) {
       if (
         p.pair_round_id === input.pair_round_id &&
         p.q === input.q &&
@@ -448,29 +539,29 @@ class MemoryGameRepository implements GameRepository {
       placed_by: input.placed_by,
       placed_at: new Date().toISOString(),
     };
-    this.placements.set(record.id, record);
+    this._placementTable.set(record.id, record);
     return record;
   }
 
   async listPlacements(pair_round_id: string): Promise<PlacementRecord[]> {
-    return [...this.placements.values()]
+    return [...this._placementTable.values()]
       .filter((p) => p.pair_round_id === pair_round_id)
       .sort((a, b) => a.placed_at.localeCompare(b.placed_at));
   }
 
   async findPlacement(id: string): Promise<PlacementRecord | null> {
-    return this.placements.get(id) ?? null;
+    return this._placementTable.get(id) ?? null;
   }
 
   async deletePlacement(id: string): Promise<boolean> {
-    return this.placements.delete(id);
+    return this._placementTable.delete(id);
   }
 
   async clearPlacements(pair_round_id: string): Promise<number> {
     let count = 0;
-    for (const [id, p] of this.placements.entries()) {
+    for (const [id, p] of this._placementTable.entries()) {
       if (p.pair_round_id === pair_round_id) {
-        this.placements.delete(id);
+        this._placementTable.delete(id);
         count += 1;
       }
     }
@@ -487,12 +578,12 @@ class MemoryGameRepository implements GameRepository {
       color?: string;
     },
   ): Promise<PlacementRecord | null> {
-    const existing = this.placements.get(id);
+    const existing = this._placementTable.get(id);
     if (!existing) return null;
     const newQ = patch.q ?? existing.q;
     const newR = patch.r ?? existing.r;
     if (newQ !== existing.q || newR !== existing.r) {
-      for (const p of this.placements.values()) {
+      for (const p of this._placementTable.values()) {
         if (
           p.id !== id &&
           p.pair_round_id === existing.pair_round_id &&
@@ -519,9 +610,9 @@ class MemoryGameRepository implements GameRepository {
     rules: string[];
   }): Promise<BriefRecord> {
     // Replace any existing brief for this (pair_round, role).
-    for (const [id, b] of this.briefs.entries()) {
+    for (const [id, b] of this._briefTable.entries()) {
       if (b.pair_round_id === input.pair_round_id && b.role === input.role) {
-        this.briefs.delete(id);
+        this._briefTable.delete(id);
       }
     }
     const record: BriefRecord = {
@@ -534,7 +625,7 @@ class MemoryGameRepository implements GameRepository {
       revealed: false,
       created_at: new Date().toISOString(),
     };
-    this.briefs.set(record.id, record);
+    this._briefTable.set(record.id, record);
     return record;
   }
 
@@ -542,7 +633,7 @@ class MemoryGameRepository implements GameRepository {
     pair_round_id: string,
     role: BriefRole,
   ): Promise<BriefRecord | null> {
-    for (const b of this.briefs.values()) {
+    for (const b of this._briefTable.values()) {
       if (b.pair_round_id === pair_round_id && b.role === role) return b;
     }
     return null;
@@ -551,7 +642,7 @@ class MemoryGameRepository implements GameRepository {
   async listBriefsForPairRound(
     pair_round_id: string,
   ): Promise<BriefRecord[]> {
-    return [...this.briefs.values()].filter(
+    return [...this._briefTable.values()].filter(
       (b) => b.pair_round_id === pair_round_id,
     );
   }
@@ -584,7 +675,7 @@ class MemoryGameRepository implements GameRepository {
       pair_id: input.pair_id,
       triggered_at: new Date().toISOString(),
     };
-    this.superPowerEvents.set(event.id, event);
+    this._superPowerTable.set(event.id, event);
     return { id: event.id, triggered_at: event.triggered_at };
   }
 
@@ -597,18 +688,18 @@ class MemoryGameRepository implements GameRepository {
       triggered_at: string;
     }>
   > {
-    return [...this.superPowerEvents.values()].filter(
+    return [...this._superPowerTable.values()].filter(
       (e) => e.round_id === round_id,
     );
   }
 
   async setBriefsRevealed(pair_round_id: string): Promise<void> {
-    const pr = this.pairRounds.get(pair_round_id);
+    const pr = this._pairRoundTable.get(pair_round_id);
     if (pr) pr.briefs_revealed = true;
   }
 
   async incrementSharesRemaining(pair_round_id: string): Promise<number> {
-    const pr = this.pairRounds.get(pair_round_id);
+    const pr = this._pairRoundTable.get(pair_round_id);
     if (!pr) throw new Error("incrementSharesRemaining: not_found");
     pr.shares_remaining = (pr.shares_remaining ?? 0) + 1;
     return pr.shares_remaining;
@@ -618,7 +709,7 @@ class MemoryGameRepository implements GameRepository {
     pair_round_id: string,
     enabled: boolean,
   ): Promise<void> {
-    const pr = this.pairRounds.get(pair_round_id);
+    const pr = this._pairRoundTable.get(pair_round_id);
     if (pr) pr.test_enabled = enabled;
   }
 
@@ -627,7 +718,7 @@ class MemoryGameRepository implements GameRepository {
     pattern: unknown,
     seed: string,
   ): Promise<void> {
-    const pr = this.pairRounds.get(pair_round_id);
+    const pr = this._pairRoundTable.get(pair_round_id);
     if (pr) {
       pr.goal_pattern = pattern;
       pr.pattern_seed = seed;
@@ -644,7 +735,7 @@ class MemoryGameRepository implements GameRepository {
     | { ok: true; perGame: number; perDay: number }
     | { ok: false; reason: "per_game_cap" | "per_day_cap" }
   > {
-    const game = [...this.games.values()].find((g) => g.id === input.game_id);
+    const game = [...this._gameTable.values()].find((g) => g.id === input.game_id);
     if (!game) return { ok: false, reason: "per_game_cap" };
     if (game.gemini_calls_used >= input.perGameMax) {
       return { ok: false, reason: "per_game_cap" };
@@ -663,7 +754,7 @@ class MemoryGameRepository implements GameRepository {
     round_id: string,
     delta: number,
   ): Promise<void> {
-    const r = this.rounds.get(round_id);
+    const r = this._roundTable.get(round_id);
     if (r) {
       // Compute current remaining; floor at 30s.
       const startedMs = r.started_at
@@ -680,7 +771,7 @@ class MemoryGameRepository implements GameRepository {
     pair_round_id: string,
     until: Date,
   ): Promise<void> {
-    const pr = this.pairRounds.get(pair_round_id);
+    const pr = this._pairRoundTable.get(pair_round_id);
     if (pr) pr.prototype_until = until.toISOString();
   }
 
@@ -688,7 +779,7 @@ class MemoryGameRepository implements GameRepository {
     pair_round_id: string,
     snapshot: unknown,
   ): Promise<number> {
-    const pr = this.pairRounds.get(pair_round_id);
+    const pr = this._pairRoundTable.get(pair_round_id);
     if (!pr) throw new SnapshotShareCapError("pair_round_not_found");
     if (pr.shares_remaining <= 0) {
       throw new SnapshotShareCapError("no_shares_remaining");

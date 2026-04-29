@@ -44,14 +44,14 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
   const repo = getRepository();
   const me = session.me;
-  const pair = await repo.findPairById(body.pair_id);
+  const pair = await repo.pairs.findById(body.pair_id);
   if (!pair || pair.game_id !== session.claims.game_id) {
     return NextResponse.json({ error: "pair_not_found" }, { status: 404 });
   }
 
   // Reuse the existing assignObserver helper. Our observer was
   // already role='observer'; this only updates pair_id.
-  await repo.assignObserver(me.id, pair.id);
+  await repo.pairs.assignObserver(me.id, pair.id);
   await publishGameEvent(session.claims.game_id, "observer_switched");
   return NextResponse.json({ ok: true });
 }

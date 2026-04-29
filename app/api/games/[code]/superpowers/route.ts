@@ -68,17 +68,17 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
 
   const repo = getRepository();
-  const game = await repo.findGameByCode(code);
+  const game = await repo.games.findByCode(code);
   if (!game || game.id !== claims.game_id) {
     return NextResponse.json({ error: "game_not_found" }, { status: 404 });
   }
-  const round = await repo.findLatestRound(game.id);
+  const round = await repo.rounds.findLatest(game.id);
   if (!round || round.status !== "running") {
     return NextResponse.json({ error: "round_not_running" }, { status: 400 });
   }
 
   // Policy check (caps, cooldowns, implementation status).
-  const rawEvents = await repo.listSuperPowerEvents(round.id);
+  const rawEvents = await repo.superPowers.listEvents(round.id);
   const events = rawEvents.map((e) => ({
     kind: e.kind as SuperPowerKind,
     scope: e.scope,
@@ -97,7 +97,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
 
   // Gather affected pair_rounds.
-  const allPairs = await repo.listPairs(game.id);
+  const allPairs = await repo.pairs.list(game.id);
   const targetedPairs =
     body.scope === "all"
       ? allPairs
@@ -117,8 +117,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     case "reveal_briefs":
       await Promise.all(
         targetedPairs.map(async (pair) => {
-          const pr = await repo.findPairRound(round.id, pair.id);
-          if (pr) await repo.setBriefsRevealed(pr.id);
+          const pr = await repo.pairRounds.find(round.id, pair.id);
+          if (pr) await repo.pairRounds.setBriefsRevealed(pr.id);
         }),
       );
       break;
@@ -126,8 +126,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     case "test_build":
       await Promise.all(
         targetedPairs.map(async (pair) => {
-          const pr = await repo.findPairRound(round.id, pair.id);
-          if (pr) await repo.setTestEnabled(pr.id, true);
+          const pr = await repo.pairRounds.find(round.id, pair.id);
+          if (pr) await repo.pairRounds.setTestEnabled(pr.id, true);
         }),
       );
       break;
@@ -135,7 +135,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     case "time_pressure": {
       const raw = body.payload?.delta_seconds;
       const delta = typeof raw === "number" ? raw : 180; // default −3:00
-      await repo.decrementRoundDuration(round.id, delta);
+      await repo.rounds.decrementDuration(round.id, delta);
       break;
     }
 
@@ -151,7 +151,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       const wasOff =
         role === "builder" ? !game.builder_brief_on : !game.guider_brief_on;
       if (wasOff) {
-        await repo.setBriefOn(game.id, role, true);
+        await repo.games.setBriefOn(game.id, role, true);
       }
       const source =
         role === "builder" ? game.builder_brief_source : game.guider_brief_source;
@@ -159,9 +159,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         role === "builder" ? game.builder_brief_custom : game.guider_brief_custom;
       await Promise.all(
         targetedPairs.map(async (pair) => {
-          const pr = await repo.findPairRound(round.id, pair.id);
+          const pr = await repo.pairRounds.find(round.id, pair.id);
           if (!pr) return;
-          const current = await repo.findBrief(pr.id, role);
+          const current = await repo.briefs.find(pr.id, role);
           const exclude = current ? [current.title] : [];
           const fresh = await pickBrief({
             role,
@@ -171,7 +171,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
             custom,
             exclude_titles: exclude,
           });
-          await repo.upsertBrief({
+          await repo.briefs.upsert({
             pair_round_id: pr.id,
             role,
             source: fresh.source,
@@ -186,7 +186,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     case "randomizer":
       await Promise.all(
         targetedPairs.map(async (pair) => {
-          const pr = await repo.findPairRound(round.id, pair.id);
+          const pr = await repo.pairRounds.find(round.id, pair.id);
           if (!pr) return;
           // Re-seed deterministically with the event timestamp so two
           // randomizer triggers in a row don't collide.
@@ -195,7 +195,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
             complexity: round.complexity,
             seed: newSeed,
           });
-          await repo.updateGoalPattern(pr.id, newPattern, newSeed);
+          await repo.pairRounds.updateGoalPattern(pr.id, newPattern, newSeed);
         }),
       );
       break;
@@ -212,7 +212,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       const grid = gridSizeFor(round.complexity);
       await Promise.all(
         targetedPairs.map(async (pair) => {
-          const pr = await repo.findPairRound(round.id, pair.id);
+          const pr = await repo.pairRounds.find(round.id, pair.id);
           if (!pr) return;
           const newSeed = `${pr.pattern_seed}:${body.kind}:${Date.now()}`;
           const newPattern = generatePattern({
@@ -220,7 +220,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
             seed: newSeed,
             grid,
           });
-          await repo.updateGoalPattern(pr.id, newPattern, newSeed);
+          await repo.pairRounds.updateGoalPattern(pr.id, newPattern, newSeed);
         }),
       );
       break;
@@ -229,14 +229,14 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     case "requirement_change":
       await Promise.all(
         targetedPairs.map(async (pair) => {
-          const pr = await repo.findPairRound(round.id, pair.id);
+          const pr = await repo.pairRounds.find(round.id, pair.id);
           if (!pr) return;
           const current = pr.goal_pattern as GoalPattern;
           if (!Array.isArray(current) || current.length === 0) return;
           const grid = gridSizeFor(round.complexity);
           const mutated = mutateOne(current, grid);
           const newSeed = `${pr.pattern_seed}:req:${Date.now()}`;
-          await repo.updateGoalPattern(pr.id, mutated, newSeed);
+          await repo.pairRounds.updateGoalPattern(pr.id, mutated, newSeed);
         }),
       );
       break;
@@ -252,8 +252,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       const until = new Date(Date.now() + seconds * 1000);
       await Promise.all(
         targetedPairs.map(async (pair) => {
-          const pr = await repo.findPairRound(round.id, pair.id);
-          if (pr) await repo.setPrototypeUntil(pr.id, until);
+          const pr = await repo.pairRounds.find(round.id, pair.id);
+          if (pr) await repo.pairRounds.setPrototypeUntil(pr.id, until);
         }),
       );
       break;
@@ -269,8 +269,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       // the builder clicks, which decrements shares_remaining.
       await Promise.all(
         targetedPairs.map(async (pair) => {
-          const pr = await repo.findPairRound(round.id, pair.id);
-          if (pr) await repo.incrementSharesRemaining(pr.id);
+          const pr = await repo.pairRounds.find(round.id, pair.id);
+          if (pr) await repo.pairRounds.incrementSharesRemaining(pr.id);
         }),
       );
       break;
@@ -280,7 +280,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
 
   // Audit log.
-  await repo.createSuperPowerEvent({
+  await repo.superPowers.createEvent({
     round_id: round.id,
     scope: body.scope,
     pair_id: body.scope === "pair" ? body.pair_id! : null,

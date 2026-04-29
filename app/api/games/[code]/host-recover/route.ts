@@ -37,7 +37,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
 
   const repo = getRepository();
-  const game = await repo.findGameByCode(code);
+  const game = await repo.games.findByCode(code);
   if (!game) {
     return NextResponse.json({ error: "game_not_found" }, { status: 404 });
   }

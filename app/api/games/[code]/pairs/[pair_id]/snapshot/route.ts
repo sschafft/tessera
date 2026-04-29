@@ -32,11 +32,11 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
   }
 
   const repo = getRepository();
-  const game = await repo.findGameByCode(code);
+  const game = await repo.games.findByCode(code);
   if (!game || game.id !== claims.game_id) {
     return NextResponse.json({ error: "game_not_found" }, { status: 404 });
   }
-  const pair = await repo.findPairById(pair_id);
+  const pair = await repo.pairs.findById(pair_id);
   if (!pair || pair.game_id !== game.id) {
     return NextResponse.json({ error: "pair_not_found" }, { status: 404 });
   }
@@ -45,11 +45,11 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
   // the GM's focused-pair heading reads "Avery ↔ Bri" before Start
   // is clicked, not "? ↔ ?".
   const builder =
-    pair.builder_id ? await repo.findParticipantById(pair.builder_id) : null;
+    pair.builder_id ? await repo.participants.findById(pair.builder_id) : null;
   const guider =
-    pair.guider_id ? await repo.findParticipantById(pair.guider_id) : null;
+    pair.guider_id ? await repo.participants.findById(pair.guider_id) : null;
 
-  const round = await repo.findLatestRound(game.id);
+  const round = await repo.rounds.findLatest(game.id);
   if (!round) {
     return NextResponse.json({
       pair_id,
@@ -66,13 +66,13 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     });
   }
 
-  const pairRound = await repo.findPairRound(round.id, pair_id);
+  const pairRound = await repo.pairRounds.find(round.id, pair_id);
 
   const goal: GoalPattern = pairRound
     ? ((pairRound.goal_pattern as GoalPattern) ?? [])
     : [];
   const placementsRaw = pairRound
-    ? await repo.listPlacements(pairRound.id)
+    ? await repo.placements.list(pairRound.id)
     : [];
 
   // Per-piece correctness — always computed for the GM. Route through
@@ -100,7 +100,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
   }));
 
   const briefs = pairRound
-    ? await repo.listBriefsForPairRound(pairRound.id)
+    ? await repo.briefs.listForPairRound(pairRound.id)
     : [];
   const builderBrief = briefs.find((b) => b.role === "builder") ?? null;
   const guiderBrief = briefs.find((b) => b.role === "guider") ?? null;

@@ -45,7 +45,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
 
   const repo = getRepository();
-  const game = await repo.findGameByCode(code);
+  const game = await repo.games.findByCode(code);
   if (!game || game.id !== claims.game_id) {
     return NextResponse.json({ error: "game_not_found" }, { status: 404 });
   }
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   // still around to read. Failures here don't block game-end — orphaned
   // calendar events are visible only to the GM and easy to bulk-delete
   // by searching "Tessera breakout".
-  const breakouts = await repo.listPairsWithBreakouts(game.id);
+  const breakouts = await repo.pairs.listWithBreakouts(game.id);
   let deleted = 0;
   let cleanupWarning: string | null = null;
   const usesGoogleMeet = game.breakout_provider === "google_meet";
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
             }`,
           );
         }
-        await repo.clearPairBreakout(b.id).catch(() => undefined);
+        await repo.pairs.clearBreakout(b.id).catch(() => undefined);
       }
     } catch (err) {
       if (err instanceof GoogleSessionLost) {
@@ -96,7 +96,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   // rows we may have only partially cleared above).
   if (breakouts.length > 0) {
     for (const b of breakouts) {
-      await repo.clearPairBreakout(b.id).catch(() => undefined);
+      await repo.pairs.clearBreakout(b.id).catch(() => undefined);
     }
   }
   // Revoke + drop any stored Google tokens (best effort) — only meaningful
@@ -110,11 +110,11 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
 
   // End the active round first (idempotent), then flip the game.
-  const round = await repo.findLatestRound(game.id);
+  const round = await repo.rounds.findLatest(game.id);
   if (round && round.status === "running") {
-    await repo.endRound(round.id);
+    await repo.rounds.end(round.id);
   }
-  await repo.setGameStatus(game.id, "ended");
+  await repo.games.setStatus(game.id, "ended");
   await publishGameEvent(game.id, "game_ended");
   return NextResponse.json({
     ok: true,

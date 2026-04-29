@@ -67,11 +67,11 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
 
   const repo = getRepository();
-  const game = await repo.findGameByCode(code);
+  const game = await repo.games.findByCode(code);
   if (!game || game.id !== claims.game_id) {
     return NextResponse.json({ error: "game_not_found" }, { status: 404 });
   }
-  await repo.updateScoring(game.id, patch);
+  await repo.games.updateScoring(game.id, patch);
   await publishGameEvent(game.id, "scoring_changed");
 
   return NextResponse.json({

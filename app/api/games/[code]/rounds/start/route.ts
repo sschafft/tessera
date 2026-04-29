@@ -61,12 +61,12 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       : undefined;
 
   const repo = getRepository();
-  const game = await repo.findGameByCode(code);
+  const game = await repo.games.findByCode(code);
   if (!game || game.id !== claims.game_id) {
     return NextResponse.json({ error: "game_not_found" }, { status: 404 });
   }
 
-  const pairs = await repo.listPairs(game.id);
+  const pairs = await repo.pairs.list(game.id);
   if (pairs.length === 0) {
     return NextResponse.json(
       { error: "no_pairs", message: "Allocate at least one pair first." },
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     );
   }
 
-  const latest = await repo.findLatestRound(game.id);
+  const latest = await repo.rounds.findLatest(game.id);
   if (latest && latest.status === "running") {
     return NextResponse.json(
       { error: "round_already_running", round_id: latest.id },
@@ -84,7 +84,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   // A pending round is an orphan from a prior failed Start (e.g.
   // Gemini timeout). Drop it so the GM can retry cleanly.
   if (latest && latest.status === "pending") {
-    await repo.deleteRound(latest.id);
+    await repo.rounds.delete(latest.id);
   }
   const nextIndex =
     (latest && latest.status === "ended" ? latest.index : 0) + 1;
@@ -191,7 +191,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   // ─── pair rows. Failures here are rare (DB outages) and would still
   // ─── leave a pending round; the next Start retries it (delete-then-
   // ─── create above).
-  const round = await repo.createRound({
+  const round = await repo.rounds.create({
     game_id: game.id,
     index: nextIndex,
     complexity,
@@ -199,14 +199,14 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   });
 
   for (const p of prepared) {
-    const pairRound = await repo.createPairRound({
+    const pairRound = await repo.pairRounds.create({
       round_id: round.id,
       pair_id: p.pair_id,
       goal_pattern: p.goal,
       pattern_seed: p.seed,
     });
     if (p.builder) {
-      await repo.upsertBrief({
+      await repo.briefs.upsert({
         pair_round_id: pairRound.id,
         role: "builder",
         source: p.builder.source,
@@ -215,7 +215,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       });
     }
     if (p.guider) {
-      await repo.upsertBrief({
+      await repo.briefs.upsert({
         pair_round_id: pairRound.id,
         role: "guider",
         source: p.guider.source,
@@ -225,8 +225,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
   }
 
-  await repo.startRound(round.id);
-  await repo.setGameStatus(game.id, "running");
+  await repo.rounds.start(round.id);
+  await repo.games.setStatus(game.id, "running");
   await publishGameEvent(game.id, "round_started");
 
   return NextResponse.json({

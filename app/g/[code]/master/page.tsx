@@ -17,7 +17,7 @@ export default async function MasterPage({ params }: PageProps) {
   if (claims.role !== "gm") redirect(`/g/${code}/play`);
 
   const repo = getRepository();
-  const game = await repo.findGameByCode(code);
+  const game = await repo.games.findByCode(code);
   if (!game || game.id !== claims.game_id) notFound();
 
   return (

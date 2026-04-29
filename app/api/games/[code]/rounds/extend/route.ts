@@ -17,7 +17,7 @@ interface ExtendPayload {
 
 /**
  * GM-only "extend round" — pads the running round timer with extra
- * seconds. Reuses repo.decrementRoundDuration with a negative delta
+ * seconds. Reuses repo.rounds.decrementDuration with a negative delta
  * (the existing impl handles both directions; the floor at 30s only
  * applies when shrinking).
  *
@@ -54,16 +54,16 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
 
   const repo = getRepository();
-  const game = await repo.findGameByCode(code);
+  const game = await repo.games.findByCode(code);
   if (!game || game.id !== claims.game_id) {
     return NextResponse.json({ error: "game_not_found" }, { status: 404 });
   }
-  const round = await repo.findLatestRound(game.id);
+  const round = await repo.rounds.findLatest(game.id);
   if (!round || round.status !== "running") {
     return NextResponse.json({ error: "round_not_running" }, { status: 400 });
   }
 
-  await repo.decrementRoundDuration(round.id, -delta);
+  await repo.rounds.decrementDuration(round.id, -delta);
   await publishGameEvent(game.id, "round_extended", { delta_seconds: delta });
 
   return NextResponse.json({ ok: true, delta_seconds: delta });

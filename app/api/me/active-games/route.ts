@@ -42,7 +42,7 @@ export async function GET() {
   }
   const lookedUp = await Promise.all(
     validClaims.map(async (claims) => {
-      const game = await repo.findGameByCode(claims.code);
+      const game = await repo.games.findByCode(claims.code);
       if (!game) return null;
       if (game.id !== claims.game_id) return null;
       if (game.status === "ended" || game.status === "purged") return null;

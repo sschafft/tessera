@@ -69,7 +69,7 @@ export async function pickBrief(input: OrchestrateInput): Promise<PickedBrief> {
     let aiFailReason: string | null = null;
     try {
       const repo = getRepository();
-      const reservation = await repo.reserveGeminiCall({
+      const reservation = await repo.games.reserveGeminiCall({
         game_id: input.game_id,
         perGameMax: PER_GAME_MAX,
         perDayMax: PER_DAY_MAX,

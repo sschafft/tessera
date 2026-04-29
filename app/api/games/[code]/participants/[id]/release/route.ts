@@ -37,12 +37,12 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
   }
 
   const repo = getRepository();
-  const game = await repo.findGameByCode(code);
+  const game = await repo.games.findByCode(code);
   if (!game || game.id !== claims.game_id) {
     return NextResponse.json({ error: "game_not_found" }, { status: 404 });
   }
 
-  const target = await repo.findParticipantById(id);
+  const target = await repo.participants.findById(id);
   if (!target || target.game_id !== game.id) {
     return NextResponse.json({ error: "participant_not_found" }, { status: 404 });
   }
@@ -52,7 +52,7 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "cannot_release_gm" }, { status: 400 });
   }
 
-  await repo.releaseParticipant(id);
+  await repo.participants.release(id);
   await publishGameEvent(game.id, "lobby_changed");
   return NextResponse.json({ ok: true });
 }

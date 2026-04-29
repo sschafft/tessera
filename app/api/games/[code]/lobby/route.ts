@@ -35,21 +35,21 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
   }
 
   const repo = getRepository();
-  const game = await repo.findGameByCode(code);
+  const game = await repo.games.findByCode(code);
   if (!game || game.id !== claims.game_id) {
     return NextResponse.json({ error: "game_not_found" }, { status: 404 });
   }
 
   const [active, pairs, round] = await Promise.all([
-    repo.listActiveParticipants(game.id),
-    repo.listPairs(game.id),
-    repo.findLatestRound(game.id),
+    repo.participants.listActive(game.id),
+    repo.pairs.list(game.id),
+    repo.rounds.findLatest(game.id),
   ]);
 
   // Super-power events for the current round (used to render usage
   // counters + cooldowns on the dashboard rail).
   const superpowerEvents = round
-    ? await repo.listSuperPowerEvents(round.id)
+    ? await repo.superPowers.listEvents(round.id)
     : [];
 
   // Build a map of (pair_id → { builder_brief, guider_brief, progress })
@@ -78,11 +78,11 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
   if (round) {
     const entries = await Promise.all(
       pairs.map(async (pair) => {
-        const pr = await repo.findPairRound(round.id, pair.id);
+        const pr = await repo.pairRounds.find(round.id, pair.id);
         if (!pr) return null;
         const [list, placements] = await Promise.all([
-          repo.listBriefsForPairRound(pr.id),
-          repo.listPlacements(pr.id),
+          repo.briefs.listForPairRound(pr.id),
+          repo.placements.list(pr.id),
         ]);
         const builder = list.find((b) => b.role === "builder");
         const guider = list.find((b) => b.role === "guider");

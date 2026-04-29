@@ -32,7 +32,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
 
   const repo = getRepository();
-  const game = await repo.findGameByCode(code);
+  const game = await repo.games.findByCode(code);
   if (!game || game.id !== claims.game_id) {
     return NextResponse.json({ error: "game_not_found" }, { status: 404 });
   }
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "game_purged" }, { status: 410 });
   }
 
-  const pairs = await repo.listPairs(game.id);
+  const pairs = await repo.pairs.list(game.id);
   if (pairs.length === 0) {
     return NextResponse.json(
       { error: "no_pairs", message: "Allocate at least one pair before replaying." },
@@ -50,12 +50,12 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
   // Reopen the game if it had ended.
   if (game.status === "ended") {
-    await repo.setGameStatus(game.id, "running");
+    await repo.games.setStatus(game.id, "running");
   }
 
   // Pick the next round index, extending round_count if we'd otherwise
   // hit the all_rounds_complete cap.
-  const latest = await repo.findLatestRound(game.id);
+  const latest = await repo.rounds.findLatest(game.id);
   const nextIndex = (latest?.index ?? 0) + 1;
   // (round_count is just a planning ceiling; bumping it is the cheapest
   // way to allow another round without a schema change.)
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   const complexity = game.default_complexity;
   const duration = game.round_duration_seconds;
 
-  const round = await repo.createRound({
+  const round = await repo.rounds.create({
     game_id: game.id,
     index: nextIndex,
     complexity,
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   for (const pair of pairs) {
     const seed = `${game.id}:${round.id}:${pair.id}`;
     const goal = generatePattern({ complexity, seed });
-    const pairRound = await repo.createPairRound({
+    const pairRound = await repo.pairRounds.create({
       round_id: round.id,
       pair_id: pair.id,
       goal_pattern: goal,
@@ -87,7 +87,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         game_id: game.id,
         custom: game.builder_brief_custom,
       });
-      await repo.upsertBrief({
+      await repo.briefs.upsert({
         pair_round_id: pairRound.id,
         role: "builder",
         source: brief.source,
@@ -103,7 +103,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         game_id: game.id,
         custom: game.guider_brief_custom,
       });
-      await repo.upsertBrief({
+      await repo.briefs.upsert({
         pair_round_id: pairRound.id,
         role: "guider",
         source: brief.source,
@@ -113,7 +113,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
   }
 
-  await repo.startRound(round.id);
+  await repo.rounds.start(round.id);
   await publishGameEvent(game.id, "round_started");
 
   return NextResponse.json({

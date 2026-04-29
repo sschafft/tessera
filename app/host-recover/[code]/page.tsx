@@ -12,7 +12,7 @@ export default async function HostRecoverPage({ params }: PageProps) {
   const { code } = await params;
   if (!isValidGameCode(code)) notFound();
   const repo = getRepository();
-  const game = await repo.findGameByCode(code);
+  const game = await repo.games.findByCode(code);
   if (!game) notFound();
 
   return (

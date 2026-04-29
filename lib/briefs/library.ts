@@ -47,7 +47,7 @@ export async function pickLibraryBrief({
   exclude_titles?: string[];
 }): Promise<PickedBrief> {
   const repo = getRepository();
-  const candidates = await repo.listLibraryBriefs({
+  const candidates = await repo.briefs.listLibrary({
     role,
     complexity,
     exclude_titles,
@@ -57,7 +57,7 @@ export async function pickLibraryBrief({
     // First retry without the exclude filter (we may have run out).
     const second =
       exclude_titles && exclude_titles.length > 0
-        ? await repo.listLibraryBriefs({ role, complexity })
+        ? await repo.briefs.listLibrary({ role, complexity })
         : [];
     if (second.length === 0) {
       return { source: "library", ...FALLBACK_BRIEFS[role] };

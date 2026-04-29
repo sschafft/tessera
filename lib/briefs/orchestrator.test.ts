@@ -8,8 +8,8 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/lib/game/getRepository", () => {
   return {
     getRepository: () => ({
-      reserveGeminiCall: reserveGeminiMock,
-      listLibraryBriefs: listLibraryMock,
+      games: { reserveGeminiCall: reserveGeminiMock },
+      briefs: { listLibrary: listLibraryMock },
     }),
   };
 });

@@ -78,12 +78,12 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
 
   const repo = getRepository();
-  const game = await repo.findGameByCode(code);
+  const game = await repo.games.findByCode(code);
   if (!game || game.id !== claims.game_id) {
     return NextResponse.json({ error: "game_not_found" }, { status: 404 });
   }
 
-  const participants = await repo.listActiveParticipants(game.id);
+  const participants = await repo.participants.listActive(game.id);
   const byId = new Map(participants.map((p) => [p.id, p]));
 
   if (body.kind === "auto") {
@@ -104,7 +104,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
 
   if (body.kind === "auto_observers") {
-    const existingPairs = await repo.listPairs(game.id);
+    const existingPairs = await repo.pairs.list(game.id);
     if (existingPairs.length === 0) {
       return NextResponse.json(
         { error: "no_pairs", message: "Create at least one pair first." },
@@ -117,7 +117,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     let assigned = 0;
     for (let i = 0; i < lobby.length; i++) {
       const target = existingPairs[i % existingPairs.length]!;
-      await repo.assignObserver(lobby[i]!.id, target.id);
+      await repo.pairs.assignObserver(lobby[i]!.id, target.id);
       assigned += 1;
     }
     await publishGameEvent(game.id, "allocation_changed");
@@ -136,13 +136,13 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
     const builderId = body.builder_id;
     const guiderId = builderId === aId ? bId : aId;
-    await repo.createPair(game.id, builderId, guiderId);
+    await repo.pairs.create(game.id, builderId, guiderId);
     await publishGameEvent(game.id, "allocation_changed");
     return NextResponse.json({ ok: true });
   }
 
   // observer
-  const pairs = await repo.listPairs(game.id);
+  const pairs = await repo.pairs.list(game.id);
   const pair = pairs.find((p) => p.id === body.pair_id);
   if (!pair) {
     return NextResponse.json({ error: "pair_not_found" }, { status: 400 });
@@ -150,7 +150,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   for (const pid of body.participant_ids) {
     const p = byId.get(pid);
     if (!p) continue;
-    await repo.assignObserver(pid, pair.id);
+    await repo.pairs.assignObserver(pid, pair.id);
   }
   await publishGameEvent(game.id, "allocation_changed");
   return NextResponse.json({ ok: true });
@@ -172,7 +172,7 @@ async function autoAllocate({
   participants: ParticipantRecord[];
 }): Promise<AutoResult> {
   // Reset all roles first so re-running auto-allocate is idempotent.
-  await repo.clearAllocations(game_id);
+  await repo.pairs.clearAllocations(game_id);
 
   const lobbyOnly = participants.filter((p) => p.role !== "gm");
   shuffle(lobbyOnly);
@@ -188,7 +188,7 @@ async function autoAllocate({
 
   const createdPairs: string[] = [];
   for (const p of pairs) {
-    const created = await repo.createPair(game_id, p.builder, p.guider);
+    const created = await repo.pairs.create(game_id, p.builder, p.guider);
     createdPairs.push(created.id);
   }
 
@@ -198,7 +198,7 @@ async function autoAllocate({
     const leftovers = lobbyOnly.slice(i);
     for (let j = 0; j < leftovers.length; j++) {
       const target = createdPairs[j % createdPairs.length]!;
-      await repo.assignObserver(leftovers[j]!.id, target);
+      await repo.pairs.assignObserver(leftovers[j]!.id, target);
       observers += 1;
     }
   }
@@ -247,7 +247,7 @@ async function autoCreatePairs({
   for (let i = 0; i < cap; i++) {
     const a = lobby[i * 2]!;
     const b = lobby[i * 2 + 1]!;
-    await repo.createPair(game_id, a.id, b.id);
+    await repo.pairs.create(game_id, a.id, b.id);
     created += 1;
   }
   return {

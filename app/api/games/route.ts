@@ -198,7 +198,7 @@ export async function POST(req: NextRequest) {
   const gmParticipantId = crypto.randomUUID();
 
   const repo = getRepository();
-  const game = await repo.createGame({
+  const game = await repo.games.create({
     ...validated,
     code,
     host_token_hash: hostTokenHash,
@@ -208,7 +208,7 @@ export async function POST(req: NextRequest) {
   // foreign-key references (super_power_events.triggered_by, etc.).
   // The lobby UI filters by role='lobby', so this row never appears
   // in the player-facing list.
-  await repo.createParticipant({
+  await repo.participants.create({
     id: gmParticipantId,
     game_id: game.id,
     display_name: "Facilitator",

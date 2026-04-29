@@ -42,20 +42,20 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
   }
 
   const repo = getRepository();
-  const game = await repo.findGameByCode(code);
+  const game = await repo.games.findByCode(code);
   if (!game || game.id !== session.claims.game_id) {
     return NextResponse.json({ error: "game_not_found" }, { status: 404 });
   }
-  const round = await repo.findLatestRound(game.id);
+  const round = await repo.rounds.findLatest(game.id);
   if (!round || round.status !== "running") {
     return NextResponse.json({ error: "round_not_running" }, { status: 400 });
   }
-  const pairRound = await repo.findPairRound(round.id, me.pair_id);
+  const pairRound = await repo.pairRounds.find(round.id, me.pair_id);
   if (!pairRound) {
     return NextResponse.json({ error: "no_pair_round" }, { status: 400 });
   }
 
-  const placements = await repo.listPlacements(pairRound.id);
+  const placements = await repo.placements.list(pairRound.id);
   const goal = (pairRound.goal_pattern as GoalPattern) ?? [];
   const breakdown = scorePlacements(placements, goal, {
     correctPts: game.scoring_correct_pts,
@@ -65,7 +65,7 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
   // Persist test-enabled so the canvas shows correctness highlights
   // even after the celebratory animation fades.
   if (!pairRound.test_enabled) {
-    await repo.setTestEnabled(pairRound.id, true);
+    await repo.pairRounds.setTestEnabled(pairRound.id, true);
   }
 
   await publishGameEvent(game.id, "solution_tested", {

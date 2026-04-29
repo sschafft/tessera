@@ -42,12 +42,12 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
   }
 
   const repo = getRepository();
-  const game = await repo.findGameByCode(code);
+  const game = await repo.games.findByCode(code);
   if (!game || game.id !== claims.game_id) {
     return NextResponse.json({ error: "game_not_found" }, { status: 404 });
   }
 
-  const breakouts = await repo.listPairsWithBreakouts(game.id);
+  const breakouts = await repo.pairs.listWithBreakouts(game.id);
   if (breakouts.length === 0) {
     return NextResponse.json({ ok: true, deleted: 0 });
   }
@@ -57,7 +57,7 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
   // the players leave the room (rooms are ephemeral on meet.jit.si).
   if (game.breakout_provider === "jitsi") {
     for (const b of breakouts) {
-      await repo.clearPairBreakout(b.id);
+      await repo.pairs.clearBreakout(b.id);
     }
     await publishGameEvent(game.id, "breakouts_changed", { cleared: true });
     return NextResponse.json({
@@ -76,7 +76,7 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
     // events are orphaned but only visible to the GM.
     if (err instanceof GoogleSessionLost) {
       for (const b of breakouts) {
-        await repo.clearPairBreakout(b.id);
+        await repo.pairs.clearBreakout(b.id);
       }
       await publishGameEvent(game.id, "breakouts_changed", { cleared: true });
       return NextResponse.json({
@@ -116,12 +116,12 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
         }`,
       );
     }
-    await repo.clearPairBreakout(b.id);
+    await repo.pairs.clearBreakout(b.id);
   }
 
   // Catch up on any local rows we didn't reach in the loop.
   for (const b of breakouts.slice(deleted)) {
-    await repo.clearPairBreakout(b.id).catch(() => undefined);
+    await repo.pairs.clearBreakout(b.id).catch(() => undefined);
   }
 
   await publishGameEvent(game.id, "breakouts_changed", { cleared: true });
