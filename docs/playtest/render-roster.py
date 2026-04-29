@@ -33,6 +33,10 @@ DURATION_MIN = int(os.environ.get("DURATION_MIN", "8"))
 ROUND_COUNT = int(os.environ.get("ROUND_COUNT", "2"))
 MEETING_MODE = os.environ.get("MEETING_MODE", "remote")
 BREAKOUT_PROVIDER = os.environ.get("BREAKOUT_PROVIDER", "none")
+# QA_MODE=1 swaps the experiential v1.4/v1.5 lenses for a regression-
+# focused checklist. Use after a substantive code change to confirm
+# nothing visible has broken before going experiential again.
+QA_MODE = os.environ.get("QA_MODE", "0") == "1"
 
 if not CODE or not HOST_TOKEN:
     print("CODE and HOST_TOKEN env vars are required", file=sys.stderr)
@@ -297,42 +301,81 @@ for i, entry in enumerate(ROSTER):
     else:
         body += player_breakouts_check
 
-    # v1.4 UX + copy lens — separate observation pass on copy quality
-    # and brief evocativeness. Brief library was tuned with new themed
-    # vocabularies (floop-doopy, acronym officer, pirate's log, star
-    # captain, cooking show, telegraph operator) + softened over-stacked
-    # builder briefs. We want experiential read on whether the briefs
-    # land and whether the site copy reads polished or rough.
-    ux_copy_lens = (
-        "\n\n## v1.4 UX + copy lens (NEW — read this and respond in your final report)\n"
-        "Beyond your role-specific phases, run a separate observation pass on TWO things:\n"
-        "\n"
-        "1. **Brief evocativeness.** When you read your own brief (and any briefs revealed at round-end), judge each one as a piece of writing. Was it tricky-but-parseable, or convoluted? Did the constraint feel themed and consistent (e.g., a clean nautical vocabulary you could lean into), or like an arbitrary stack of rules? Specifically watch for the new themed briefs — pirate's log, star captain, cooking show host, acronym officer, floop-doopy lexicon, telegraph operator. If you got one, did it generate the kind of weird-funny conversation Tessera is supposed to spark? Or did it just slow you down?\n"
-        "\n"
-        "2. **Copy polish across the site.** As you move between surfaces (landing page → join → lobby → play → round end), notice the copy. Anywhere a label, hint, button, or banner felt: too clever, too jargony, too generic, internally inconsistent (e.g., a button labelled X but the next screen calls the same action Y), or just rough — flag it. Specifically check: lobby waiting copy ('YOU'RE IN · WAITING' badge + body text), top-bar Pair-call vs Main-room labels, brief envelope wording, super-power tile labels, round-ended view header copy.\n"
-        "\n"
-        "Add these as `findings` with `category: copy` and `area: shared` (or your role) AND surface 1–2 sentences of synthesis in `experience.what_to_change` if copy was the dominant issue.\n"
-    )
-    body += ux_copy_lens
+    # When QA_MODE is on, replace the experiential lenses with a
+    # regression-focused QA checklist. Skip both the v1.4 copy lens
+    # and the v1.5 personas; the agent walks the role's happy path,
+    # confirms specific recent changes, and reports PASS/FAIL.
+    if QA_MODE:
+        qa_role_checks = {
+            "gm": (
+                "- Recover host session via host-recover URL → land on /master.\n"
+                "- Step 4 panel is visible (provider != 'none'). For Jitsi mode: header reads 'Jitsi — generate when pairs are ready.', NO 'Sign in with Google' CTA visible.\n"
+                "- After pairing, 'Generate breakout calls' mints links instantly (no confirm modal in Jitsi mode); panel transitions to '3 of 3 ready' within ~1s.\n"
+                "- Once the round starts: PairsPanel sidebar shows a 'Pair calls · Jitsi' strip with 'Clear all' affordance (mid-round reachable).\n"
+                "- Top-bar shows 'End round' AND 'End game' buttons during a running round.\n"
+                "- Each pair row in PairsPanel shows the per-pair URL with a 'copy' button.\n"
+                "- FocusedPairPlaceholder during a running round shows the 'Click a pair on the left' hint.\n"
+                "- End the game; cleanup modal copy says 'Pair calls cleaned up' / 'Tearing down N pair call(s)…' (NOT calendar/Google for Jitsi mode).\n"
+                "- GameEndedView header reads 'The game ends; the workshop begins.' Debrief prompts ordered tactical → structural.\n"
+            ),
+            "builder": (
+                "- Join via /g/{code}/join — display name only required (no email since provider=jitsi).\n"
+                "- Recovery URL modal shows 'Save this URL — it's your way back if your tab closes.' (NOT 'One-shot — keep this safe').\n"
+                "- Lobby waiting screen shows 'YOU'RE IN · WAITING' badge with green pulsing dot, body copy says 'You're seated' + 'while you wait' + 'no need to refresh'.\n"
+                "- Top-bar shows 'Pair call' chip (NOT 'Breakout') once breakouts mint, plus 'Main room' (NOT 'Video call').\n"
+                "- placeholder hosts (example.com): the top-bar chip should NOT render a row for an example.com URL; the lobby body copy should drop the 'hop on the call below' line.\n"
+                "- During the round: place ~5 pieces, hit Test solution, verify result card pulses + scoring annotation appears IF the GM toggles wrong-pts mid-round.\n"
+                "- Round-end footer reads 'Debrief on your call. Your facilitator will move the room next.' (NOT 'Waiting for the next round').\n"
+            ),
+            "guider": (
+                "- Same join + recovery + lobby checks as builder.\n"
+                "- Top-bar Pair call / Main room labels.\n"
+                "- Round-end footer copy.\n"
+                "- Open the brief envelope; rules render correctly. If brief title matches one of the new themed briefs (Pirate's log, Star captain, Cooking show host, Acronym officer, Telegraph operator, Floop-doopy lexicon, Reluctant translator, Parts-shortage technician, The deck-hand, Half-tuned-in, Old-timey postman, Compass swap, Diagonal logic), confirm the rules read intact (no truncation, no markdown leak).\n"
+            ),
+            "observer": (
+                "- Join via /g/{code}/join.\n"
+                "- Same recovery + lobby + top-bar copy checks.\n"
+                "- Once seated as observer: confirm side-by-side builder + goal canvas renders.\n"
+                "- Pair switch chip works; switching back to original pair restores its view.\n"
+                "- Round-end footer copy.\n"
+            ),
+        }
+        checklist = qa_role_checks.get(role, qa_role_checks["builder"])
+        ux_copy_lens = (
+            "\n\n## v1.6 QA pass — regression checklist (PRIMARY for this run)\n"
+            "**Posture:** This run is QA, not experience. Do NOT write narrative. For each item below, mark PASS / FAIL / N/A and add a one-line reason. Failures get a `findings` entry with `category: bug`, `severity: blocker` (something broken) or `major` (visible regression) or `minor` (rough edge). Skip the `experience` block — leave fields empty strings.\n"
+            "\n"
+            f"**Your role's checklist ({role}):**\n{checklist}"
+            "\n"
+            "**Cross-cutting (all roles):**\n"
+            "- No console errors during the run. Capture any in `console_errors`.\n"
+            "- No 4xx/5xx network errors during normal flow. Capture any in `network_errors`.\n"
+            "- All visible copy renders without JSX leaks (`{\" \"}` or `&apos;` showing through), without missing spaces, and without obviously placeholder text (`example.com` should be filtered).\n"
+            "\n"
+            "**Output the checklist verbatim in `experience.summary` as `ITEM: PASS|FAIL|N/A — reason` lines, one per line. That's the report — no narrative needed.**\n"
+        )
+        body += ux_copy_lens
+        # Skip the v1.4/v1.5 experiential lenses entirely in QA mode.
+        # Fall through to the file-write at the bottom of the loop.
+    if not QA_MODE:
+        ux_copy_lens = (
+            "\n\n## v1.4 UX + copy lens (NEW — read this and respond in your final report)\n"
+            "Beyond your role-specific phases, run a separate observation pass on TWO things:\n"
+            "\n"
+            "1. **Brief evocativeness.** When you read your own brief (and any briefs revealed at round-end), judge each one as a piece of writing. Was it tricky-but-parseable, or convoluted? Did the constraint feel themed and consistent (e.g., a clean nautical vocabulary you could lean into), or like an arbitrary stack of rules? Specifically watch for the new themed briefs — pirate's log, star captain, cooking show host, acronym officer, floop-doopy lexicon, telegraph operator. If you got one, did it generate the kind of weird-funny conversation Tessera is supposed to spark? Or did it just slow you down?\n"
+            "\n"
+            "2. **Copy polish across the site.** As you move between surfaces (landing page → join → lobby → play → round end), notice the copy. Anywhere a label, hint, button, or banner felt: too clever, too jargony, too generic, internally inconsistent (e.g., a button labelled X but the next screen calls the same action Y), or just rough — flag it. Specifically check: lobby waiting copy ('YOU'RE IN · WAITING' badge + body text), top-bar Pair-call vs Main-room labels, brief envelope wording, super-power tile labels, round-ended view header copy.\n"
+            "\n"
+            "Add these as `findings` with `category: copy` and `area: shared` (or your role) AND surface 1–2 sentences of synthesis in `experience.what_to_change` if copy was the dominant issue.\n"
+        )
+        body += ux_copy_lens
 
-    # v1.5 lenses — three role-distributed evaluation frames so the
-    # 10-role roster surfaces structural, pedagogical, and simplification
-    # concerns at once. Mapping (role index → lens) is fixed for
-    # reproducibility:
-    #
-    #   0 GM           → pedagogical (facilitator role aligns with adult
-    #                    learning theory)
-    #   1 Avery        → adversarial PM
-    #   2 Bri          → simplification
-    #   3 Cameron      → adversarial PM
-    #   4 Drew         → pedagogical
-    #   5 Ellis        → simplification
-    #   6 Finley       → adversarial PM
-    #   7 Gray         → pedagogical
-    #   8 Harper       → simplification
-    #   9 Indigo       → adversarial PM
-    #
+    # v1.5 lenses — three role-distributed evaluation frames. Skipped
+    # in QA_MODE since the QA checklist replaces these.
+    # Mapping (role index → lens) is fixed for reproducibility.
     # Net: 4 adversarial PM, 3 pedagogical, 3 simplification.
+    lens_segment = ""
     LENS_BY_INDEX = {
         0: "pedagogical",
         1: "adversarial_pm",
@@ -347,7 +390,9 @@ for i, entry in enumerate(ROSTER):
     }
     lens = LENS_BY_INDEX.get(i, "adversarial_pm")
 
-    if lens == "adversarial_pm":
+    if QA_MODE:
+        lens_segment = ""
+    elif lens == "adversarial_pm":
         lens_segment = (
             "\n\n## v1.5 lens — adversarial product manager (PRIMARY for this run)\n"
             "**Switch posture.** You're a skeptical product manager evaluating Tessera as a candidate to invest in or kill. You want to find reasons it's NOT well built — feature gaps, brittle states, edge cases, IA confusion, bad defaults, vague value propositions, things that look polished but break under stress. Be uncharitable. Imagine demoing this to a CEO who'll cut it for fluff and asking what they'd zero in on.\n"
