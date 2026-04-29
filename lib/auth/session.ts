@@ -37,7 +37,7 @@ export async function readSessionAndParticipant(
   const claims = await readSessionForGame(code);
   if (!claims) return null;
   const repo = getRepository();
-  const me = await repo.findParticipantById(claims.sub);
+  const me = await repo.participants.findById(claims.sub);
   if (!me || me.game_id !== claims.game_id) return null;
   return { claims, me };
 }

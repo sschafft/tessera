@@ -30,15 +30,15 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
   }
   const repo = getRepository();
-  const game = await repo.findGameByCode(code);
+  const game = await repo.games.findByCode(code);
   if (!game || game.id !== claims.game_id) {
     return NextResponse.json({ error: "game_not_found" }, { status: 404 });
   }
 
-  const pairs = await repo.listPairs(game.id);
-  const allRounds = await repo.listRounds(game.id);
+  const pairs = await repo.pairs.list(game.id);
+  const allRounds = await repo.rounds.list(game.id);
   const latestRound = allRounds[allRounds.length - 1] ?? null;
-  const allParticipants = await repo.listActiveParticipants(game.id);
+  const allParticipants = await repo.participants.listActive(game.id);
   const byId = new Map(allParticipants.map((p) => [p.id, p]));
 
   // Pre-fetch all pair_rounds + placements grouped by round, so the
@@ -86,10 +86,10 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       const guider = pair.guider_id ? byId.get(pair.guider_id) : undefined;
       const roundResults = await Promise.all(
         allRounds.map(async (round) => {
-          const pr = await repo.findPairRound(round.id, pair.id);
+          const pr = await repo.pairRounds.find(round.id, pair.id);
           if (!pr) return null;
           const goal = (pr.goal_pattern as GoalPattern) ?? [];
-          const placements = await repo.listPlacements(pr.id);
+          const placements = await repo.placements.list(pr.id);
           const breakdown = scorePlacements(placements, goal, {
             correctPts: game.scoring_correct_pts,
             wrongPts: game.scoring_wrong_pts,

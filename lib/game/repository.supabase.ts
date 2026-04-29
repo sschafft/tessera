@@ -11,16 +11,24 @@ import type {
   BriefRecord,
   BriefRole,
   BriefSource,
+  BriefStore,
   CreateGameInput,
   CreateParticipantInput,
   GameRecord,
   GameRepository,
+  GameStore,
   LibraryBriefRecord,
   PairRecord,
   PairRoundRecord,
+  PairRoundStore,
+  PairStore,
   ParticipantRecord,
+  ParticipantStore,
   PlacementRecord,
+  PlacementStore,
   RoundRecord,
+  RoundStore,
+  SuperPowerStore,
 } from "./repository";
 
 type DbGame = Database["public"]["Tables"]["games"]["Row"];
@@ -99,6 +107,91 @@ function toParticipantRecord(row: DbParticipant): ParticipantRecord {
 }
 
 export class SupabaseGameRepository implements GameRepository {
+  // ─── Sub-store facades ──────────────────────────────────────────
+  // The class still owns one method per DB operation (existing
+  // bodies left intact below). The sub-store properties group them
+  // per the GameRepository interface so callers read as
+  // `repo.games.findByCode(c)` rather than the flat-50-method API
+  // we used to have. Pure regrouping — zero behaviour change.
+  games: GameStore = {
+    create: (input) => this.createGame(input),
+    findByCode: (code) => this.findGameByCode(code),
+    setStatus: (id, status) => this.setGameStatus(id, status),
+    updateScoring: (id, patch) => this.updateScoring(id, patch),
+    setBriefOn: (id, role, on) => this.setBriefOn(id, role, on),
+    reserveGeminiCall: (input) => this.reserveGeminiCall(input),
+  };
+
+  participants: ParticipantStore = {
+    create: (input) => this.createParticipant(input),
+    listActive: (game_id) => this.listActiveParticipants(game_id),
+    findByName: (game_id, name) => this.findParticipantByName(game_id, name),
+    findById: (id) => this.findParticipantById(id),
+    touch: (id) => this.touchParticipant(id),
+    release: (id) => this.releaseParticipant(id),
+  };
+
+  pairs: PairStore = {
+    create: (game_id, builder_id, guider_id) =>
+      this.createPair(game_id, builder_id, guider_id),
+    list: (game_id) => this.listPairs(game_id),
+    findById: (pair_id) => this.findPairById(pair_id),
+    assignObserver: (pid, pair_id) => this.assignObserver(pid, pair_id),
+    setDisplayName: (pair_id, name) => this.setPairDisplayName(pair_id, name),
+    clearAllocations: (game_id) => this.clearAllocations(game_id),
+    setBreakout: (pair_id, breakout) => this.setPairBreakout(pair_id, breakout),
+    clearBreakout: (pair_id) => this.clearPairBreakout(pair_id),
+    listWithBreakouts: (game_id) => this.listPairsWithBreakouts(game_id),
+  };
+
+  rounds: RoundStore = {
+    create: (input) => this.createRound(input),
+    start: (round_id) => this.startRound(round_id),
+    end: (round_id) => this.endRound(round_id),
+    delete: (round_id) => this.deleteRound(round_id),
+    findLatest: (game_id) => this.findLatestRound(game_id),
+    list: (game_id) => this.listRounds(game_id),
+    decrementDuration: (round_id, delta) =>
+      this.decrementRoundDuration(round_id, delta),
+  };
+
+  pairRounds: PairRoundStore = {
+    create: (input) => this.createPairRound(input),
+    listForRound: (round_id) => this.listPairRoundsForRound(round_id),
+    find: (round_id, pair_id) => this.findPairRound(round_id, pair_id),
+    setBriefsRevealed: (pr_id) => this.setBriefsRevealed(pr_id),
+    incrementSharesRemaining: (pr_id) => this.incrementSharesRemaining(pr_id),
+    setTestEnabled: (pr_id, enabled) => this.setTestEnabled(pr_id, enabled),
+    updateGoalPattern: (pr_id, pattern, seed) =>
+      this.updateGoalPattern(pr_id, pattern, seed),
+    setPrototypeUntil: (pr_id, until) => this.setPrototypeUntil(pr_id, until),
+    captureBuilderSnapshot: (pr_id, snapshot) =>
+      this.captureBuilderSnapshot(pr_id, snapshot),
+  };
+
+  placements: PlacementStore = {
+    create: (input) => this.createPlacement(input),
+    list: (pr_id) => this.listPlacements(pr_id),
+    find: (id) => this.findPlacement(id),
+    delete: (id) => this.deletePlacement(id),
+    clear: (pr_id) => this.clearPlacements(pr_id),
+    update: (id, patch) => this.updatePlacement(id, patch),
+  };
+
+  briefs: BriefStore = {
+    upsert: (input) => this.upsertBrief(input),
+    find: (pr_id, role) => this.findBrief(pr_id, role),
+    listForPairRound: (pr_id) => this.listBriefsForPairRound(pr_id),
+    listLibrary: (input) => this.listLibraryBriefs(input),
+  };
+
+  superPowers: SuperPowerStore = {
+    createEvent: (input) => this.createSuperPowerEvent(input),
+    listEvents: (round_id) => this.listSuperPowerEvents(round_id),
+  };
+
+  // ─── DB methods (existing bodies, regrouped above into facades) ───
+
   async createGame(
     input: CreateGameInput & {
       code: string;

@@ -66,7 +66,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
 
   const repo = getRepository();
-  const game = await repo.findGameByCode(code);
+  const game = await repo.games.findByCode(code);
   if (!game) {
     return NextResponse.json({ error: "game_not_found" }, { status: 404 });
   }
@@ -99,14 +99,14 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   // the participant's display_name matches, reclaim the seat.
   const existingClaims = await readSessionForGame(code);
   if (existingClaims) {
-    const existing = await repo.findParticipantById(existingClaims.sub);
+    const existing = await repo.participants.findById(existingClaims.sub);
     if (
       existing &&
       existing.game_id === game.id &&
       existing.released_at === null &&
       existing.display_name.toLowerCase() === displayName.toLowerCase()
     ) {
-      await repo.touchParticipant(existing.id);
+      await repo.participants.touch(existing.id);
       return successResponse({
         code,
         game,
@@ -117,7 +117,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
 
   // Capacity check (active participants only).
-  const active = await repo.listActiveParticipants(game.id);
+  const active = await repo.participants.listActive(game.id);
   if (active.length >= game.participant_cap) {
     return NextResponse.json({ error: "game_full" }, { status: 409 });
   }
@@ -131,7 +131,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
   let participant;
   try {
-    participant = await repo.createParticipant({
+    participant = await repo.participants.create({
       game_id: game.id,
       display_name: displayName,
       role: effectiveRole,

@@ -52,7 +52,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   }
 
   const repo = getRepository();
-  const pair = await repo.findPairById(pair_id);
+  const pair = await repo.pairs.findById(pair_id);
   if (!pair || pair.game_id !== session.claims.game_id) {
     return NextResponse.json({ error: "pair_not_found" }, { status: 404 });
   }
@@ -63,7 +63,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  await repo.setPairDisplayName(pair_id, trimmed);
+  await repo.pairs.setDisplayName(pair_id, trimmed);
   await publishGameEvent(session.claims.game_id, "pair_renamed");
 
   return NextResponse.json({ ok: true, display_name: trimmed });

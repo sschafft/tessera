@@ -45,21 +45,21 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   const role: BriefRole = body.role;
 
   const repo = getRepository();
-  const game = await repo.findGameByCode(code);
+  const game = await repo.games.findByCode(code);
   if (!game || game.id !== claims.game_id) {
     return NextResponse.json({ error: "game_not_found" }, { status: 404 });
   }
 
-  const round = await repo.findLatestRound(game.id);
+  const round = await repo.rounds.findLatest(game.id);
   if (!round) {
     return NextResponse.json({ error: "no_round" }, { status: 400 });
   }
-  const pairRound = await repo.findPairRound(round.id, body.pair_id);
+  const pairRound = await repo.pairRounds.find(round.id, body.pair_id);
   if (!pairRound) {
     return NextResponse.json({ error: "no_pair_round" }, { status: 400 });
   }
 
-  const current = await repo.findBrief(pairRound.id, role);
+  const current = await repo.briefs.find(pairRound.id, role);
   const exclude = current ? [current.title] : [];
   const sourceForRole =
     role === "builder" ? game.builder_brief_source : game.guider_brief_source;
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     custom: customForRole,
     exclude_titles: exclude,
   });
-  const inserted = await repo.upsertBrief({
+  const inserted = await repo.briefs.upsert({
     pair_round_id: pairRound.id,
     role,
     source: fresh.source,

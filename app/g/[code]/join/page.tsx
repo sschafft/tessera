@@ -17,7 +17,7 @@ export default async function JoinPage({ params, searchParams }: PageProps) {
   // way back to the join surface; a clear "this code doesn't exist"
   // message keeps them in the flow.
   const valid = isValidGameCode(code);
-  const game = valid ? await getRepository().findGameByCode(code) : null;
+  const game = valid ? await getRepository().games.findByCode(code) : null;
   if (!valid || !game) {
     return (
       <div className="relative min-h-screen w-full bg-[var(--color-paper)]">

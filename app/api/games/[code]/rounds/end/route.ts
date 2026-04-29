@@ -28,18 +28,18 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
 
   const repo = getRepository();
-  const game = await repo.findGameByCode(code);
+  const game = await repo.games.findByCode(code);
   if (!game || game.id !== claims.game_id) {
     return NextResponse.json({ error: "game_not_found" }, { status: 404 });
   }
-  const round = await repo.findLatestRound(game.id);
+  const round = await repo.rounds.findLatest(game.id);
   if (!round) {
     return NextResponse.json({ error: "no_round" }, { status: 400 });
   }
   if (round.status === "ended") {
     return NextResponse.json({ ok: true, already_ended: true });
   }
-  await repo.endRound(round.id);
+  await repo.rounds.end(round.id);
   await publishGameEvent(game.id, "round_ended");
   return NextResponse.json({ ok: true, round_id: round.id });
 }

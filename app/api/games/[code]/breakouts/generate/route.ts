@@ -48,7 +48,7 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
   }
 
   const repo = getRepository();
-  const game = await repo.findGameByCode(code);
+  const game = await repo.games.findByCode(code);
   if (!game || game.id !== claims.game_id) {
     return NextResponse.json({ error: "game_not_found" }, { status: 404 });
   }
@@ -59,7 +59,7 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "breakouts_disabled" }, { status: 400 });
   }
 
-  const pairs = await repo.listPairs(game.id);
+  const pairs = await repo.pairs.list(game.id);
   const todo = pairs.filter((p) => !p.breakout_call_url);
   if (todo.length === 0) {
     return NextResponse.json({ ok: true, created: 0, skipped: pairs.length });
@@ -73,7 +73,7 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
     let created = 0;
     for (const pair of todo) {
       const url = jitsiUrlForPair({ gameCode: code, pairId: pair.id });
-      await repo.setPairBreakout(pair.id, {
+      await repo.pairs.setBreakout(pair.id, {
         call_url: url,
         event_id: `jitsi:${pair.id}`,
       });
@@ -103,7 +103,7 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
     throw err;
   }
 
-  const participants = await repo.listActiveParticipants(game.id);
+  const participants = await repo.participants.listActive(game.id);
   const nameById = new Map(participants.map((p) => [p.id, p.display_name]));
   const emailById = new Map(
     participants.filter((p) => p.email).map((p) => [p.id, p.email as string]),
@@ -145,7 +145,7 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
         gameCode: code,
         attendeeEmails: emailsFor(pair),
       });
-      await repo.setPairBreakout(pair.id, {
+      await repo.pairs.setBreakout(pair.id, {
         call_url: result.meetUrl,
         event_id: result.eventId,
       });

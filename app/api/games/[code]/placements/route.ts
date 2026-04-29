@@ -86,7 +86,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "not_in_pair" }, { status: 400 });
   }
 
-  const round = await repo.findLatestRound(session.claims.game_id);
+  const round = await repo.rounds.findLatest(session.claims.game_id);
   if (!round || round.status !== "running") {
     return NextResponse.json({ error: "round_not_running" }, { status: 400 });
   }
@@ -99,7 +99,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   if (body.r >= grid.h) {
     return NextResponse.json({ error: "invalid_r" }, { status: 400 });
   }
-  const pairRound = await repo.findPairRound(round.id, me.pair_id);
+  const pairRound = await repo.pairRounds.find(round.id, me.pair_id);
   if (!pairRound) {
     return NextResponse.json({ error: "no_pair_round" }, { status: 400 });
   }
@@ -108,12 +108,12 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     // POST is upsert-by-cell: tapping an occupied cell with a fresh
     // selection overwrites the existing piece. We delete first so the
     // unique(pair_round, q, r) constraint can't fire.
-    const existing = await repo.listPlacements(pairRound.id);
+    const existing = await repo.placements.list(pairRound.id);
     const collision = existing.find((p) => p.q === body.q && p.r === body.r);
     if (collision) {
-      await repo.deletePlacement(collision.id);
+      await repo.placements.delete(collision.id);
     }
-    const placement = await repo.createPlacement({
+    const placement = await repo.placements.create({
       pair_round_id: pairRound.id,
       shape: body.shape,
       color: body.color,
@@ -166,16 +166,16 @@ export async function DELETE(_req: NextRequest, { params }: RouteParams) {
   }
 
   const repo = getRepository();
-  const round = await repo.findLatestRound(session.claims.game_id);
+  const round = await repo.rounds.findLatest(session.claims.game_id);
   if (!round || round.status !== "running") {
     return NextResponse.json({ error: "round_not_running" }, { status: 400 });
   }
-  const pairRound = await repo.findPairRound(round.id, me.pair_id);
+  const pairRound = await repo.pairRounds.find(round.id, me.pair_id);
   if (!pairRound) {
     return NextResponse.json({ error: "no_pair_round" }, { status: 400 });
   }
 
-  const cleared = await repo.clearPlacements(pairRound.id);
+  const cleared = await repo.placements.clear(pairRound.id);
   await publishGameEvent(session.claims.game_id, "placements_cleared");
   return NextResponse.json({ ok: true, cleared });
 }

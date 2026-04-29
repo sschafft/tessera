@@ -36,20 +36,20 @@ export default async function PlayPage({ params }: PageProps) {
   if (claims.role === "gm") redirect(`/g/${code}/master`);
 
   const repo = getRepository();
-  const game = await repo.findGameByCode(code);
+  const game = await repo.games.findByCode(code);
   if (!game || game.id !== claims.game_id) notFound();
-  const me = await repo.findParticipantById(claims.sub);
+  const me = await repo.participants.findById(claims.sub);
   if (!me) redirect(`/g/${code}/join`);
 
-  const round = await repo.findLatestRound(game.id);
+  const round = await repo.rounds.findLatest(game.id);
   let pair = null;
   let pairRound = null;
   let partner = null;
-  let placementsRaw: Awaited<ReturnType<typeof repo.listPlacements>> = [];
+  let placementsRaw: Awaited<ReturnType<typeof repo.placements.list>> = [];
   if (me.pair_id) {
-    pair = await repo.findPairById(me.pair_id);
+    pair = await repo.pairs.findById(me.pair_id);
     if (round) {
-      pairRound = await repo.findPairRound(round.id, me.pair_id);
+      pairRound = await repo.pairRounds.find(round.id, me.pair_id);
     }
     if (pair) {
       const partnerId =
@@ -58,16 +58,16 @@ export default async function PlayPage({ params }: PageProps) {
           : me.role === "guider"
             ? pair.builder_id
             : pair.builder_id;
-      if (partnerId) partner = await repo.findParticipantById(partnerId);
+      if (partnerId) partner = await repo.participants.findById(partnerId);
     }
     if (pairRound && (me.role === "builder" || me.role === "observer")) {
-      placementsRaw = await repo.listPlacements(pairRound.id);
+      placementsRaw = await repo.placements.list(pairRound.id);
     }
   }
 
   const myBrief =
     pairRound && (me.role === "builder" || me.role === "guider")
-      ? await repo.findBrief(pairRound.id, me.role)
+      ? await repo.briefs.find(pairRound.id, me.role)
       : null;
 
   const showGoal = me.role === "guider" || me.role === "observer";

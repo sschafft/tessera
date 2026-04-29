@@ -208,8 +208,16 @@ export interface LibraryBriefRecord {
   rules: string[];
 }
 
-export interface GameRepository {
-  createGame(
+// ───────────────────────────────────────────────────────────────────
+// Sub-store interfaces. The repository was a flat 50-method interface
+// that grew organically; splitting into per-domain stores makes the
+// surface easier to reason about (each store owns one table or a
+// small group of related tables) and keeps two backends — memory +
+// supabase — straightforward to keep in sync.
+// ───────────────────────────────────────────────────────────────────
+
+export interface GameStore {
+  create(
     input: CreateGameInput & {
       code: string;
       host_token_hash: string;
@@ -217,238 +225,10 @@ export interface GameRepository {
     },
   ): Promise<GameRecord>;
 
-  findGameByCode(code: string): Promise<GameRecord | null>;
+  findByCode(code: string): Promise<GameRecord | null>;
 
-  /**
-   * Insert a new participant. Throws when the display name is already
-   * taken by an active participant in the same game (unique constraint).
-   */
-  createParticipant(input: CreateParticipantInput): Promise<ParticipantRecord>;
-
-  /**
-   * List all active participants for a game, ordered by joined_at asc.
-   */
-  listActiveParticipants(game_id: string): Promise<ParticipantRecord[]>;
-
-  /**
-   * Find a participant by display name (case-insensitive) within a game.
-   * Active participants only (released_at is null).
-   */
-  findParticipantByName(
-    game_id: string,
-    display_name: string,
-  ): Promise<ParticipantRecord | null>;
-
-  /**
-   * Find a participant by id (for cookie-based reconnect).
-   */
-  findParticipantById(id: string): Promise<ParticipantRecord | null>;
-
-  /**
-   * Touch last_seen_at on a participant.
-   */
-  touchParticipant(id: string): Promise<void>;
-
-  /**
-   * Mark a participant as released — sets released_at = now() and
-   * clears their pair_id. Frees their display name for re-use within
-   * the game (the unique-name constraint is scoped to active
-   * participants only). Used by the GM-side "Release seat" affordance
-   * for stuck players whose cookie is gone and who don't have their
-   * recovery URL.
-   */
-  releaseParticipant(id: string): Promise<void>;
-
-  /**
-   * Create a pair with a builder + guider, and atomically update both
-   * participants' role + pair_id.
-   */
-  createPair(
-    game_id: string,
-    builder_id: string,
-    guider_id: string,
-  ): Promise<PairRecord>;
-
-  /**
-   * List pairs for a game, ordered by created_at asc.
-   */
-  listPairs(game_id: string): Promise<PairRecord[]>;
-
-  /**
-   * Add a participant to an existing pair as an observer. Updates the
-   * participant's role + pair_id; does not modify the pair row.
-   */
-  assignObserver(participant_id: string, pair_id: string): Promise<void>;
-
-  /**
-   * Set or clear a pair's self-chosen display name. Empty string
-   * clears the name (UI falls back to "Builder ↔ Guider").
-   */
-  setPairDisplayName(pair_id: string, name: string | null): Promise<void>;
-
-  /**
-   * Reset every participant in a game back to the lobby and delete all
-   * existing pairs. Used as the precondition for auto-allocate.
-   */
-  clearAllocations(game_id: string): Promise<void>;
-
-  /**
-   * Round + pair_round operations.
-   */
-  createRound(input: {
-    game_id: string;
-    index: number;
-    complexity: number;
-    duration_seconds: number;
-  }): Promise<RoundRecord>;
-
-  /**
-   * Mark a round running by setting started_at = now() and status = 'running'.
-   */
-  startRound(round_id: string): Promise<void>;
-
-  /**
-   * Mark a round ended by setting status='ended' and ended_at = now().
-   * Idempotent — calling on an already-ended round is a no-op.
-   */
-  endRound(round_id: string): Promise<void>;
-
-  /**
-   * Delete a round (and via cascade, its pair_rounds and briefs).
-   * Used to clean up half-started rounds left behind by a failed
-   * /rounds/start so the GM can retry.
-   */
-  deleteRound(round_id: string): Promise<void>;
-
-  /**
-   * Find the most recent (highest index) round for a game.
-   */
-  findLatestRound(game_id: string): Promise<RoundRecord | null>;
-
-  /**
-   * List all rounds for a game in ascending index order. Used for the
-   * game-end leaderboard, which sums per-round scores across all
-   * ended rounds.
-   */
-  listRounds(game_id: string): Promise<RoundRecord[]>;
-
-  /**
-   * Insert a pair_round row with a pre-generated goal pattern.
-   */
-  createPairRound(input: {
-    round_id: string;
-    pair_id: string;
-    goal_pattern: unknown;
-    pattern_seed: string;
-  }): Promise<PairRoundRecord>;
-
-  listPairRoundsForRound(round_id: string): Promise<PairRoundRecord[]>;
-
-  /**
-   * Find the pair_round row for a given (round, pair). Used by player
-   * views to fetch their goal pattern.
-   */
-  findPairRound(
-    round_id: string,
-    pair_id: string,
-  ): Promise<PairRoundRecord | null>;
-
-  /**
-   * Find a pair by id (used for play-state lookups).
-   */
-  findPairById(pair_id: string): Promise<PairRecord | null>;
-
-  /**
-   * Place a tile on the canvas. Throws PlacementCellTakenError when
-   * the (pair_round, q, r) cell is already occupied.
-   */
-  createPlacement(input: {
-    pair_round_id: string;
-    shape: string;
-    color: string;
-    q: number;
-    r: number;
-    rot: number;
-    placed_by: string;
-  }): Promise<PlacementRecord>;
-
-  /**
-   * Returns placements ordered by placed_at ascending.
-   */
-  listPlacements(pair_round_id: string): Promise<PlacementRecord[]>;
-
-  /**
-   * Read a single placement (for ownership check before delete).
-   */
-  findPlacement(id: string): Promise<PlacementRecord | null>;
-
-  /**
-   * Delete a placement by id. Returns true on delete, false if not found.
-   */
-  deletePlacement(id: string): Promise<boolean>;
-
-  /**
-   * Delete every placement in a pair_round. Returns count deleted.
-   * Used by the builder's "Clear all" action.
-   */
-  clearPlacements(pair_round_id: string): Promise<number>;
-
-  /**
-   * Update a placement's cell (q, r), rotation, shape, and/or color.
-   * Throws PlacementCellTakenError when a new (q, r) collides with
-   * another placement in the same pair_round. Used both for moves and
-   * for tap-occupied-cell-with-selection convert-in-place.
-   */
-  updatePlacement(
-    id: string,
-    patch: {
-      q?: number;
-      r?: number;
-      rot?: number;
-      shape?: string;
-      color?: string;
-    },
-  ): Promise<PlacementRecord | null>;
-
-  /**
-   * Insert (or replace) a brief for a (pair_round, role). Used both at
-   * round start and for re-rolls.
-   */
-  upsertBrief(input: {
-    pair_round_id: string;
-    role: BriefRole;
-    source: BriefSource;
-    title: string;
-    rules: string[];
-  }): Promise<BriefRecord>;
-
-  /**
-   * Read a single brief for a pair_round + role.
-   */
-  findBrief(
-    pair_round_id: string,
-    role: BriefRole,
-  ): Promise<BriefRecord | null>;
-
-  /**
-   * Read both briefs for a pair_round (used by the GM dashboard).
-   */
-  listBriefsForPairRound(pair_round_id: string): Promise<BriefRecord[]>;
-
-  /**
-   * Read library briefs matching a role + complexity, optionally
-   * excluding titles (for re-roll dedupe).
-   */
-  listLibraryBriefs(input: {
-    role: BriefRole;
-    complexity: number;
-    exclude_titles?: string[];
-  }): Promise<LibraryBriefRecord[]>;
-
-  /**
-   * Update the game status (lobby → running → ended → purged).
-   */
-  setGameStatus(
+  /** Update the game status (lobby → running → ended → purged). */
+  setStatus(
     game_id: string,
     status: "lobby" | "running" | "ended" | "purged",
   ): Promise<void>;
@@ -476,71 +256,6 @@ export interface GameRepository {
   ): Promise<void>;
 
   /**
-   * Persist the per-pair breakout link + originating calendar event.
-   * Called by /breakouts/generate after a successful Calendar API
-   * mint. Both fields move together so end-game cleanup never lacks
-   * an event ID.
-   */
-  setPairBreakout(
-    pair_id: string,
-    breakout: { call_url: string; event_id: string },
-  ): Promise<void>;
-
-  /** Clear breakout state on a single pair (used after deletion). */
-  clearPairBreakout(pair_id: string): Promise<void>;
-
-  /**
-   * List all pairs in a game with breakout state set — drives the
-   * end-game cleanup loop and the GM dashboard's "N of M ready" copy.
-   */
-  listPairsWithBreakouts(game_id: string): Promise<
-    Array<{ id: string; event_id: string; call_url: string }>
-  >;
-
-  // ─── Super-power events ───────────────────────────────────────────
-  // Persisted in the `super_power_events` table (renamed from
-  // `accelerant_events` in migration 21).
-  createSuperPowerEvent(input: {
-    round_id: string;
-    scope: "pair" | "all";
-    pair_id: string | null;
-    kind: string;
-    payload?: unknown;
-    triggered_by: string;
-  }): Promise<{ id: string; triggered_at: string }>;
-
-  listSuperPowerEvents(round_id: string): Promise<
-    Array<{
-      id: string;
-      kind: string;
-      scope: "pair" | "all";
-      pair_id: string | null;
-      triggered_at: string;
-    }>
-  >;
-
-  setBriefsRevealed(pair_round_id: string): Promise<void>;
-
-  /**
-   * Grant the builder one more agile-share unlock. Fired by the
-   * Agile share super-power on each trigger — the builder's
-   * "Share progress" button is gated by `shares_remaining > 0`,
-   * which now starts at 0 by default. Atomic increment so two
-   * back-to-back trigger requests don't race.
-   */
-  incrementSharesRemaining(pair_round_id: string): Promise<number>;
-
-  setTestEnabled(pair_round_id: string, enabled: boolean): Promise<void>;
-
-  updateGoalPattern(
-    pair_round_id: string,
-    pattern: unknown,
-    seed: string,
-  ): Promise<void>;
-
-  decrementRoundDuration(round_id: string, delta: number): Promise<void>;
-
-  /**
    * Atomic check-and-increment for the Gemini budget. Returns:
    *   - { ok: true, perGame, perDay } when both caps are still under
    *   - { ok: false, reason } otherwise (without incrementing)
@@ -554,6 +269,170 @@ export interface GameRepository {
     | { ok: true; perGame: number; perDay: number }
     | { ok: false; reason: "per_game_cap" | "per_day_cap" }
   >;
+}
+
+export interface ParticipantStore {
+  /**
+   * Insert a new participant. Throws when the display name is already
+   * taken by an active participant in the same game (unique constraint).
+   */
+  create(input: CreateParticipantInput): Promise<ParticipantRecord>;
+
+  /** List all active participants for a game, ordered by joined_at asc. */
+  listActive(game_id: string): Promise<ParticipantRecord[]>;
+
+  /**
+   * Find a participant by display name (case-insensitive) within a game.
+   * Active participants only (released_at is null).
+   */
+  findByName(
+    game_id: string,
+    display_name: string,
+  ): Promise<ParticipantRecord | null>;
+
+  /** Find a participant by id (for cookie-based reconnect). */
+  findById(id: string): Promise<ParticipantRecord | null>;
+
+  /** Touch last_seen_at on a participant. */
+  touch(id: string): Promise<void>;
+
+  /**
+   * Mark a participant as released — sets released_at = now() and
+   * clears their pair_id. Frees their display name for re-use within
+   * the game. Used by the GM-side "Release seat" affordance for stuck
+   * players whose cookie is gone and who don't have their recovery URL.
+   */
+  release(id: string): Promise<void>;
+}
+
+export interface PairStore {
+  /**
+   * Create a pair with a builder + guider, and atomically update both
+   * participants' role + pair_id.
+   */
+  create(
+    game_id: string,
+    builder_id: string,
+    guider_id: string,
+  ): Promise<PairRecord>;
+
+  /** List pairs for a game, ordered by created_at asc. */
+  list(game_id: string): Promise<PairRecord[]>;
+
+  /** Find a pair by id (used for play-state lookups). */
+  findById(pair_id: string): Promise<PairRecord | null>;
+
+  /**
+   * Add a participant to an existing pair as an observer. Updates the
+   * participant's role + pair_id; does not modify the pair row.
+   */
+  assignObserver(participant_id: string, pair_id: string): Promise<void>;
+
+  /**
+   * Set or clear a pair's self-chosen display name. Empty string
+   * clears the name (UI falls back to "Builder ↔ Guider").
+   */
+  setDisplayName(pair_id: string, name: string | null): Promise<void>;
+
+  /**
+   * Reset every participant in a game back to the lobby and delete all
+   * existing pairs. Used as the precondition for auto-allocate.
+   */
+  clearAllocations(game_id: string): Promise<void>;
+
+  /**
+   * Persist the per-pair breakout link + originating calendar event.
+   * Called by /breakouts/generate after a successful Calendar API
+   * mint. Both fields move together so end-game cleanup never lacks
+   * an event ID.
+   */
+  setBreakout(
+    pair_id: string,
+    breakout: { call_url: string; event_id: string },
+  ): Promise<void>;
+
+  /** Clear breakout state on a single pair (used after deletion). */
+  clearBreakout(pair_id: string): Promise<void>;
+
+  /**
+   * List all pairs in a game with breakout state set — drives the
+   * end-game cleanup loop and the GM dashboard's "N of M ready" copy.
+   */
+  listWithBreakouts(game_id: string): Promise<
+    Array<{ id: string; event_id: string; call_url: string }>
+  >;
+}
+
+export interface RoundStore {
+  /** Insert a fresh round. */
+  create(input: {
+    game_id: string;
+    index: number;
+    complexity: number;
+    duration_seconds: number;
+  }): Promise<RoundRecord>;
+
+  /** Mark a round running. Sets started_at = now() and status = 'running'. */
+  start(round_id: string): Promise<void>;
+
+  /**
+   * Mark a round ended. Sets status='ended' + ended_at = now().
+   * Idempotent — calling on an already-ended round is a no-op.
+   */
+  end(round_id: string): Promise<void>;
+
+  /**
+   * Delete a round (and via cascade, its pair_rounds and briefs).
+   * Used to clean up half-started rounds left behind by a failed
+   * /rounds/start so the GM can retry.
+   */
+  delete(round_id: string): Promise<void>;
+
+  /** Find the most recent (highest index) round for a game. */
+  findLatest(game_id: string): Promise<RoundRecord | null>;
+
+  /**
+   * List all rounds for a game in ascending index order. Used for the
+   * game-end leaderboard.
+   */
+  list(game_id: string): Promise<RoundRecord[]>;
+
+  /** Subtract `delta` seconds from a round's duration (Time pressure). */
+  decrementDuration(round_id: string, delta: number): Promise<void>;
+}
+
+export interface PairRoundStore {
+  /** Insert a pair_round row with a pre-generated goal pattern. */
+  create(input: {
+    round_id: string;
+    pair_id: string;
+    goal_pattern: unknown;
+    pattern_seed: string;
+  }): Promise<PairRoundRecord>;
+
+  listForRound(round_id: string): Promise<PairRoundRecord[]>;
+
+  /**
+   * Find the pair_round row for a given (round, pair). Used by player
+   * views to fetch their goal pattern.
+   */
+  find(round_id: string, pair_id: string): Promise<PairRoundRecord | null>;
+
+  setBriefsRevealed(pair_round_id: string): Promise<void>;
+
+  /**
+   * Grant the builder one more agile-share unlock. Atomic increment
+   * so two back-to-back trigger requests don't race.
+   */
+  incrementSharesRemaining(pair_round_id: string): Promise<number>;
+
+  setTestEnabled(pair_round_id: string, enabled: boolean): Promise<void>;
+
+  updateGoalPattern(
+    pair_round_id: string,
+    pattern: unknown,
+    seed: string,
+  ): Promise<void>;
 
   /**
    * Set Prototype-glimpse visibility window. Builder play state will
@@ -570,4 +449,118 @@ export interface GameRepository {
     pair_round_id: string,
     snapshot: unknown,
   ): Promise<number>;
+}
+
+export interface PlacementStore {
+  /**
+   * Place a tile on the canvas. Throws PlacementCellTakenError when
+   * the (pair_round, q, r) cell is already occupied.
+   */
+  create(input: {
+    pair_round_id: string;
+    shape: string;
+    color: string;
+    q: number;
+    r: number;
+    rot: number;
+    placed_by: string;
+  }): Promise<PlacementRecord>;
+
+  /** Returns placements ordered by placed_at ascending. */
+  list(pair_round_id: string): Promise<PlacementRecord[]>;
+
+  /** Read a single placement (for ownership check before delete). */
+  find(id: string): Promise<PlacementRecord | null>;
+
+  /** Delete a placement by id. Returns true on delete, false if not found. */
+  delete(id: string): Promise<boolean>;
+
+  /**
+   * Delete every placement in a pair_round. Returns count deleted.
+   * Used by the builder's "Clear all" action.
+   */
+  clear(pair_round_id: string): Promise<number>;
+
+  /**
+   * Update a placement's cell (q, r), rotation, shape, and/or color.
+   * Throws PlacementCellTakenError when a new (q, r) collides with
+   * another placement in the same pair_round.
+   */
+  update(
+    id: string,
+    patch: {
+      q?: number;
+      r?: number;
+      rot?: number;
+      shape?: string;
+      color?: string;
+    },
+  ): Promise<PlacementRecord | null>;
+}
+
+export interface BriefStore {
+  /**
+   * Insert (or replace) a brief for a (pair_round, role). Used both at
+   * round start and for re-rolls.
+   */
+  upsert(input: {
+    pair_round_id: string;
+    role: BriefRole;
+    source: BriefSource;
+    title: string;
+    rules: string[];
+  }): Promise<BriefRecord>;
+
+  /** Read a single brief for a pair_round + role. */
+  find(
+    pair_round_id: string,
+    role: BriefRole,
+  ): Promise<BriefRecord | null>;
+
+  /** Read both briefs for a pair_round (used by the GM dashboard). */
+  listForPairRound(pair_round_id: string): Promise<BriefRecord[]>;
+
+  /**
+   * Read library briefs matching a role + complexity, optionally
+   * excluding titles (for re-roll dedupe).
+   */
+  listLibrary(input: {
+    role: BriefRole;
+    complexity: number;
+    exclude_titles?: string[];
+  }): Promise<LibraryBriefRecord[]>;
+}
+
+export interface SuperPowerStore {
+  // Persisted in the `super_power_events` table (renamed from
+  // `accelerant_events` in migration 21).
+  createEvent(input: {
+    round_id: string;
+    scope: "pair" | "all";
+    pair_id: string | null;
+    kind: string;
+    payload?: unknown;
+    triggered_by: string;
+  }): Promise<{ id: string; triggered_at: string }>;
+
+  listEvents(round_id: string): Promise<
+    Array<{
+      id: string;
+      kind: string;
+      scope: "pair" | "all";
+      pair_id: string | null;
+      triggered_at: string;
+    }>
+  >;
+}
+
+export interface GameRepository {
+  games: GameStore;
+  participants: ParticipantStore;
+  pairs: PairStore;
+  rounds: RoundStore;
+  pairRounds: PairRoundStore;
+  placements: PlacementStore;
+  briefs: BriefStore;
+  superPowers: SuperPowerStore;
 }

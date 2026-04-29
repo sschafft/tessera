@@ -28,7 +28,7 @@ async function loadOwnedPlacement(code: string, id: string) {
     return { error: NextResponse.json({ error: "forbidden" }, { status: 403 }) } as const;
   }
   const repo = getRepository();
-  const placement = await repo.findPlacement(id);
+  const placement = await repo.placements.find(id);
   if (!placement) {
     return { error: NextResponse.json({ error: "not_found" }, { status: 404 }) } as const;
   }
@@ -42,7 +42,7 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
   const { code, id } = await params;
   const loaded = await loadOwnedPlacement(code, id);
   if ("error" in loaded) return loaded.error;
-  const ok = await loaded.repo.deletePlacement(id);
+  const ok = await loaded.repo.placements.delete(id);
   if (ok) {
     await publishGameEvent(loaded.session.claims.game_id, "placement_removed");
   }
@@ -111,7 +111,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   // moves a piece outside the current round's per-complexity grid
   // (e.g. q=8 on a 3×3 round would land but never score).
   if (body.q !== undefined || body.r !== undefined) {
-    const round = await loaded.repo.findLatestRound(
+    const round = await loaded.repo.rounds.findLatest(
       loaded.session.claims.game_id,
     );
     if (round && round.status === "running") {
@@ -128,7 +128,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
   }
 
   try {
-    const placement = await loaded.repo.updatePlacement(id, body);
+    const placement = await loaded.repo.placements.update(id, body);
     if (!placement) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
     }

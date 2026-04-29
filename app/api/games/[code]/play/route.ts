@@ -48,8 +48,8 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
   // on game_id (which we already have from the JWT claim, and which
   // findGameByCode confirms still exists).
   const [game, round] = await Promise.all([
-    repo.findGameByCode(code),
-    repo.findLatestRound(claims.game_id),
+    repo.games.findByCode(code),
+    repo.rounds.findLatest(claims.game_id),
   ]);
   if (!game || game.id !== claims.game_id) {
     return NextResponse.json({ error: "game_not_found" }, { status: 404 });
@@ -92,8 +92,8 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
   // other. partnerOf would be a third here but it needs the pair
   // result, so it lands in wave 3 after pair resolves.
   const [pair, pairRound] = await Promise.all([
-    repo.findPairById(me.pair_id),
-    round !== null ? repo.findPairRound(round.id, me.pair_id) : Promise.resolve(null),
+    repo.pairs.findById(me.pair_id),
+    round !== null ? repo.pairRounds.find(round.id, me.pair_id) : Promise.resolve(null),
   ]);
   const partner = await partnerOf(repo, me, pair);
 
@@ -123,35 +123,35 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
   // where pieces are. Playtest 2026-04-28 surfaced the gap — guiders
   // sat watching a static board for minutes between Test events.
   const placementsPromise = pairRound
-    ? repo.listPlacements(pairRound.id)
+    ? repo.placements.list(pairRound.id)
     : Promise.resolve(
-        [] as Awaited<ReturnType<typeof repo.listPlacements>>,
+        [] as Awaited<ReturnType<typeof repo.placements.list>>,
       );
   const myBriefPromise =
     pairRound && (me.role === "builder" || me.role === "guider")
-      ? repo.findBrief(pairRound.id, me.role)
+      ? repo.briefs.find(pairRound.id, me.role)
       : Promise.resolve(null);
   const partnerBriefPromise =
     pairRound && briefsOpen
       ? me.role === "builder"
-        ? repo.findBrief(pairRound.id, "guider")
+        ? repo.briefs.find(pairRound.id, "guider")
         : me.role === "guider"
-          ? repo.findBrief(pairRound.id, "builder")
+          ? repo.briefs.find(pairRound.id, "builder")
           : Promise.resolve(null)
       : Promise.resolve(null);
   const observerBriefsPromise =
     pairRound && briefsOpen && me.role === "observer"
-      ? repo.listBriefsForPairRound(pairRound.id)
+      ? repo.briefs.listForPairRound(pairRound.id)
       : Promise.resolve(
           null as Awaited<
-            ReturnType<typeof repo.listBriefsForPairRound>
+            ReturnType<typeof repo.briefs.listForPairRound>
           > | null,
         );
   const observerPairsPromise =
     me.role === "observer"
       ? Promise.all([
-          repo.listPairs(game.id),
-          repo.listActiveParticipants(game.id),
+          repo.pairs.list(game.id),
+          repo.participants.listActive(game.id),
         ])
       : Promise.resolve(null);
 
@@ -438,7 +438,7 @@ function prototypeWindow(
   };
 }
 
-function meSummary(p: NonNullable<Awaited<ReturnType<ReturnType<typeof getRepository>["findParticipantById"]>>>) {
+function meSummary(p: NonNullable<Awaited<ReturnType<ReturnType<typeof getRepository>["participants"]["findById"]>>>) {
   return {
     id: p.id,
     display_name: p.display_name,
@@ -466,20 +466,20 @@ function roundSummary(
 
 async function partnerOf(
   repo: ReturnType<typeof getRepository>,
-  me: NonNullable<Awaited<ReturnType<ReturnType<typeof getRepository>["findParticipantById"]>>>,
-  pair: Awaited<ReturnType<ReturnType<typeof getRepository>["findPairById"]>>,
+  me: NonNullable<Awaited<ReturnType<ReturnType<typeof getRepository>["participants"]["findById"]>>>,
+  pair: Awaited<ReturnType<ReturnType<typeof getRepository>["pairs"]["findById"]>>,
 ) {
   if (!pair) return null;
   if (me.role === "builder" && pair.guider_id) {
-    return repo.findParticipantById(pair.guider_id);
+    return repo.participants.findById(pair.guider_id);
   }
   if (me.role === "guider" && pair.builder_id) {
-    return repo.findParticipantById(pair.builder_id);
+    return repo.participants.findById(pair.builder_id);
   }
   if (me.role === "observer") {
     // Observers see both — we surface the builder as "partner" for the
     // top-bar pill; the canvas view shows both.
-    if (pair.builder_id) return repo.findParticipantById(pair.builder_id);
+    if (pair.builder_id) return repo.participants.findById(pair.builder_id);
   }
   return null;
 }

@@ -63,7 +63,7 @@ const ROLE_DESCRIPTION: Record<BriefRole, string> = {
 
 /**
  * Generate a brief via Gemini. Returns a typed brief or throws.
- * Caller is responsible for budget reservation (via repo.reserveGeminiCall)
+ * Caller is responsible for budget reservation (via repo.games.reserveGeminiCall)
  * BEFORE calling this; the budget shouldn't be touched for failures.
  */
 export async function generateBriefViaGemini(
