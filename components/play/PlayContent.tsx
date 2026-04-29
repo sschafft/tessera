@@ -13,6 +13,7 @@ import {
 } from "@/lib/sound";
 import { useGameEvents } from "@/lib/realtime/useGameEvents";
 import { SuperPowerToast } from "./SuperPowerToast";
+import { WelcomeToast } from "./WelcomeToast";
 
 export interface PlacedPiece {
   id: string;
@@ -305,6 +306,7 @@ export function PlayContent({ code, initial }: PlayContentProps) {
         {renderBody(state)}
       </main>
       <SuperPowerToast gameId={state.game_id} />
+      <WelcomeToast code={code} />
       {sessionLost && (
         <SessionLostBanner code={code} />
       )}

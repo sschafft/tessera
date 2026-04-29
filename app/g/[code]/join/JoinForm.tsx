@@ -28,10 +28,6 @@ export function JoinForm({ code, defaultName, breakoutProvider }: JoinFormProps)
 
   const emailRequired = breakoutProvider === "google_meet";
 
-  const [recoveryModal, setRecoveryModal] = useState<{
-    url: string;
-    redirect: string;
-  } | null>(null);
   const [nameTakenHint, setNameTakenHint] = useState<string | null>(null);
 
   async function onSubmit(e: React.FormEvent) {
@@ -114,7 +110,9 @@ export function JoinForm({ code, defaultName, breakoutProvider }: JoinFormProps)
         await res.json();
       if (data.recovery_url) {
         // Stash a fully-qualified URL so the player can paste it
-        // anywhere (including a different browser).
+        // anywhere (including a different browser). Cookie + the
+        // home-page "Resume game" pill cover the same-browser
+        // reconnect path; this is the rarer cross-device fallback.
         const fullUrl = `${window.location.origin}${data.recovery_url}`;
         try {
           window.localStorage.setItem(
@@ -122,13 +120,17 @@ export function JoinForm({ code, defaultName, breakoutProvider }: JoinFormProps)
             fullUrl,
           );
         } catch {
-          // localStorage can be disabled (incognito on some browsers);
-          // the modal below is the main affordance, this is a backup.
+          // localStorage can be disabled (incognito on some browsers).
+          // The cookie reconnect path will still work; the cross-
+          // device-recovery URL is just lost.
         }
-        setRecoveryModal({ url: fullUrl, redirect: data.redirect });
-      } else {
-        router.push(data.redirect);
       }
+      // Hand off to /play with a one-shot ?welcome=1 flag so the play
+      // surface can render a brief non-blocking confirmation toast.
+      // No modal interrupts join — the cookie reconnect path + the
+      // home-page Resume pill already handle the common cases.
+      const sep = data.redirect.includes("?") ? "&" : "?";
+      router.push(`${data.redirect}${sep}welcome=1`);
     } catch (err) {
       setError({
         field: null,
@@ -141,10 +143,6 @@ export function JoinForm({ code, defaultName, breakoutProvider }: JoinFormProps)
   const nameError = error?.field === "name" ? error.message : null;
   const emailError = error?.field === "email" ? error.message : null;
   const generalError = error?.field === null ? error.message : null;
-
-  if (recoveryModal) {
-    return <RecoverySaveModal {...recoveryModal} router={router} />;
-  }
 
   return (
     <form
@@ -275,69 +273,3 @@ export function JoinForm({ code, defaultName, breakoutProvider }: JoinFormProps)
   );
 }
 
-function RecoverySaveModal({
-  url,
-  redirect,
-  router,
-}: {
-  url: string;
-  redirect: string;
-  router: ReturnType<typeof useRouter>;
-}) {
-  const [copied, setCopied] = useState(false);
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      setCopied(false);
-    }
-  };
-
-  return (
-    <div className="t-card flex flex-col gap-4 p-6">
-      <div className="flex flex-col gap-1">
-        <span className="t-mono text-[11px] uppercase tracking-widest text-[var(--color-ink-3)]">
-          Save your recovery URL
-        </span>
-        <h2 className="t-display text-[20px] leading-tight">
-          Save this URL — it&apos;s your way back if your tab closes.
-        </h2>
-        <p className="text-[13px] text-[var(--color-ink-2)]">
-          Tessera shows it once. If your browser session is wiped, paste it
-          to reclaim the same seat with the same name.
-        </p>
-      </div>
-
-      <div
-        className="flex items-center gap-2 rounded-[10px] px-3 py-2.5 text-[12px]"
-        style={{
-          background: "var(--color-tint-yellow)",
-          border: "1.5px solid var(--color-t-yellow)",
-        }}
-      >
-        <span className="t-mono flex-1 break-all" style={{ color: "#7a5b00" }}>
-          {url}
-        </span>
-        <button
-          type="button"
-          onClick={copy}
-          className="t-mono rounded-md bg-white px-2.5 py-1 text-[11px] font-bold uppercase tracking-widest text-[var(--color-ink)]"
-          style={{ border: "1.5px solid var(--color-line)" }}
-        >
-          {copied ? "✓ copied" : "copy"}
-        </button>
-      </div>
-
-      <button
-        type="button"
-        onClick={() => router.push(redirect)}
-        className="t-btn t-btn--primary self-start"
-      >
-        Got it · take me to the game →
-      </button>
-    </div>
-  );
-}

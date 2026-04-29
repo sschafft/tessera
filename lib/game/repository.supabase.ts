@@ -229,6 +229,21 @@ export class SupabaseGameRepository implements GameRepository {
     if (error) throw new Error(`touchParticipant: ${error.message}`);
   }
 
+  async releaseParticipant(id: string): Promise<void> {
+    const supabase = getServiceClient();
+    const { error } = await supabase
+      .from("participants")
+      .update({
+        released_at: new Date().toISOString(),
+        pair_id: null,
+        // Reset role to lobby so a re-join under the same name doesn't
+        // inherit a stale role assignment.
+        role: "lobby",
+      })
+      .eq("id", id);
+    if (error) throw new Error(`releaseParticipant: ${error.message}`);
+  }
+
   async createPair(
     game_id: string,
     builder_id: string,
