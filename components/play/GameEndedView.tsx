@@ -183,7 +183,10 @@ export function GameEndedView({ code, workshopName }: GameEndedViewProps) {
               >
                 {i + 1}.
               </span>
-              {q}
+              {/* Explicit {" "} so screen readers and innerText
+                  capture a space between the numeral and the prompt
+                  — the mr-2 only handles visual spacing. */}
+              {" "}{q}
             </li>
           ))}
         </ul>

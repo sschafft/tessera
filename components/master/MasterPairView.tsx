@@ -5,6 +5,7 @@ import { PlayCanvas } from "@/components/canvas/PlayCanvas";
 import { Avatar } from "@/components/primitives/Avatar";
 import type { TileColor, TileShape } from "@/components/canvas/Tile";
 import { useGameEvents } from "@/lib/realtime/useGameEvents";
+import { PairNameBadge } from "@/components/play/PairNameBadge";
 
 interface PairSnapshot {
   pair_id: string;
@@ -53,7 +54,11 @@ export interface MasterPairViewProps {
   code: string;
   gameId: string;
   pairId: string;
+  /** Self-chosen pair name from the lobby snapshot. Null when unnamed. */
+  pairDisplayName: string | null;
   onReroll: (pairId: string, role: "builder" | "guider") => void;
+  /** Called after the GM saves a rename so the parent refetches. */
+  onRenamed?: () => void;
   busy: boolean;
 }
 
@@ -67,7 +72,9 @@ export function MasterPairView({
   code,
   gameId,
   pairId,
+  pairDisplayName,
   onReroll,
+  onRenamed,
   busy,
 }: MasterPairViewProps) {
   const [snap, setSnap] = useState<PairSnapshot | null>(null);
@@ -107,8 +114,21 @@ export function MasterPairView({
     <div className="flex flex-col gap-4">
       <div className="flex items-end justify-between">
         <div>
-          <div className="t-mono text-[11px] tracking-widest text-[var(--color-ink-3)]">
-            FOCUSED PAIR · OBSERVING
+          <div className="flex items-center gap-2">
+            <div className="t-mono text-[11px] tracking-widest text-[var(--color-ink-3)]">
+              FOCUSED PAIR · OBSERVING
+            </div>
+            {/* GM-side rename badge — opens the same PairNameModal
+                players see, so the GM can clean up "Untitled Pair"
+                before sending a calendar invite or fix a typo without
+                asking the players to do it. */}
+            <PairNameBadge
+              code={code}
+              pairId={pairId}
+              displayName={pairDisplayName}
+              defaultName={pairName}
+              onSaved={onRenamed}
+            />
           </div>
           <h2 className="t-display mt-1 flex items-center gap-2 text-[28px]">
             <span className="flex items-center gap-1">

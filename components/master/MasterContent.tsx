@@ -849,7 +849,9 @@ export function MasterContent({
                   code={code}
                   gameId={data.game_id}
                   pairId={focusedPair.id}
+                  pairDisplayName={focusedPair.display_name ?? null}
                   onReroll={rerollBrief}
+                  onRenamed={fetchSnapshot}
                   busy={busy}
                 />
               ) : (
