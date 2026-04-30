@@ -13,6 +13,8 @@ import {
 import { MasterLobby } from "./MasterLobby";
 import { PairsPanel } from "./PairsPanel";
 import { PairsFullscreenModal } from "./PairsFullscreenModal";
+import { useLobbyPoll } from "./hooks/useLobbyPoll";
+import { useFocusedPair } from "./hooks/useFocusedPair";
 import { TopBarControls } from "./TopBarControls";
 import { SuperPowersRail } from "./SuperPowersRail";
 import { ScoringPanel } from "./ScoringPanel";
@@ -24,8 +26,6 @@ import {
 } from "./BreakoutsPanel";
 import { GameEndedView } from "@/components/play/GameEndedView";
 import { MasterPairView } from "./MasterPairView";
-import { useGameEvents } from "@/lib/realtime/useGameEvents";
-
 // Re-export the shared types so existing imports of `LobbyParticipant`
 // etc. from MasterContent continue to resolve.
 export type {
@@ -35,16 +35,6 @@ export type {
   LobbyResponse,
   SuperPowerEvent,
 };
-
-// Realtime broadcasts drive the freshness; this poll is a safety net
-// for cases where the WS drops, the browser tab is backgrounded, or
-// NEXT_PUBLIC_SUPABASE_ANON_KEY is missing client-side. Was 30s —
-// playtest 2026-04-28 surfaced a 90s lag on the GM dashboard's
-// super-power counter (3× polling cycles for a missed broadcast),
-// which made super-power triggers feel ambiguous in the moment.
-// 10s matches PlayContent.POLL_MS and keeps the load trivial (one
-// /lobby hit per 10s, single tab).
-const POLL_MS = 10_000;
 
 export interface MasterContentProps {
   code: string;
@@ -71,55 +61,14 @@ export function MasterContent({
   defaultComplexity,
   initialDurationSeconds,
 }: MasterContentProps) {
-  const [data, setData] = useState<LobbyResponse | null>(null);
-  const [pollError, setPollError] = useState<string | null>(null);
-  const [hostSessionLost, setHostSessionLost] = useState(false);
+  // Lobby fetch loop, realtime subscription, and host-session detection
+  // all live in `useLobbyPoll`. See components/master/hooks/useLobbyPoll.ts.
+  const { data, pollError, hostSessionLost, fetchSnapshot, setData } =
+    useLobbyPoll(code);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [focusedPairId, setFocusedPairId] = useState<string | null>(null);
   const [pairsExpanded, setPairsExpanded] = useState(false);
-
-  const fetchSnapshot = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/games/${code}/lobby`, {
-        cache: "no-store",
-      });
-      if (res.status === 401 || res.status === 403) {
-        // GM session is gone — could be a torn cookie (player tab on
-        // the same browser overwrote it), an expired session, or the
-        // GM landing here with no session at all. Surface the host-
-        // recover CTA instead of looping silently with an empty lobby.
-        setHostSessionLost(true);
-        setPollError(null);
-        return;
-      }
-      if (!res.ok) throw new Error(`status ${res.status}`);
-      const json: LobbyResponse = await res.json();
-      setData(json);
-      setPollError(null);
-      setHostSessionLost(false);
-    } catch (err) {
-      setPollError(err instanceof Error ? err.message : "fetch failed");
-    }
-  }, [code]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const tick = async () => {
-      if (cancelled) return;
-      await fetchSnapshot();
-    };
-    tick();
-    const id = setInterval(tick, POLL_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [fetchSnapshot]);
-
-  // Realtime: refetch instantly on any game event.
-  useGameEvents(data?.game_id ?? null, fetchSnapshot);
 
   const toggleSelect = useCallback((id: string) => {
     setSelected((prev) => {
@@ -469,7 +418,7 @@ export function MasterContent({
         await fetchSnapshot();
       }
     },
-    [code, fetchSnapshot],
+    [code, fetchSnapshot, setData],
   );
 
   const replay = useCallback(async () => {
@@ -506,22 +455,10 @@ export function MasterContent({
   );
   const pairs = useMemo(() => data?.pairs ?? [], [data]);
 
-  // Auto-focus the first pair once one exists; clear focus if the pair
-  // disappears (e.g. after a Shuffle). Sync state from a derived prop
-  // (the pairs list) — there's no cleaner place for this since
-  // MasterContent owns focusedPairId and the pairs list is fetched
-  // async by the same component.
-  useEffect(() => {
-    if (!focusedPairId && pairs.length > 0) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- syncs focused-pair when the pairs list arrives or a Shuffle drops the focused row.
-      setFocusedPairId(pairs[0]!.id);
-    } else if (focusedPairId && !pairs.some((p) => p.id === focusedPairId)) {
-       
-      setFocusedPairId(pairs[0]?.id ?? null);
-    }
-  }, [pairs, focusedPairId]);
-
-  const focusedPair = pairs.find((p) => p.id === focusedPairId) ?? null;
+  // Focused-pair state + auto-pick / re-pick logic lives in
+  // useFocusedPair. See components/master/hooks/useFocusedPair.ts.
+  const { focusedPairId, setFocusedPairId, focusedPair } =
+    useFocusedPair(pairs);
 
   const round = data?.round ?? null;
   const workshopName = data?.workshop_name ?? initialWorkshopName;
