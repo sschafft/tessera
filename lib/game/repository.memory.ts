@@ -19,7 +19,10 @@ import type {
   PlacementStore,
   RoundRecord,
   RoundStore,
+  RoundSurveyRecord,
+  RoundSurveyStore,
   SuperPowerStore,
+  SurveyHarderReason,
 } from "./repository";
 
 export class DuplicateNameError extends Error {
@@ -158,6 +161,15 @@ class MemoryGameRepository implements GameRepository {
   superPowers: SuperPowerStore = {
     createEvent: (input) => this.createSuperPowerEvent(input),
     listEvents: (round_id) => this.listSuperPowerEvents(round_id),
+  };
+
+  private _roundSurveyTable = new Map<string, RoundSurveyRecord>();
+
+  roundSurveys: RoundSurveyStore = {
+    upsert: (input) => this.upsertRoundSurvey(input),
+    findForParticipant: (round_id, participant_id) =>
+      this.findRoundSurveyForParticipant(round_id, participant_id),
+    listForRound: (round_id) => this.listRoundSurveys(round_id),
   };
 
   async createGame(
@@ -815,6 +827,54 @@ class MemoryGameRepository implements GameRepository {
     pr.builder_snapshot = snapshot;
     pr.shares_remaining = pr.shares_remaining - 1;
     return pr.shares_remaining;
+  }
+
+  // ─── Round surveys ─────────────────────────────────────────────────
+  private surveyKey(round_id: string, participant_id: string): string {
+    return `${round_id}:${participant_id}`;
+  }
+
+  async upsertRoundSurvey(input: {
+    round_id: string;
+    participant_id: string;
+    comm_balance: number;
+    what_made_harder: SurveyHarderReason;
+  }): Promise<RoundSurveyRecord> {
+    const key = this.surveyKey(input.round_id, input.participant_id);
+    const existing = this._roundSurveyTable.get(key);
+    const record: RoundSurveyRecord = existing
+      ? {
+          ...existing,
+          comm_balance: input.comm_balance,
+          what_made_harder: input.what_made_harder,
+          submitted_at: new Date().toISOString(),
+        }
+      : {
+          id: crypto.randomUUID(),
+          round_id: input.round_id,
+          participant_id: input.participant_id,
+          comm_balance: input.comm_balance,
+          what_made_harder: input.what_made_harder,
+          submitted_at: new Date().toISOString(),
+        };
+    this._roundSurveyTable.set(key, record);
+    return record;
+  }
+
+  async findRoundSurveyForParticipant(
+    round_id: string,
+    participant_id: string,
+  ): Promise<RoundSurveyRecord | null> {
+    return (
+      this._roundSurveyTable.get(this.surveyKey(round_id, participant_id)) ??
+      null
+    );
+  }
+
+  async listRoundSurveys(round_id: string): Promise<RoundSurveyRecord[]> {
+    return [...this._roundSurveyTable.values()].filter(
+      (s) => s.round_id === round_id,
+    );
   }
 }
 

@@ -28,7 +28,10 @@ import type {
   PlacementStore,
   RoundRecord,
   RoundStore,
+  RoundSurveyRecord,
+  RoundSurveyStore,
   SuperPowerStore,
+  SurveyHarderReason,
 } from "./repository";
 
 type DbGame = Database["public"]["Tables"]["games"]["Row"];
@@ -190,6 +193,13 @@ export class SupabaseGameRepository implements GameRepository {
   superPowers: SuperPowerStore = {
     createEvent: (input) => this.createSuperPowerEvent(input),
     listEvents: (round_id) => this.listSuperPowerEvents(round_id),
+  };
+
+  roundSurveys: RoundSurveyStore = {
+    upsert: (input) => this.upsertRoundSurvey(input),
+    findForParticipant: (round_id, participant_id) =>
+      this.findRoundSurveyForParticipant(round_id, participant_id),
+    listForRound: (round_id) => this.listRoundSurveys(round_id),
   };
 
   // ─── DB methods (existing bodies, regrouped above into facades) ───
@@ -1098,6 +1108,129 @@ export class SupabaseGameRepository implements GameRepository {
     if (error) throw new Error(`listLibraryBriefs: ${error.message}`);
     return (data ?? []).map(toLibraryBrief);
   }
+
+  // ─── Round surveys ─────────────────────────────────────────────────
+  // The `round_surveys` table is added in migration
+  // 20260430120000_round_surveys.sql; until `npm run gen:types` is run
+  // against a project that has the migration applied, the client type
+  // doesn't know about it. We cast through `unknown` here so the queries
+  // type-check; the row shape is locked down by the toRoundSurveyRecord
+  // mapper + the table's own CHECK constraints.
+
+  async upsertRoundSurvey(input: {
+    round_id: string;
+    participant_id: string;
+    comm_balance: number;
+    what_made_harder: SurveyHarderReason;
+  }): Promise<RoundSurveyRecord> {
+    const supabase = getServiceClient();
+    const table = (supabase as unknown as {
+      from: (name: string) => {
+        upsert: (
+          values: Record<string, unknown>,
+          options?: { onConflict?: string },
+        ) => {
+          select: () => {
+            single: () => Promise<{ data: unknown; error: { message: string } | null }>;
+          };
+        };
+      };
+    }).from("round_surveys");
+    const { data, error } = await table
+      .upsert(
+        {
+          round_id: input.round_id,
+          participant_id: input.participant_id,
+          comm_balance: input.comm_balance,
+          what_made_harder: input.what_made_harder,
+          submitted_at: new Date().toISOString(),
+        },
+        { onConflict: "round_id,participant_id" },
+      )
+      .select()
+      .single();
+    if (error || !data) {
+      throw new Error(
+        `upsertRoundSurvey: ${error?.message ?? "no row returned"}`,
+      );
+    }
+    return toRoundSurveyRecord(data as Parameters<typeof toRoundSurveyRecord>[0]);
+  }
+
+  async findRoundSurveyForParticipant(
+    round_id: string,
+    participant_id: string,
+  ): Promise<RoundSurveyRecord | null> {
+    const supabase = getServiceClient();
+    const result = await (supabase as unknown as {
+      from: (name: string) => {
+        select: (cols: string) => {
+          eq: (col: string, val: string) => {
+            eq: (col: string, val: string) => {
+              maybeSingle: () => Promise<{
+                data: unknown;
+                error: { message: string } | null;
+              }>;
+            };
+          };
+        };
+      };
+    })
+      .from("round_surveys")
+      .select("*")
+      .eq("round_id", round_id)
+      .eq("participant_id", participant_id)
+      .maybeSingle();
+    if (result.error)
+      throw new Error(
+        `findRoundSurveyForParticipant: ${result.error.message}`,
+      );
+    return result.data
+      ? toRoundSurveyRecord(
+          result.data as Parameters<typeof toRoundSurveyRecord>[0],
+        )
+      : null;
+  }
+
+  async listRoundSurveys(round_id: string): Promise<RoundSurveyRecord[]> {
+    const supabase = getServiceClient();
+    const result = await (supabase as unknown as {
+      from: (name: string) => {
+        select: (cols: string) => {
+          eq: (col: string, val: string) => Promise<{
+            data: unknown[] | null;
+            error: { message: string } | null;
+          }>;
+        };
+      };
+    })
+      .from("round_surveys")
+      .select("*")
+      .eq("round_id", round_id);
+    if (result.error)
+      throw new Error(`listRoundSurveys: ${result.error.message}`);
+    return (result.data ?? []).map((row) =>
+      toRoundSurveyRecord(row as Parameters<typeof toRoundSurveyRecord>[0]),
+    );
+  }
+}
+
+function toRoundSurveyRecord(row: {
+  id: string;
+  round_id: string;
+  participant_id: string;
+  comm_balance: number;
+  what_made_harder: string;
+  submitted_at: string;
+}): RoundSurveyRecord {
+  return {
+    id: row.id,
+    round_id: row.round_id,
+    participant_id: row.participant_id,
+    comm_balance: row.comm_balance,
+    what_made_harder: row.what_made_harder as SurveyHarderReason,
+    submitted_at: row.submitted_at,
+  };
 }
 
 function toBriefRecord(row: DbBrief): BriefRecord {

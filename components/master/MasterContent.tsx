@@ -170,6 +170,11 @@ export function MasterContent({
     [doAction],
   );
 
+  const resetAllPairs = useCallback(
+    () => doAction("reset-pairs", "/lobby/reset", null, clearSelection),
+    [doAction, clearSelection],
+  );
+
   const pullBackToMain = useCallback(
     () => doAction("return-to-main", "/return-to-main", null),
     [doAction],
@@ -664,6 +669,7 @@ export function MasterContent({
                     roundRunning={round?.status === "running"}
                     onSwapRoles={swapPairRoles}
                     onSwapAllRoles={swapAllPairRoles}
+                    onResetPairs={resetAllPairs}
                     onExpand={() => setPairsExpanded(true)}
                   />
                 </SetupStep>
@@ -762,6 +768,7 @@ export function MasterContent({
                 roundRunning={round?.status === "running"}
                 onSwapRoles={swapPairRoles}
                 onSwapAllRoles={swapAllPairRoles}
+                onResetPairs={resetAllPairs}
                 onExpand={() => setPairsExpanded(true)}
                 breakouts={
                   data?.breakouts
