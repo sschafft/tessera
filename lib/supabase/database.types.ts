@@ -19,61 +19,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      super_power_events: {
-        Row: {
-          id: string
-          kind: Database["public"]["Enums"]["super_power_kind"]
-          pair_id: string | null
-          payload: Json
-          round_id: string
-          scope: Database["public"]["Enums"]["super_power_scope"]
-          triggered_at: string
-          triggered_by: string
-        }
-        Insert: {
-          id?: string
-          kind: Database["public"]["Enums"]["super_power_kind"]
-          pair_id?: string | null
-          payload?: Json
-          round_id: string
-          scope: Database["public"]["Enums"]["super_power_scope"]
-          triggered_at?: string
-          triggered_by: string
-        }
-        Update: {
-          id?: string
-          kind?: Database["public"]["Enums"]["super_power_kind"]
-          pair_id?: string | null
-          payload?: Json
-          round_id?: string
-          scope?: Database["public"]["Enums"]["super_power_scope"]
-          triggered_at?: string
-          triggered_by?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "super_power_events_pair_id_fkey"
-            columns: ["pair_id"]
-            isOneToOne: false
-            referencedRelation: "pairs"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "super_power_events_round_id_fkey"
-            columns: ["round_id"]
-            isOneToOne: false
-            referencedRelation: "rounds"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "super_power_events_triggered_by_fkey"
-            columns: ["triggered_by"]
-            isOneToOne: false
-            referencedRelation: "participants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       briefs: {
         Row: {
           created_at: string
@@ -149,7 +94,6 @@ export type Database = {
           builder_brief_on: boolean
           builder_brief_source: Database["public"]["Enums"]["brief_source_t"]
           code: string
-          meeting_mode: string
           created_at: string
           default_complexity: number
           ended_at: string | null
@@ -161,6 +105,7 @@ export type Database = {
           host_token_hash: string
           id: string
           last_interaction_at: string
+          meeting_mode: string
           participant_cap: number
           round_count: number
           round_duration_seconds: number
@@ -179,7 +124,6 @@ export type Database = {
           builder_brief_on?: boolean
           builder_brief_source?: Database["public"]["Enums"]["brief_source_t"]
           code: string
-          meeting_mode?: string
           created_at?: string
           default_complexity: number
           ended_at?: string | null
@@ -191,6 +135,7 @@ export type Database = {
           host_token_hash: string
           id?: string
           last_interaction_at?: string
+          meeting_mode?: string
           participant_cap: number
           round_count: number
           round_duration_seconds?: number
@@ -209,7 +154,6 @@ export type Database = {
           builder_brief_on?: boolean
           builder_brief_source?: Database["public"]["Enums"]["brief_source_t"]
           code?: string
-          meeting_mode?: string
           created_at?: string
           default_complexity?: number
           ended_at?: string | null
@@ -221,6 +165,7 @@ export type Database = {
           host_token_hash?: string
           id?: string
           last_interaction_at?: string
+          meeting_mode?: string
           participant_cap?: number
           round_count?: number
           round_duration_seconds?: number
@@ -523,6 +468,48 @@ export type Database = {
         }
         Relationships: []
       }
+      round_surveys: {
+        Row: {
+          comm_balance: number
+          id: string
+          participant_id: string
+          round_id: string
+          submitted_at: string
+          what_made_harder: string
+        }
+        Insert: {
+          comm_balance: number
+          id?: string
+          participant_id: string
+          round_id: string
+          submitted_at?: string
+          what_made_harder: string
+        }
+        Update: {
+          comm_balance?: number
+          id?: string
+          participant_id?: string
+          round_id?: string
+          submitted_at?: string
+          what_made_harder?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "round_surveys_participant_id_fkey"
+            columns: ["participant_id"]
+            isOneToOne: false
+            referencedRelation: "participants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "round_surveys_round_id_fkey"
+            columns: ["round_id"]
+            isOneToOne: false
+            referencedRelation: "rounds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rounds: {
         Row: {
           complexity: number
@@ -564,17 +551,83 @@ export type Database = {
           },
         ]
       }
+      super_power_events: {
+        Row: {
+          id: string
+          kind: Database["public"]["Enums"]["super_power_kind"]
+          pair_id: string | null
+          payload: Json
+          round_id: string
+          scope: Database["public"]["Enums"]["super_power_scope"]
+          triggered_at: string
+          triggered_by: string
+        }
+        Insert: {
+          id?: string
+          kind: Database["public"]["Enums"]["super_power_kind"]
+          pair_id?: string | null
+          payload?: Json
+          round_id: string
+          scope: Database["public"]["Enums"]["super_power_scope"]
+          triggered_at?: string
+          triggered_by: string
+        }
+        Update: {
+          id?: string
+          kind?: Database["public"]["Enums"]["super_power_kind"]
+          pair_id?: string | null
+          payload?: Json
+          round_id?: string
+          scope?: Database["public"]["Enums"]["super_power_scope"]
+          triggered_at?: string
+          triggered_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accelerant_events_pair_id_fkey"
+            columns: ["pair_id"]
+            isOneToOne: false
+            referencedRelation: "pairs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accelerant_events_round_id_fkey"
+            columns: ["round_id"]
+            isOneToOne: false
+            referencedRelation: "rounds"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accelerant_events_triggered_by_fkey"
+            columns: ["triggered_by"]
+            isOneToOne: false
+            referencedRelation: "participants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      adjust_round_duration: {
+        Args: { p_delta_seconds: number; p_round_id: string }
+        Returns: Json
+      }
+      capture_builder_snapshot: {
+        Args: { p_pair_round_id: string; p_snapshot: Json }
+        Returns: Json
+      }
       clear_allocations: { Args: { p_game_id: string }; Returns: undefined }
       create_pair_with_roles: {
         Args: { p_builder_id: string; p_game_id: string; p_guider_id: string }
         Returns: {
+          breakout_call_url: string | null
+          breakout_event_id: string | null
           builder_id: string | null
           created_at: string
+          display_name: string | null
           game_id: string
           guider_id: string | null
           id: string
@@ -596,7 +649,10 @@ export type Database = {
       }
     }
     Enums: {
-      super_power_scope: "pair" | "all"
+      brief_source_t: "gm" | "library" | "gemini"
+      game_status_t: "lobby" | "running" | "ended" | "purged"
+      role_t: "gm" | "builder" | "guider" | "observer" | "lobby"
+      round_status_t: "pending" | "running" | "ended"
       super_power_kind:
         | "prototype"
         | "reveal_briefs"
@@ -604,15 +660,12 @@ export type Database = {
         | "agile_share"
         | "time_pressure"
         | "change_guider_brief"
-        | "change_builder_brief"
         | "randomizer"
         | "requirement_change"
+        | "change_builder_brief"
         | "harder"
         | "easier"
-      brief_source_t: "gm" | "library" | "gemini"
-      game_status_t: "lobby" | "running" | "ended" | "purged"
-      role_t: "gm" | "builder" | "guider" | "observer" | "lobby"
-      round_status_t: "pending" | "running" | "ended"
+      super_power_scope: "pair" | "all"
       team_mode_t: "gm_picks" | "players_pick"
     }
     CompositeTypes: {
@@ -741,7 +794,10 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      super_power_scope: ["pair", "all"],
+      brief_source_t: ["gm", "library", "gemini"],
+      game_status_t: ["lobby", "running", "ended", "purged"],
+      role_t: ["gm", "builder", "guider", "observer", "lobby"],
+      round_status_t: ["pending", "running", "ended"],
       super_power_kind: [
         "prototype",
         "reveal_briefs",
@@ -749,16 +805,13 @@ export const Constants = {
         "agile_share",
         "time_pressure",
         "change_guider_brief",
-        "change_builder_brief",
         "randomizer",
         "requirement_change",
+        "change_builder_brief",
         "harder",
         "easier",
       ],
-      brief_source_t: ["gm", "library", "gemini"],
-      game_status_t: ["lobby", "running", "ended", "purged"],
-      role_t: ["gm", "builder", "guider", "observer", "lobby"],
-      round_status_t: ["pending", "running", "ended"],
+      super_power_scope: ["pair", "all"],
       team_mode_t: ["gm_picks", "players_pick"],
     },
   },

@@ -1110,12 +1110,6 @@ export class SupabaseGameRepository implements GameRepository {
   }
 
   // ─── Round surveys ─────────────────────────────────────────────────
-  // The `round_surveys` table is added in migration
-  // 20260430120000_round_surveys.sql; until `npm run gen:types` is run
-  // against a project that has the migration applied, the client type
-  // doesn't know about it. We cast through `unknown` here so the queries
-  // type-check; the row shape is locked down by the toRoundSurveyRecord
-  // mapper + the table's own CHECK constraints.
 
   async upsertRoundSurvey(input: {
     round_id: string;
@@ -1124,19 +1118,8 @@ export class SupabaseGameRepository implements GameRepository {
     what_made_harder: SurveyHarderReason;
   }): Promise<RoundSurveyRecord> {
     const supabase = getServiceClient();
-    const table = (supabase as unknown as {
-      from: (name: string) => {
-        upsert: (
-          values: Record<string, unknown>,
-          options?: { onConflict?: string },
-        ) => {
-          select: () => {
-            single: () => Promise<{ data: unknown; error: { message: string } | null }>;
-          };
-        };
-      };
-    }).from("round_surveys");
-    const { data, error } = await table
+    const { data, error } = await supabase
+      .from("round_surveys")
       .upsert(
         {
           round_id: input.round_id,
@@ -1154,7 +1137,7 @@ export class SupabaseGameRepository implements GameRepository {
         `upsertRoundSurvey: ${error?.message ?? "no row returned"}`,
       );
     }
-    return toRoundSurveyRecord(data as Parameters<typeof toRoundSurveyRecord>[0]);
+    return toRoundSurveyRecord(data);
   }
 
   async findRoundSurveyForParticipant(
@@ -1162,56 +1145,25 @@ export class SupabaseGameRepository implements GameRepository {
     participant_id: string,
   ): Promise<RoundSurveyRecord | null> {
     const supabase = getServiceClient();
-    const result = await (supabase as unknown as {
-      from: (name: string) => {
-        select: (cols: string) => {
-          eq: (col: string, val: string) => {
-            eq: (col: string, val: string) => {
-              maybeSingle: () => Promise<{
-                data: unknown;
-                error: { message: string } | null;
-              }>;
-            };
-          };
-        };
-      };
-    })
+    const { data, error } = await supabase
       .from("round_surveys")
       .select("*")
       .eq("round_id", round_id)
       .eq("participant_id", participant_id)
       .maybeSingle();
-    if (result.error)
-      throw new Error(
-        `findRoundSurveyForParticipant: ${result.error.message}`,
-      );
-    return result.data
-      ? toRoundSurveyRecord(
-          result.data as Parameters<typeof toRoundSurveyRecord>[0],
-        )
-      : null;
+    if (error)
+      throw new Error(`findRoundSurveyForParticipant: ${error.message}`);
+    return data ? toRoundSurveyRecord(data) : null;
   }
 
   async listRoundSurveys(round_id: string): Promise<RoundSurveyRecord[]> {
     const supabase = getServiceClient();
-    const result = await (supabase as unknown as {
-      from: (name: string) => {
-        select: (cols: string) => {
-          eq: (col: string, val: string) => Promise<{
-            data: unknown[] | null;
-            error: { message: string } | null;
-          }>;
-        };
-      };
-    })
+    const { data, error } = await supabase
       .from("round_surveys")
       .select("*")
       .eq("round_id", round_id);
-    if (result.error)
-      throw new Error(`listRoundSurveys: ${result.error.message}`);
-    return (result.data ?? []).map((row) =>
-      toRoundSurveyRecord(row as Parameters<typeof toRoundSurveyRecord>[0]),
-    );
+    if (error) throw new Error(`listRoundSurveys: ${error.message}`);
+    return (data ?? []).map(toRoundSurveyRecord);
   }
 }
 

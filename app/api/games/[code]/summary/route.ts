@@ -167,6 +167,36 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     return rb - ra;
   });
 
+  // Per-round survey aggregate. Surfaces what the pair players self-
+  // reported about who carried the conversation + what made the round
+  // hard. Anonymised — only counts + averages, no individual responses.
+  // Empty when nobody filled out the prompt.
+  const surveysByRound = await Promise.all(
+    allRounds.map(async (round) => ({
+      round,
+      responses: await repo.roundSurveys.listForRound(round.id),
+    })),
+  );
+  const surveys = surveysByRound
+    .filter(({ responses }) => responses.length > 0)
+    .map(({ round, responses }) => {
+      const reasons = { me: 0, partner: 0, briefs: 0, puzzle: 0 };
+      let balanceSum = 0;
+      for (const r of responses) {
+        balanceSum += r.comm_balance;
+        if (r.what_made_harder in reasons) {
+          reasons[r.what_made_harder as keyof typeof reasons] += 1;
+        }
+      }
+      return {
+        round_id: round.id,
+        round_index: round.index,
+        response_count: responses.length,
+        avg_comm_balance: Math.round(balanceSum / responses.length),
+        harder_reasons: reasons,
+      };
+    });
+
   return NextResponse.json({
     code,
     workshop_name: game.workshop_name,
@@ -178,5 +208,6 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       wrong_pts: game.scoring_wrong_pts,
     },
     pairs: summary,
+    surveys,
   });
 }

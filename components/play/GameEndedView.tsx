@@ -30,8 +30,18 @@ interface PairSummary {
   }>;
 }
 
+interface SurveyAggregate {
+  round_id: string;
+  round_index: number;
+  response_count: number;
+  /** 0..100 — 0 = "I did most of it" leaning, 100 = "partner did most". */
+  avg_comm_balance: number;
+  harder_reasons: { me: number; partner: number; briefs: number; puzzle: number };
+}
+
 export function GameEndedView({ code, workshopName }: GameEndedViewProps) {
   const [summary, setSummary] = useState<PairSummary[] | null>(null);
+  const [surveys, setSurveys] = useState<SurveyAggregate[] | null>(null);
   const [callUrl, setCallUrl] = useState<string | null>(null);
   const [whiteboardUrl, setWhiteboardUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +52,7 @@ export function GameEndedView({ code, workshopName }: GameEndedViewProps) {
       .then((d) => {
         if (Array.isArray(d.pairs)) setSummary(d.pairs);
         else setError(d.error ?? "Could not load summary.");
+        if (Array.isArray(d.surveys)) setSurveys(d.surveys);
         if (typeof d.video_call_url === "string") setCallUrl(d.video_call_url);
         if (typeof d.whiteboard_url === "string")
           setWhiteboardUrl(d.whiteboard_url);
@@ -151,6 +162,10 @@ export function GameEndedView({ code, workshopName }: GameEndedViewProps) {
         </p>
       )}
 
+      {surveys && surveys.length > 0 && (
+        <SurveyAggregateCard surveys={surveys} />
+      )}
+
       <div className="t-card flex w-full flex-col gap-2.5 p-5 text-left">
         <span
           className="t-mono text-[11px] uppercase tracking-widest text-[var(--color-ink-3)]"
@@ -209,4 +224,105 @@ export function GameEndedView({ code, workshopName }: GameEndedViewProps) {
       </div>
     </section>
   );
+}
+
+const HARDER_LABELS: Record<keyof SurveyAggregate["harder_reasons"], string> =
+  {
+    me: "myself",
+    partner: "my partner",
+    briefs: "the briefs",
+    puzzle: "the puzzle",
+  };
+
+/** Aggregated reflection card. Surfaces what the room self-reported
+ *  about who carried the conversation + what made each round hard.
+ *  Anonymised — only counts + averages, no individual responses. */
+function SurveyAggregateCard({ surveys }: { surveys: SurveyAggregate[] }) {
+  return (
+    <div className="t-card flex w-full flex-col gap-3 p-5 text-left">
+      <span
+        className="t-mono text-[11px] uppercase tracking-widest text-[var(--color-ink-3)]"
+        style={{ letterSpacing: ".15em" }}
+      >
+        Reflection roundup · per round
+      </span>
+      <p className="text-[12px] text-[var(--color-ink-3)]">
+        Anonymised — counts + averages from the post-round prompts. Use
+        the breakdown as a starting place for the call.
+      </p>
+      <ul className="flex flex-col gap-3">
+        {surveys.map((s) => {
+          const total = s.response_count;
+          const reasons = (
+            ["me", "partner", "briefs", "puzzle"] as const
+          ).map((k) => ({
+            key: k,
+            label: HARDER_LABELS[k],
+            count: s.harder_reasons[k] ?? 0,
+            pct: total > 0 ? Math.round((s.harder_reasons[k] / total) * 100) : 0,
+          }));
+          const top = reasons
+            .filter((r) => r.count > 0)
+            .sort((a, b) => b.count - a.count)[0];
+          return (
+            <li
+              key={s.round_id}
+              className="rounded-[12px] px-3 py-2.5"
+              style={{
+                background: "var(--color-paper-2)",
+                border: "1.5px solid var(--color-line)",
+              }}
+            >
+              <div className="mb-1.5 flex items-baseline justify-between">
+                <span className="t-mono text-[11px] font-bold uppercase tracking-wide text-[var(--color-ink-2)]">
+                  Round {s.round_index}
+                </span>
+                <span className="t-mono text-[10px] text-[var(--color-ink-3)]">
+                  {total} response{total === 1 ? "" : "s"}
+                </span>
+              </div>
+              <div className="text-[12px] text-[var(--color-ink-2)]">
+                Talk balance averaged{" "}
+                <b>{labelForBalanceAvg(s.avg_comm_balance)}</b>.
+                {top && (
+                  <>
+                    {" "}
+                    Most cited <b>{top.label}</b> as what made it
+                    harder ({top.count}/{total}).
+                  </>
+                )}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5 text-[10px]">
+                {reasons.map((r) => (
+                  <span
+                    key={r.key}
+                    className="t-mono rounded-full px-2 py-0.5"
+                    style={{
+                      background:
+                        r.count > 0 ? "white" : "transparent",
+                      color:
+                        r.count > 0
+                          ? "var(--color-ink-2)"
+                          : "var(--color-ink-3)",
+                      border: "1px solid var(--color-line)",
+                    }}
+                  >
+                    {r.label}: {r.count}
+                  </span>
+                ))}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function labelForBalanceAvg(v: number): string {
+  if (v <= 25) return "the player carried it";
+  if (v <= 45) return "the player led";
+  if (v < 55) return "even";
+  if (v < 75) return "the partner led";
+  return "the partner carried it";
 }
