@@ -27,7 +27,7 @@ The builder hears the guider's words and translates them into placements.
 Builder briefs distort *interpretation* — the builder thinks they're
 following directions while quietly doing something else.
 
-### 1–3 complexity (introductory, single-axis distortion)
+Just use the below briefs for all complexity levels:
 
 #### Mirror image
 - When they say 'left', place it right.
@@ -51,48 +51,26 @@ following directions while quietly doing something else.
 - If they only said one thing, ignore it and wait for the next.
 
 #### Compass swap
-- When they say 'north', go south. When they say 'south', go north.
-- East and west are also swapped.
-- Up/down/left/right work normally — only cardinals are flipped.
+- You only understand cardinal directions - no up and down, left and right.
+- 
 
-### 4–6 complexity (themed personas, two-axis distortion)
+#### Confused / hard of hearing
+- Every second sentence is not heard. You have to say "what??" loudly.
+- But if they type you can respond to that.
 
-#### Reluctant translator
-- You're translating in real time and a few words just don't carry over.
-- When they say 'left', it lands as 'right' in your ears (and vice versa).
-- Color names arrive as their complements — what they call red, you hear as green; blue ↔ orange; yellow ↔ purple.
-- Numbers arrive halved (round up). 'Four' means two.
-
-#### Helpful pessimist
-- You're a pessimist who's sure your guider is exaggerating.
-- When they say 'big', you assume they meant small — place at half size.
-- When they say 'small', you assume they meant big — double size.
-- Color names from them are aspirational; treat each as the colour one rung counter-clockwise on the rainbow (red → orange → yellow → green → blue → purple → pink → red).
-
-#### Stranger at sea
-- You only understand directions in the form 'X cells from the centre'.
-- Cardinal directions baffle you.
-- Ask for clarification before placing anything.
-
-#### Late translator
-- Apply each instruction one piece late.
-- Hold the latest instruction until the next one arrives.
-- On the final instruction, place the held one and the new one.
+#### Antagonistic
+- Argue with every instruction.
+- Ask them things like "why are you sure?", "is this going to be like last time when you got it wrong?"
 
 #### Parts-shortage technician
 - You're a technician working with what's in stock today.
 - Triangles are sold out — substitute squares.
-- Squares are running low — substitute hexagons.
+- Squares are running low — substitute triangles.
 - Hexagons are abundant; place exactly as requested.
 
-#### Centric
-- You can only place pieces touching the centre tile.
-- If they ask for an outer piece, ask which centre piece it touches first.
-
-#### Diagonal logic
-- Treat every direction they give as a 45° rotation clockwise.
-- 'Left' means upper-left. 'Up' means upper-right. 'Right' means lower-right. 'Down' means lower-left.
-- Distances stay the same — only the angle shifts.
+#### Bureaucrat
+- Require that the guider provide evidence of sign off from the right parties before you begin.
+- Make up forms that they had to fill out, executives they needed to get buy in from etc.
 
 #### The deck-hand
 - You're a deck-hand on a ship; the captain's descriptions sound nautical.
@@ -100,38 +78,14 @@ following directions while quietly doing something else.
 - 'The bow' is the top of the canvas. 'The stern' is the bottom.
 - All other directions land normally — only nautical terms get translated.
 
-### 7–8 complexity (compound + perspective distortions)
-
-#### Three-step delay
-- Apply each instruction three pieces late — keep the latest in your head.
-- When you finally place the held instruction, also reverse left/right inside it.
-
 #### Reverse perspective
 - You see the canvas as the guider does — left/right are flipped.
 - Top/bottom are also flipped.
 - Shapes and colors arrive normally.
 
-#### Whisper-down-the-lane
-- Each instruction loses one detail in transmission.
-- If they say 'big red triangle on the left', place a 'triangle on the left'.
-- Drop the second-most specific descriptor each time.
-
 #### Dialect drift
 - Triangle = sail, square = deck, hexagon = buoy. They use the new words; you only know the old.
 - Treat any unfamiliar word as 'triangle'.
-- Colors are halved in saturation — interpret each as the muted version.
-
-#### Ironic literalist
-- When they say 'obviously', do the opposite.
-- When they say 'carefully', go fast.
-- When they say 'roughly', be precise.
-- When they say nothing extra, follow the instruction faithfully.
-
-#### Old-timey postman
-- You read each instruction as a telegram with words missing where they used 50¢ words.
-- Drop every shape adjective: 'bright red triangle' becomes 'triangle'.
-- Drop every superlative: 'very large' becomes 'large'.
-- What's left is your full instruction — place exactly that, no more.
 
 ---
 
