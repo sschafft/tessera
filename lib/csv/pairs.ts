@@ -42,8 +42,12 @@ const MAX_EMAIL_LEN = 120;
 /**
  * Parse one CSV record from a raw line. Handles quoted fields with
  * escaped doubled quotes (RFC-4180 lite). Returns the field array.
+ *
+ * Delimiter is passed in so the same routine works for comma (RFC),
+ * semicolon (Excel-EU), or tab (paste-from-Sheets). See
+ * `detectDelimiter` for how the dialect is sniffed.
  */
-function splitRecord(line: string): string[] {
+function splitRecord(line: string, delimiter: string): string[] {
   const out: string[] = [];
   let cur = "";
   let inQuotes = false;
@@ -63,7 +67,7 @@ function splitRecord(line: string): string[] {
     } else {
       if (c === '"' && cur.length === 0) {
         inQuotes = true;
-      } else if (c === ",") {
+      } else if (c === delimiter) {
         out.push(cur);
         cur = "";
       } else {
@@ -73,6 +77,36 @@ function splitRecord(line: string): string[] {
   }
   out.push(cur);
   return out;
+}
+
+/**
+ * Sniff the delimiter from the first non-empty line of the CSV.
+ * Counts commas, semicolons, and tabs; picks whichever is most
+ * frequent. A German-locale Excel exports `;`-separated; a paste
+ * from Google Sheets is often tab-aligned. Defaults to comma when
+ * counts are tied.
+ */
+function detectDelimiter(headerLine: string): "," | ";" | "\t" {
+  // Count outside of quotes so a quoted "Smith, Jane" doesn't
+  // mislead the count.
+  let inQuotes = false;
+  const counts = { ",": 0, ";": 0, "\t": 0 };
+  for (let i = 0; i < headerLine.length; i++) {
+    const c = headerLine[i];
+    if (c === '"') {
+      // Skip escaped quote pairs.
+      if (inQuotes && headerLine[i + 1] === '"') i += 1;
+      else inQuotes = !inQuotes;
+      continue;
+    }
+    if (inQuotes) continue;
+    if (c === "," || c === ";" || c === "\t") counts[c] += 1;
+  }
+  // Prefer comma on ties (the canonical CSV delimiter and our
+  // template's default).
+  if (counts[";"] > counts[","] && counts[";"] >= counts["\t"]) return ";";
+  if (counts["\t"] > counts[","] && counts["\t"] > counts[";"]) return "\t";
+  return ",";
 }
 
 export function parsePairsCsv(text: string): ParseResult {
@@ -95,9 +129,23 @@ export function parsePairsCsv(text: string): ParseResult {
     return { rows, errors };
   }
 
-  const headerCells = splitRecord(lines[headerIdx]!).map((c) =>
+  const delimiter = detectDelimiter(lines[headerIdx]!);
+  const headerCells = splitRecord(lines[headerIdx]!, delimiter).map((c) =>
     c.trim().toLowerCase(),
   );
+  // If the header parsed to a single cell with our 4 column names
+  // smashed together, the wrong delimiter won. Surface it explicitly.
+  if (
+    headerCells.length === 1 &&
+    /name.*team|team.*name|email|role/.test(headerCells[0] ?? "")
+  ) {
+    errors.push({
+      line: headerIdx + 1,
+      message:
+        "header parsed as a single cell — try saving the CSV with comma, semicolon, or tab delimiters",
+    });
+    return { rows, errors };
+  }
   // Map column header → index. Tolerate extra columns; require the four.
   const indexOf: Record<(typeof CSV_HEADERS)[number], number> = {
     name: -1,
@@ -126,7 +174,7 @@ export function parsePairsCsv(text: string): ParseResult {
   for (let i = headerIdx + 1; i < lines.length; i++) {
     const raw = lines[i]!;
     if (raw.trim().length === 0) continue;
-    const cells = splitRecord(raw).map((c) => c.trim());
+    const cells = splitRecord(raw, delimiter).map((c) => c.trim());
     const name = cells[indexOf.name] ?? "";
     const team_name = cells[indexOf.team_name] ?? "";
     const role = (cells[indexOf.role] ?? "").toLowerCase();

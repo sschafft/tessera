@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type PointerEvent } from "react";
+import { useMemo, useRef, useState, type PointerEvent } from "react";
 import { CanvasGridBg } from "./CanvasGridBg";
 import { CoordinateLabels } from "./CoordinateLabels";
 import { Tile, type TileColor, type TileShape } from "./Tile";
@@ -74,8 +74,18 @@ export function InteractiveCanvas({
   const grid = gridSizeFor(complexity);
   const { width, height } = canvasSizeFor(complexity);
 
-  const occupiedById = new Map(pieces.map((p) => [p.id, p]));
-  const occupiedByCell = new Map(pieces.map((p) => [`${p.q},${p.r}`, p]));
+  // Memoise on `pieces` identity so unrelated state changes (cursor
+  // hover, sidebar tray tweaks) don't churn through the .map() loops
+  // every render. Both maps are read-only — recomputing them only
+  // when the placements list actually changes is a free win.
+  const occupiedById = useMemo(
+    () => new Map(pieces.map((p) => [p.id, p])),
+    [pieces],
+  );
+  const occupiedByCell = useMemo(
+    () => new Map(pieces.map((p) => [`${p.q},${p.r}`, p])),
+    [pieces],
+  );
   const editing = editingId ? (occupiedById.get(editingId) ?? null) : null;
   const inAddMode = selectedShape !== null;
   const inEditMode = editing !== null;
@@ -205,7 +215,10 @@ export function InteractiveCanvas({
         />
       )}
 
-      {/* Existing placements */}
+      {/* Existing placements. Correctness badges live in a separate
+          overlay layer below so toggling correct/wrong feedback after
+          a Test solution doesn't re-render every Tile (the SVG path
+          stays stable; only the small badge layer flips). */}
       {pieces.map((p) => {
         const { x, y } = cellToPixel({ q: p.q, r: p.r });
         const size = tileSizeFor(p.shape);
@@ -220,10 +233,28 @@ export function InteractiveCanvas({
               y={y - offset}
               size={size}
               rotate={p.rot * 90}
-              correct={p.correct ?? null}
             />
             {isEditing && <EditingHandles q={p.q} r={p.r} />}
           </div>
+        );
+      })}
+
+      {/* Correctness overlay — only the pieces whose `correct` flag
+          is non-null get a badge. Decoupled from Tile so flipping the
+          badge after a Test doesn't bust Tile's memo. */}
+      {pieces.map((p) => {
+        if (p.correct === null || p.correct === undefined) return null;
+        const { x, y } = cellToPixel({ q: p.q, r: p.r });
+        const size = tileSizeFor(p.shape);
+        const offset = (size - CELL) / 2;
+        return (
+          <CorrectnessBadge
+            key={`badge-${p.id}`}
+            x={x - offset}
+            y={y - offset}
+            size={size}
+            correct={p.correct}
+          />
         );
       })}
 
@@ -265,6 +296,42 @@ export function InteractiveCanvas({
     </div>
   );
 }
+
+/** Small green/red dot at the tile's top-right corner. Pure visual,
+ *  no interaction. Kept as its own component so React.memo can
+ *  short-circuit the badge render when only `correct` flips. */
+const CorrectnessBadge = (function makeBadge() {
+  const Cmp = ({
+    x,
+    y,
+    size,
+    correct,
+  }: {
+    x: number;
+    y: number;
+    size: number;
+    correct: boolean;
+  }) => (
+    <span
+      aria-hidden="true"
+      style={{
+        position: "absolute",
+        left: x + size * 0.8 - 9,
+        top: y + size * 0.2 - 9,
+        width: 18,
+        height: 18,
+        borderRadius: "50%",
+        background: correct ? "#46b86a" : "#ee3a3a",
+        border: "2.5px solid #fff",
+        boxShadow: "0 1px 2px rgba(0,0,0,.18)",
+        pointerEvents: "none",
+        zIndex: 2,
+      }}
+    />
+  );
+  Cmp.displayName = "CorrectnessBadge";
+  return Cmp;
+})();
 
 function EditingHandles({ q, r }: { q: number; r: number }) {
   const { x, y } = cellToPixel({ q, r });

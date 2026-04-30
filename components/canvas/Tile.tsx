@@ -55,8 +55,6 @@ export interface TileProps {
   ghost?: boolean;
   /** Render in muted greyscale-tinted form (Prototype super-power). */
   prototype?: boolean;
-  /** When non-null, renders a small green/red badge at top-right indicating correctness. */
-  correct?: boolean | null;
   style?: CSSProperties;
 }
 
@@ -78,7 +76,6 @@ function TileImpl({
   rotate = 0,
   ghost = false,
   prototype = false,
-  correct = null,
   style,
 }: TileProps) {
   const colorVar = PALETTE[color];
@@ -119,12 +116,6 @@ function TileImpl({
           strokeLinejoin="round"
           strokeDasharray={dash}
         />
-        {correct === true && (
-          <circle cx="80" cy="20" r="9" fill="#46b86a" stroke="#fff" strokeWidth="2.5" />
-        )}
-        {correct === false && (
-          <circle cx="80" cy="20" r="9" fill="#ee3a3a" stroke="#fff" strokeWidth="2.5" />
-        )}
       </svg>
     </div>
   );

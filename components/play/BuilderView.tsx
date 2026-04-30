@@ -228,27 +228,37 @@ function BuilderInteractive({ state }: { state: PlayState }) {
     [selectedShape, selectedColor, selectedRotation, state.code, clearLocalCorrect],
   );
 
-  const moveEditingTo = useCallback(
-    async (q: number, r: number) => {
-      if (!editingPiece) return;
-      const id = editingPiece.id;
+  /**
+   * Apply an optimistic patch to an existing placement, fire the PATCH,
+   * roll back the same fields if the server rejects. Single helper so
+   * move / rotate / convert all share identical error semantics — a
+   * failed PATCH never leaves an orphan patch that GC can't clean up
+   * (the GC effect can only drop patches when server state catches up;
+   * a 4xx means it never will). See `design/design_patterns.md` →
+   * "Optimistic UI with server reconciliation".
+   */
+  const applyOptimisticPatch = useCallback(
+    async (
+      id: string,
+      patch: Partial<PlacedPiece>,
+      formatError: (raw: string) => string = (s) => s,
+    ) => {
       setError(null);
       clearLocalCorrect();
-      // Optimistic move via patch — piece appears in the new cell
-      // immediately while the PATCH is still in flight.
+      const patchedKeys = Object.keys(patch) as Array<keyof PlacedPiece>;
       setOptimisticPatches((prev) => {
         const next = new Map(prev);
-        next.set(id, { ...next.get(id), q, r });
+        next.set(id, { ...next.get(id), ...patch });
         return next;
       });
-      if (id.startsWith("temp-")) return; // POST will sync the new q/r
+      if (id.startsWith("temp-")) return; // POST will sync the new fields.
       try {
         const res = await fetch(
           `/api/games/${state.code}/placements/${id}`,
           {
             method: "PATCH",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ q, r }),
+            body: JSON.stringify(patch),
           },
         );
         if (!res.ok) {
@@ -256,27 +266,34 @@ function BuilderInteractive({ state }: { state: PlayState }) {
           throw new Error(j.error || `status ${res.status}`);
         }
       } catch (err) {
-        // Drop the optimistic move so the piece reverts to its
-        // server cell on the next state refresh.
+        // Roll back exactly the fields we patched. Preserve any other
+        // in-flight patches on the same piece (e.g. a rotate landed
+        // while a move was racing).
         setOptimisticPatches((prev) => {
           const next = new Map(prev);
           const cur = next.get(id);
-          if (cur) {
-            const { q: _q, r: _r, ...rest } = cur;
-            void _q;
-            void _r;
-            if (Object.keys(rest).length === 0) next.delete(id);
-            else next.set(id, rest);
-          }
+          if (!cur) return next;
+          const rolled: Partial<PlacedPiece> = { ...cur };
+          for (const key of patchedKeys) delete rolled[key];
+          if (Object.keys(rolled).length === 0) next.delete(id);
+          else next.set(id, rolled);
           return next;
         });
-        const reason = err instanceof Error ? err.message : "move failed";
-        setError(
-          reason === "cell_taken" ? "That cell already has a piece." : reason,
-        );
+        const reason = err instanceof Error ? err.message : "operation failed";
+        setError(formatError(reason));
       }
     },
-    [editingPiece, state.code, clearLocalCorrect],
+    [state.code, clearLocalCorrect],
+  );
+
+  const moveEditingTo = useCallback(
+    async (q: number, r: number) => {
+      if (!editingPiece) return;
+      await applyOptimisticPatch(editingPiece.id, { q, r }, (raw) =>
+        raw === "cell_taken" ? "That cell already has a piece." : raw,
+      );
+    },
+    [editingPiece, applyOptimisticPatch],
   );
 
   // Esc cancels whichever mode is active; R rotates the editing piece
@@ -305,33 +322,8 @@ function BuilderInteractive({ state }: { state: PlayState }) {
   const rotateEditing = useCallback(async () => {
     if (!editingPiece) return;
     const newRot = (editingPiece.rot + 1) % 4;
-    const id = editingPiece.id;
-    setError(null);
-    clearLocalCorrect();
-    // Optimistic: apply rotation locally first.
-    setOptimisticPatches((prev) => {
-      const next = new Map(prev);
-      next.set(id, { ...next.get(id), rot: newRot });
-      return next;
-    });
-    if (id.startsWith("temp-")) return; // POST will sync the new rot
-    try {
-      const res = await fetch(
-        `/api/games/${state.code}/placements/${id}`,
-        {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ rot: newRot }),
-        },
-      );
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.error || `status ${res.status}`);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "rotate failed");
-    }
-  }, [editingPiece, state.code, clearLocalCorrect]);
+    await applyOptimisticPatch(editingPiece.id, { rot: newRot });
+  }, [editingPiece, applyOptimisticPatch]);
 
   // Mirror rotateEditing into the forward-ref so the keydown effect
   // above can call it. useLayoutEffect runs synchronously after render
@@ -350,39 +342,13 @@ function BuilderInteractive({ state }: { state: PlayState }) {
   const convertPiece = useCallback(
     async (target: PlacedPiece) => {
       if (!selectedShape) return;
-      const id = target.id;
-      const patch = {
+      await applyOptimisticPatch(target.id, {
         shape: selectedShape,
         color: selectedColor,
         rot: selectedRotation,
-      };
-      setError(null);
-      clearLocalCorrect();
-      // Optimistic: apply locally.
-      setOptimisticPatches((prev) => {
-        const next = new Map(prev);
-        next.set(id, { ...next.get(id), ...patch });
-        return next;
       });
-      if (id.startsWith("temp-")) return;
-      try {
-        const res = await fetch(
-          `/api/games/${state.code}/placements/${id}`,
-          {
-            method: "PATCH",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify(patch),
-          },
-        );
-        if (!res.ok) {
-          const j = await res.json().catch(() => ({}));
-          throw new Error(j.error || `status ${res.status}`);
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "convert failed");
-      }
     },
-    [selectedShape, selectedColor, selectedRotation, state.code, clearLocalCorrect],
+    [selectedShape, selectedColor, selectedRotation, applyOptimisticPatch],
   );
 
   /**
