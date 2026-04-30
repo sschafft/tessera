@@ -17,7 +17,7 @@ export default function PrivacyPage() {
         className="t-mono text-[12px] uppercase"
         style={{ color: "var(--color-ink-3)", letterSpacing: ".15em" }}
       >
-        Last updated 2026-04-28
+        Last updated 2026-04-30
       </p>
 
       <h2 className="t-display mt-6 text-[28px] font-bold tracking-tight">

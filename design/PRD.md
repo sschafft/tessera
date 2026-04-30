@@ -203,7 +203,7 @@ Two-tab card: **Host a game** | **Join a game**.
 - Three columns:
   - **Left sidebar (320px):** **Lobby** panel up top (unallocated people with avatars; selectable rows; smart action bar — pair-selected when 2 picked, "→ existing pair" / "👁 as observer" when 1 or 3+, plus "🎲 Auto-allocate all" with rule chips: pairs of 2 / mix teams / 1 observer per 2 pairs). Below: **Pairs list** with progress bars, "% / placed / off / status" line, footer with `+ add pair` and `shuffle`.
   - **Center column:** Focused pair detail — pair name, **Send accelerant** button, builder canvas + goal canvas side by side, then a **Briefs in play** card showing both briefs (only the GM sees both) with a **Re-roll briefs** button.
-  - **Right rail (360px):** **Accelerants** panel — segmented control to scope a trigger to *this pair* or *all pairs*, then 10 chunky toy-button super-powers plus an inline scoring tile. The full canonical list (kinds + per-pair / per-game caps + cooldowns) lives in §6.3; the rail surfaces those buttons in the order: **🔮 Prototype unlock**, **📖 Reveal briefs**, **✓ Test build**, **↻ Agile share**, **⏱ Time pressure**, **✦ Change builder brief**, **🎲 Randomizer**, **✎ Requirement change**, **+ Make it harder**, **− Make it easier**.
+  - **Right rail (360px):** **Super powers** panel — segmented control to scope a trigger to *this pair* or *all pairs*, then chunky toy-button super-powers plus an inline scoring tile. The full canonical list (kinds + per-pair / per-game caps + cooldowns) lives in §6.3. v1.2 surfaces 5 inline (Prototype unlock, Reveal briefs, Requirement change, Time pressure, Randomizer) with the rest behind a **More super powers** CTA. Test build was removed as a super-power in v1.2 — testing is on by default for every round.
 
 ---
 
@@ -229,7 +229,7 @@ Two-tab card: **Host a game** | **Join a game**.
 - **Guider brief** examples: "use only nautical terms," "no plain shape names."
 - Briefs are confidential to their owner (sealed envelope). Players **cannot tell** their partner the contents — they may *only* infer them via 20-questions-style probing during the off-platform call.
 - The GM sees both briefs and can **re-roll** them per pair.
-- Brief sources, in priority order: (a) **GM free-text** authored at create-time or via Re-roll, (b) **curated library** — the default at game create (a ~33-brief set shipped with the app, covering all complexity buckets), (c) **AI-generated** server-side — explicit opt-in only, never the default. The GM picks the source per side (Builder / Guider) at create-time and can change it any time via Re-roll.
+- Brief sources, in priority order: (a) **GM free-text** authored at create-time or via Re-roll, (b) **curated library** — the default at game create (a ~43-brief set shipped with the app, covering all complexity buckets — see `design/briefs.md` for the editable source), (c) **AI-generated** server-side — explicit opt-in only, never the default. The GM picks the source per side (Builder / Guider) at create-time and can change it any time via Re-roll.
 - AI-generated briefs flow through a server-side **provider router** (`lib/briefs/router.ts`): OpenAI `gpt-4o-mini` is the primary, Gemini `gemini-2.5-flash-lite` is the fallback, library is the final fallback. Both AI keys are optional and owner-provided as Vercel server env vars; the client never sees either. Multiple layers of rate limits protect the free-tier quotas — see TDD §13.1. The persisted `briefs.source` is `"gemini"` regardless of which provider answered (the storage enum is `library | gm | gemini` and we don't extend it); the actual provider is logged in the orchestrator&apos;s observability output.
 
 ### 6.3 Super powers (full spec)
@@ -249,7 +249,7 @@ without paving over the lesson.
 | --- | --- | --- | --- |
 | Prototype unlock | per-pair or all | Builder sees a degraded preview of the goal: portions in grayscale, ~10–20% wrong pieces, "PROTOTYPE — not 100% accurate" banner. **Duration is GM-adjustable**: 3s / 5s / 10s / 15s; 5s default. | ∞ uses / round, 12s cooldown |
 | Reveal briefs | per-pair or all | Both players in the pair see each other's brief. **Irreversible** within the round. Disabled in the rail when both sides have briefs off (nothing to reveal). | 1 use / round |
-| Test build | per-pair or all | GM-side counterpart to the builder's "Test solution" CTA — flips per-piece correctness highlights + accuracy gauge. Stays on once enabled. | ∞ |
+| ~~Test build~~ | — | **Removed in v1.2** — testing is now the default for every round; per-pair `pair_rounds.test_enabled` defaults to `true` (migration `20260429120000_test_enabled_default_true.sql`). The historical row is preserved for migration provenance only. | — |
 | Agile share | per-pair or all | Each fire **grants** the builder one snapshot unlock. The builder's "Share progress" button only appears once the GM has triggered Agile share at least once on that pair (each share decrements the granted count). Replaces the v1.1 default-of-3 model — playtest 2026-04-28 found GMs wanted the default to be off and the granting to be explicit. | ∞ |
 | Time pressure | per-pair or all | Subtracts a configurable amount (default 3:00) from the round timer. Plays an optional sting. | 2 uses / round |
 | Change guider brief *(historic name: vocab swap)* | per-pair or all | Re-rolls **just** the guider's brief mid-round. **Doubles as "Add guider brief"** when the side was off at game-create (the route flips `guider_brief_on=true` on first trigger). | ∞ |
@@ -295,9 +295,10 @@ recompute every visible / cumulative score immediately.
 - **Per-piece "correct"** = a goal piece exists at the same
   `(q, r, rot, color, shape)`. **Round complete** = the builder has
   placed exactly the goal pieces with no extras.
-- **Test solution** (builder-fired) and **Test build** (GM-fired)
-  both surface per-piece green/red highlights + an accuracy gauge.
-  Test solution additionally returns the score breakdown — see §6.11.
+- **Test solution** (builder-fired) surfaces per-piece green/red
+  highlights + an accuracy gauge + score breakdown — see §6.11.
+  Testing is enabled by default per round in v1.2; the historical
+  GM-fired "Test build" super-power was removed.
 - **Clear all** wipes every placement on the builder's canvas
   (builder-only, two-tap confirm).
 - **Progress counter.** "X / Y placed" sits above the canvas hint

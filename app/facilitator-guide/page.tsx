@@ -188,8 +188,8 @@ export default function FacilitatorGuidePage() {
         If you enabled per-pair breakouts at game-create, each pair row
         on the dashboard surfaces the pair&apos;s call link with a copy
         button so you can drop it into chat or open it to drop into a
-        room mid-round. Players see the link in their top bar as <b>Pair
-        call</b> alongside the workshop&apos;s <b>Main room</b>; the
+        room mid-round. Players see the link in their top bar as <b>Breakout
+        room</b> alongside the workshop&apos;s <b>Main room</b>; the
         breakout takes precedence as the primary CTA on their lobby +
         play screens.
       </p>
