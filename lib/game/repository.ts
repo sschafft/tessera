@@ -569,6 +569,41 @@ export interface SuperPowerStore {
   >;
 }
 
+export type SurveyHarderReason = "me" | "partner" | "briefs" | "puzzle";
+
+export interface RoundSurveyRecord {
+  id: string;
+  round_id: string;
+  participant_id: string;
+  comm_balance: number;
+  what_made_harder: SurveyHarderReason;
+  submitted_at: string;
+}
+
+export interface RoundSurveyStore {
+  /**
+   * Insert or update one participant's survey response for a round.
+   * Idempotent — same (round_id, participant_id) updates instead of
+   * duplicating, so a player who answers, navigates away, and re-
+   * answers from a fresh tab doesn't get blocked.
+   */
+  upsert(input: {
+    round_id: string;
+    participant_id: string;
+    comm_balance: number;
+    what_made_harder: SurveyHarderReason;
+  }): Promise<RoundSurveyRecord>;
+
+  /** Find this participant's existing response for a round, or null. */
+  findForParticipant(
+    round_id: string,
+    participant_id: string,
+  ): Promise<RoundSurveyRecord | null>;
+
+  /** All responses for a round — used by GM debrief aggregation. */
+  listForRound(round_id: string): Promise<RoundSurveyRecord[]>;
+}
+
 export interface GameRepository {
   games: GameStore;
   participants: ParticipantStore;
@@ -578,4 +613,5 @@ export interface GameRepository {
   placements: PlacementStore;
   briefs: BriefStore;
   superPowers: SuperPowerStore;
+  roundSurveys: RoundSurveyStore;
 }

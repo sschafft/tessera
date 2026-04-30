@@ -25,6 +25,13 @@ export interface PairsPanelProps {
    */
   onSwapAllRoles?: () => void;
   /**
+   * Pre-round only — wipes every pair allocation, returning all
+   * participants to the lobby. Wired through to
+   * /api/games/[code]/lobby/reset. The button shows a confirm()
+   * dialog before firing.
+   */
+  onResetPairs?: () => void;
+  /**
    * Open the fullscreen pair-management modal (participant table +
    * search). When omitted, the ⛶ expand button hides.
    */
@@ -48,6 +55,7 @@ export function PairsPanel({
   roundRunning = false,
   onSwapRoles,
   onSwapAllRoles,
+  onResetPairs,
   onExpand,
   breakouts,
 }: PairsPanelProps) {
@@ -68,6 +76,8 @@ export function PairsPanel({
   ).length;
   const canSwapAll =
     !roundRunning && fullyPairedCount > 1 && Boolean(onSwapAllRoles);
+  const canResetPairs =
+    !roundRunning && pairs.length > 0 && Boolean(onResetPairs);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -91,6 +101,31 @@ export function PairsPanel({
               aria-label="Swap all pair roles"
             >
               ⇄ swap all
+            </button>
+          )}
+          {canResetPairs && (
+            <button
+              type="button"
+              onClick={() => {
+                if (
+                  typeof window !== "undefined" &&
+                  !window.confirm(
+                    `Wipe all ${pairs.length} pair${pairs.length === 1 ? "" : "s"}? Everyone returns to the lobby and you'll re-allocate.`,
+                  )
+                ) {
+                  return;
+                }
+                onResetPairs?.();
+              }}
+              className="t-mono rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide hover:bg-[var(--color-tint-red)]"
+              style={{
+                border: "1.5px solid var(--color-line)",
+                color: "var(--color-t-red)",
+              }}
+              title="Wipe all pair allocations. Pre-round only — returns everyone to the lobby for re-pairing."
+              aria-label="Reset all pair allocations"
+            >
+              ↺ reset pairs
             </button>
           )}
           {onExpand && (

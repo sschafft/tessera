@@ -1,6 +1,7 @@
 "use client";
 
 import { PlayCanvas } from "@/components/canvas/PlayCanvas";
+import { RoundSurvey } from "./RoundSurvey";
 import type { PlayState } from "./PlayContent";
 
 export interface RoundEndedViewProps {
@@ -121,6 +122,21 @@ export function RoundEndedView({ state }: RoundEndedViewProps) {
           </div>
         </div>
       )}
+
+      {/* The two-question reflection survey only shows for builders +
+          guiders — observers don't have a partner-balance to weigh in
+          on. The component fetches the participant's existing
+          response on mount and collapses to a recap if one already
+          exists. */}
+      {state.round?.id &&
+        (state.role === "builder" || state.role === "guider") && (
+          <RoundSurvey
+            code={state.code}
+            roundId={state.round.id}
+            meName={state.me.display_name}
+            partnerName={state.partner?.display_name ?? null}
+          />
+        )}
 
       <p className="t-mono text-center text-[12px] text-[var(--color-ink-3)]">
         Debrief on your call. Your facilitator will move the room next.

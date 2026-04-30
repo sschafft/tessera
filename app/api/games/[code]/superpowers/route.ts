@@ -18,7 +18,7 @@ import type {
   GoalPattern,
   GoalPiece,
 } from "@/lib/pattern/types";
-import { BUILDER_COLORS, BUILDER_SHAPES } from "@/lib/pattern/palette";
+import { BUILDER_SHAPES, paletteColorsFor } from "@/lib/pattern/palette";
 
 export const runtime = "nodejs";
 
@@ -225,7 +225,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           const current = pr.goal_pattern as GoalPattern;
           if (!Array.isArray(current) || current.length === 0) return;
           const grid = gridSizeFor(round.complexity);
-          const mutated = mutateOne(current, grid);
+          const mutated = mutateOne(current, grid, round.complexity);
           const newSeed = `${pr.pattern_seed}:req:${Date.now()}`;
           await repo.pairRounds.updateGoalPattern(pr.id, mutated, newSeed);
         }),
@@ -295,19 +295,35 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
  * Mutate exactly one piece in a goal pattern. Picks one of {color,
  * shape, position, rotation} at random; for position, swaps with a
  * random unoccupied cell on the supplied grid envelope.
+ *
+ * `complexity` constrains the colour pick to the palette the round
+ * was generated against (see lib/pattern/palette.paletteColorsFor).
+ * Without this, low-complexity rounds (palette = [red, blue]) could
+ * mutate to colours like orange/purple that aren't in the builder's
+ * tray — surfacing a goal piece the builder has no way to place.
  */
 function mutateOne(
   pattern: GoalPattern,
   grid: { w: number; h: number },
+  complexity: number,
 ): GoalPattern {
   const out = pattern.map((p) => ({ ...p })) as GoalPiece[];
   const idx = Math.floor(Math.random() * out.length);
   const target = out[idx]!;
   const facet = Math.floor(Math.random() * 4);
+  const allowedColors = paletteColorsFor(complexity);
   switch (facet) {
     case 0: {
-      const others = BUILDER_COLORS.filter((c) => c !== target.color);
-      target.color = others[Math.floor(Math.random() * others.length)]!;
+      // Pick a colour OTHER than the target's, but only from the
+      // round's active palette. If the palette has only one colour
+      // (theoretical complexity edge), fall through to a different
+      // facet so the mutation isn't a no-op.
+      const others = allowedColors.filter((c) => c !== target.color);
+      if (others.length === 0) {
+        target.rot = (target.rot + 1 + Math.floor(Math.random() * 3)) % 4;
+      } else {
+        target.color = others[Math.floor(Math.random() * others.length)]!;
+      }
       break;
     }
     case 1: {
