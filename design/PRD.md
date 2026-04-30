@@ -1,15 +1,52 @@
-# Tessera — Product Requirements (PRD v1.1)
+# Tessera — Product Requirements (PRD v1.2)
 
-> **Status:** v1.1 shipped 2026-04-27. Builder canvas rewritten on a
-> complexity-scaled square grid, scoring system added, super-power
-> deck reworked, brief-open gate, pair self-naming, GM debrief
-> prompts, time extension + last-2-min drama. v1.0 highlights still
-> apply: cookie-based resume on home, How-it-works + Facilitator-guide
-> pages, GitHub link + OSS footer, custom briefs, Gemini brief
+> **Status:** v1.2 shipped 2026-04-30 — pair-management batch (CSV
+> upload pre-built games, fullscreen roster table + search, swap-all
+> pairs CTA, "pair call" → "breakout room" rename, name-your-pair
+> modal restored as the click target on the badge, grid clipping
+> fix). v1.1 (2026-04-27) was the canvas + scoring rewrite. v1.0
+> highlights still apply: cookie-based resume on home,
+> How-it-works + Facilitator-guide pages, custom briefs, Gemini brief
 > generation, host recovery, role-pill palette, game-end leaderboard.
-> **Sources:** User brief + Claude Design handoff bundle (`Tessera
-> mockups.html`, 5-screen prototype) + chat transcript with the design
-> assistant + v1.1 playtest follow-ups.
+> **Sources:** User brief + Claude Design handoff bundle + playtest
+> follow-ups + 2026-04-30 user feedback batch.
+
+## v1.2 changelog (key product changes from v1.1)
+
+- **Pre-built game CSV upload.** New affordance on the home page next
+  to the create-game CTA: GMs upload a four-column CSV (`name`,
+  `email`, `team_name`, `role`) and Tessera pre-creates the game,
+  every participant + recovery token, and every pair grouped by
+  `team_name`. The endpoint hands back the same CSV with a
+  `join_url` column populated per row, so the GM can paste names +
+  links into a calendar invite or email before the workshop. The
+  CSV is never persisted server-side — once the success modal closes
+  the populated form is gone (the URLs themselves work for the life
+  of the game). Builder/guider per-team is required; extras become
+  observers on that team. Email is required only when the game uses
+  Google Meet breakouts. (§7.x, TDD §X3)
+- **Pair management at scale.** The pair sidebar now has a `⛶`
+  expand button that opens a fullscreen modal with a participant
+  table and roster search (by name, team, or partner). Two new
+  pre-round CTAs: per-pair `⇄ swap` (already shipped in v1.1) and
+  `⇄ swap all pairs` — flips builder ↔ guider for every fully-paired
+  team in a single round-trip. Both are gated to pre-round only;
+  during a running round the swap controls hide entirely. (§6.x)
+- **Pair-name modal restored as the badge target.** Clicking the
+  inline pair-name badge now opens the full PairNameModal (random
+  suggestion + 🎲 again re-roll + skip), not the inline edit form.
+  Naming a pair is a small ritual the team does together; the
+  random suggestion is the warm hook.
+- **Terminology.** "Pair call" → "Breakout room" everywhere user-
+  visible. The product still uses Google Meet or Jitsi under the
+  hood; the UI is consistent now ("Breakout rooms · Jitsi"
+  sidebar header, "🔗 Breakout room" top-bar chip, etc.).
+- **Grid closing border fix.** The SVG square-grid pattern only
+  drew the *top* and *left* edges of each cell, so the rightmost
+  vertical and bottommost horizontal lines of the canvas went
+  undrawn — players saw the rightmost column "clipping" against the
+  card edge. Fixed by adding an explicit closing rect with stroke
+  matching the pattern lines. (TDD §X4)
 
 ## v1.1 changelog (key product changes from v1.0)
 

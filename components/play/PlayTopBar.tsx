@@ -124,7 +124,7 @@ function LinksBar({
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-[var(--color-paper-2)]"
-          title="Open your pair's breakout call"
+          title="Open your pair's breakout room"
         >
           <span
             className="grid h-[22px] w-[22px] place-items-center rounded-md text-[12px] font-bold text-white"
@@ -133,7 +133,7 @@ function LinksBar({
             ▶
           </span>
           <span className="flex flex-col text-[12px] font-bold leading-tight">
-            Pair call
+            Breakout room
             <span className="t-mono text-[10px] font-normal text-[var(--color-ink-3)]">
               just you + your partner
             </span>

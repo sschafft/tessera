@@ -12,6 +12,7 @@ import {
 } from "@/lib/game/lobby-response";
 import { MasterLobby } from "./MasterLobby";
 import { PairsPanel } from "./PairsPanel";
+import { PairsFullscreenModal } from "./PairsFullscreenModal";
 import { TopBarControls } from "./TopBarControls";
 import { SuperPowersRail } from "./SuperPowersRail";
 import { ScoringPanel } from "./ScoringPanel";
@@ -77,6 +78,7 @@ export function MasterContent({
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [focusedPairId, setFocusedPairId] = useState<string | null>(null);
+  const [pairsExpanded, setPairsExpanded] = useState(false);
 
   const fetchSnapshot = useCallback(async () => {
     try {
@@ -211,6 +213,11 @@ export function MasterContent({
         `/pairs/${pairId}/swap-roles`,
         null,
       ),
+    [doAction],
+  );
+
+  const swapAllPairRoles = useCallback(
+    () => doAction("swap-all", "/pairs/swap-all", null),
     [doAction],
   );
 
@@ -719,6 +726,8 @@ export function MasterContent({
                     onFocus={setFocusedPairId}
                     roundRunning={round?.status === "running"}
                     onSwapRoles={swapPairRoles}
+                    onSwapAllRoles={swapAllPairRoles}
+                    onExpand={() => setPairsExpanded(true)}
                   />
                 </SetupStep>
                 <SetupStep
@@ -737,7 +746,7 @@ export function MasterContent({
                 {data && data.breakouts.provider !== "none" && (
                   <SetupStep
                     step={4}
-                    title="Per-pair breakout calls"
+                    title="Per-pair breakout rooms"
                     hint={
                       data.breakouts.provider === "jitsi"
                         ? "Jitsi — generate when pairs are ready."
@@ -815,6 +824,8 @@ export function MasterContent({
                 onFocus={setFocusedPairId}
                 roundRunning={round?.status === "running"}
                 onSwapRoles={swapPairRoles}
+                onSwapAllRoles={swapAllPairRoles}
+                onExpand={() => setPairsExpanded(true)}
                 breakouts={
                   data?.breakouts
                     ? {
@@ -888,6 +899,16 @@ export function MasterContent({
           data?.breakouts.provider === "jitsi" ? "jitsi" : "google_meet"
         }
       />
+      {pairsExpanded && (
+        <PairsFullscreenModal
+          pairs={pairs}
+          participants={participants}
+          roundRunning={round?.status === "running"}
+          onSwapRoles={swapPairRoles}
+          onSwapAllRoles={swapAllPairRoles}
+          onClose={() => setPairsExpanded(false)}
+        />
+      )}
     </>
   );
 }

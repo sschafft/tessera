@@ -42,7 +42,7 @@ export function JoinForm({ code, defaultName, breakoutProvider }: JoinFormProps)
         setError({
           field: "email",
           message:
-            "Email is required for this game so the facilitator can add you to your breakout call.",
+            "Email is required for this game so the facilitator can add you to your breakout room.",
         });
         return;
       }
@@ -98,7 +98,7 @@ export function JoinForm({ code, defaultName, breakoutProvider }: JoinFormProps)
             field: "email",
             message:
               data.error === "email_required"
-                ? "Email is required for this game's breakout calls."
+                ? "Email is required for this game's breakout rooms."
                 : "That doesn't look like a valid email.",
           });
           setSubmitting(false);
@@ -185,7 +185,7 @@ export function JoinForm({ code, defaultName, breakoutProvider }: JoinFormProps)
           label="Email"
           hint={
             emailError ??
-            "Required so the facilitator can add you to a breakout call. Tessera does not send any other email."
+            "Required so the facilitator can add you to a breakout room. Tessera does not send any other email."
           }
         >
           <input

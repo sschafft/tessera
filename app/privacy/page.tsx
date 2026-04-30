@@ -170,7 +170,7 @@ export default function PrivacyPage() {
         </li>
         <li>
           <b>Google Calendar &amp; Meet</b> are involved <i>only</i> when a
-          facilitator opts in to per-pair breakout calls and signs in with
+          facilitator opts in to per-pair breakout rooms and signs in with
           Google. In that case, Tessera uses the Calendar API to create a
           short, private, past-dated calendar event per pair (so a Google
           Meet link can be auto-attached) and deletes those events

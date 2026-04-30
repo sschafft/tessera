@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { PairNameModal } from "./PairNameModal";
 
 export interface PairNameBadgeProps {
   code: string;
@@ -21,13 +22,12 @@ export interface PairNameBadgeProps {
   showRenameTip?: boolean;
 }
 
-const MAX_LEN = 40;
-
 /**
- * Inline editor for the pair's self-chosen name. Click the badge to
- * rename. Default name (e.g. "Builder ↔ Guider") shows in muted text
- * until the pair commits one. Updates fire PATCH and call back to
- * the parent so the play state refetches.
+ * Inline badge that opens the PairNameModal on click. The modal carries
+ * the actual rename UX — random suggestion + 🎲 again re-roll, plus a
+ * skip path. Naming is intentionally a modal moment (not an inline
+ * form) because the team-name pick is a small ritual the pair does
+ * together, and the random suggestion is the warm hook.
  */
 export function PairNameBadge({
   code,
@@ -37,36 +37,8 @@ export function PairNameBadge({
   onSaved,
   showRenameTip = false,
 }: PairNameBadgeProps) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(displayName ?? "");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
   const [tipVisible, setTipVisible] = useState(false);
-  // Optimistic value: shown instead of `displayName` from props until
-  // the next snapshot refetch echoes the new name back. Without this,
-  // the PATCH succeeds but the badge keeps rendering the old name
-  // until the realtime broadcast (or the 10s poll) carries the new
-  // value through.
-  const [optimisticName, setOptimisticName] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  // Optimistic GC — drop the local value once props echo it back, OR
-  // when the server returns a different name (e.g. another player
-  // renamed the pair concurrently; server wins). This is the
-  // optimistic-UI-with-server-reconciliation canon from
-  // design_patterns.md > "Optimistic UI with server reconciliation":
-  // GC by content match, not by request id.
-  useEffect(() => {
-    if (optimisticName === null) return;
-    if (displayName === optimisticName) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- canonical optimistic-GC; clears the local override once the server echoes it back.
-      setOptimisticName(null);
-    }
-  }, [displayName, optimisticName]);
-
-  useEffect(() => {
-    if (editing) inputRef.current?.focus();
-  }, [editing]);
 
   // One-shot fly-out tip: surfaces only when (a) the parent asked for
   // it (via showRenameTip), (b) the pair is unnamed, (c) we haven't
@@ -84,105 +56,16 @@ export function PairNameBadge({
     return () => window.clearTimeout(id);
   }, [showRenameTip, displayName, pairId]);
 
-  const enterEdit = () => {
-    setDraft(displayName ?? "");
-    setEditing(true);
-    setTipVisible(false);
-  };
+  const named = displayName !== null && displayName.length > 0;
 
-  const save = async () => {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    const trimmed = draft.trim();
-    try {
-      const res = await fetch(`/api/games/${code}/pairs/${pairId}/name`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ display_name: trimmed }),
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.error || `status ${res.status}`);
-      }
-      setOptimisticName(trimmed.length > 0 ? trimmed : null);
-      setEditing(false);
-      onSaved?.();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "rename failed");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const cancel = () => {
-    setDraft(displayName ?? "");
-    setEditing(false);
-    setError(null);
-  };
-
-  if (editing) {
-    return (
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          void save();
-        }}
-        className="flex items-center gap-1.5 rounded-full bg-white px-2 py-1"
-        style={{ border: "1.5px solid var(--color-ink)" }}
-      >
-        <input
-          ref={inputRef}
-          type="text"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          maxLength={MAX_LEN}
-          placeholder="The Pelicans…"
-          disabled={busy}
-          className="text-[12px] font-bold outline-none"
-          style={{
-            background: "transparent",
-            color: "var(--color-ink)",
-            border: "none",
-            minWidth: 140,
-          }}
-          aria-label="Pair name"
-          onKeyDown={(e) => {
-            if (e.key === "Escape") cancel();
-          }}
-        />
-        <button
-          type="submit"
-          disabled={busy}
-          className="t-mono text-[10px] font-bold text-[var(--color-t-blue)] disabled:opacity-50"
-        >
-          {busy ? "…" : "save"}
-        </button>
-        <button
-          type="button"
-          onClick={cancel}
-          className="t-mono text-[10px] text-[var(--color-ink-3)]"
-        >
-          ×
-        </button>
-        {error && (
-          <span className="t-mono text-[10px] text-[var(--color-t-red)]">
-            {error}
-          </span>
-        )}
-      </form>
-    );
-  }
-
-  // Effective name = optimistic if pending, else server prop.
-  const effective =
-    optimisticName !== null ? optimisticName : displayName;
-  const named = effective !== null && effective.length > 0;
   return (
     <div className="relative inline-block">
       <button
         type="button"
-        onClick={enterEdit}
+        onClick={() => {
+          setTipVisible(false);
+          setModalOpen(true);
+        }}
         className="flex items-center gap-2 rounded-full px-3 py-1.5 transition-colors hover:bg-white"
         style={{
           background: named ? "var(--color-paper-2)" : "var(--color-tint-yellow)",
@@ -205,7 +88,7 @@ export function PairNameBadge({
           className="text-[12px] font-bold"
           style={{ color: named ? "var(--color-ink)" : "#7a5b00" }}
         >
-          {named ? effective : defaultName}
+          {named ? displayName : defaultName}
         </span>
         <span
           className="t-mono text-[10px]"
@@ -250,6 +133,15 @@ export function PairNameBadge({
             }
           `}</style>
         </div>
+      )}
+      {modalOpen && (
+        <PairNameModal
+          code={code}
+          pairId={pairId}
+          initialName={named ? (displayName ?? undefined) : undefined}
+          onClose={() => setModalOpen(false)}
+          onSaved={onSaved}
+        />
       )}
     </div>
   );

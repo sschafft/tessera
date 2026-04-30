@@ -15,6 +15,14 @@ export default function FacilitatorGuidePage() {
       <h2 className="t-display mt-6 text-[28px] font-bold tracking-tight">
         Before the workshop
       </h2>
+      <p>
+        Two ways to set up a game: <b>build the room live</b> (default —
+        share the code, players self-join, you allocate pairs from the
+        lobby) or <b>upload a pre-built CSV</b> (already-decided pairs,
+        you get back per-person join URLs to paste into a calendar
+        invite). The CSV path is the right call when the workshop is
+        scheduled and you want every link in your invite ready to go.
+      </p>
       <ul className="ml-6 list-disc pl-2">
         <li>
           Pick a <b>complexity</b> from 1–8. Start at 3 if your team
@@ -34,7 +42,7 @@ export default function FacilitatorGuidePage() {
         <li>
           Pick <b>remote</b> or <b>in-person</b> at the top of the host
           form. Remote shows fields for a workshop video call link and
-          (optional) per-pair <b>breakout calls</b> — Google Meet or
+          (optional) per-pair <b>breakout rooms</b> — Google Meet or
           Jitsi. In-person hides all the call/whiteboard fields; everyone
           is already together.
         </li>
@@ -58,6 +66,29 @@ export default function FacilitatorGuidePage() {
           when they join.
         </li>
       </ul>
+
+      <h2 className="t-display mt-6 text-[28px] font-bold tracking-tight">
+        Pre-built games (CSV upload)
+      </h2>
+      <p>
+        On the home page, click <b>⬆ upload pre-built game (CSV)</b>{" "}
+        next to the create button. The modal explains the shape of the
+        CSV and links to a downloadable template — four columns:{" "}
+        <code>name</code>, <code>email</code>, <code>team_name</code>,{" "}
+        <code>role</code>. Each team needs one builder and one guider;
+        any extra rows in the same team become observers on that pair.
+      </p>
+      <p>
+        After you upload, Tessera creates the game, the participants,
+        and the pairs in one shot, then hands back the same CSV with
+        an extra <code>join_url</code> column — one unique recovery URL
+        per row. Paste those into your calendar invite or email and
+        every participant lands directly on /play with their seat
+        reclaimed when they click. Tessera doesn&apos;t persist the
+        CSV server-side; once the success modal closes the populated
+        version is gone (the URLs themselves still work for the life
+        of the game).
+      </p>
 
       <h2 className="t-display mt-6 text-[28px] font-bold tracking-tight">
         At kickoff
@@ -85,6 +116,19 @@ export default function FacilitatorGuidePage() {
           Use <b>auto-allocate</b> if you don&apos;t care about pairings.
           Use <b>manual pair</b> when you want to mix functions
           deliberately (engineer ↔ designer, junior ↔ senior).
+        </li>
+        <li>
+          Need to flip everyone&apos;s role for round 2? Pre-round, the
+          pair sidebar shows a <b>⇄ swap all</b> pill — one click flips
+          builder ↔ guider for every fully-paired team. Per-pair{" "}
+          <b>⇄ swap</b> pills are also there if you want to flip just
+          one team.
+        </li>
+        <li>
+          For larger rooms, click <b>⛶</b> on the pair sidebar to open
+          the fullscreen <i>roster</i> view: a participant table with
+          search by name, team, or partner. The sidebar is for live
+          monitoring; the roster view is for setup wrangling.
         </li>
         <li>
           Encourage pairs to give themselves a name once they read their

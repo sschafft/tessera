@@ -105,6 +105,7 @@ class MemoryGameRepository implements GameRepository {
     list: (game_id) => this.listPairs(game_id),
     findById: (pair_id) => this.findPairById(pair_id),
     swapRoles: (pair_id) => this.swapPairRoles(pair_id),
+    swapAllRoles: (game_id) => this.swapAllPairRoles(game_id),
     assignObserver: (pid, pair_id) => this.assignObserver(pid, pair_id),
     setDisplayName: (pair_id, name) => this.setPairDisplayName(pair_id, name),
     clearAllocations: (game_id) => this.clearAllocations(game_id),
@@ -270,6 +271,17 @@ class MemoryGameRepository implements GameRepository {
     const swapped = pair.builder_id;
     pair.builder_id = pair.guider_id;
     pair.guider_id = swapped;
+  }
+
+  async swapAllPairRoles(game_id: string): Promise<number> {
+    let count = 0;
+    for (const pair of this._pairTable.values()) {
+      if (pair.game_id !== game_id) continue;
+      if (!pair.builder_id || !pair.guider_id) continue;
+      await this.swapPairRoles(pair.id);
+      count += 1;
+    }
+    return count;
   }
 
   async createPair(

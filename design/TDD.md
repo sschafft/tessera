@@ -1,10 +1,72 @@
-# Tessera — Technical Design Doc (TDD v1.1)
+# Tessera — Technical Design Doc (TDD v1.2)
 
-> **Status:** v1.1 shipped 2026-04-27. Schema migrations 1–11 applied
-> to the live project. Section §15 documents implementation deltas
-> vs the original plan; the v1.1 changelog directly below this
-> summary covers the build-mode rewrite + scoring system at depth.
+> **Status:** v1.2 shipped 2026-04-30 — pair management batch
+> (CSV upload, fullscreen roster modal, swap-all endpoint,
+> "pair call" → "breakout room" rename, grid clipping fix). v1.1
+> (2026-04-27) was the canvas + scoring rewrite.
 > **Reads alongside:** `./PRD.md`, `./tessera/` (Claude Design handoff bundle).
+
+## v1.2 changelog (key technical changes from v1.1)
+
+**New endpoints:**
+- `POST /api/games/upload` — multipart-form endpoint accepting a
+  CSV file + JSON settings. Parses via `lib/csv/pairs.parsePairsCsv`,
+  groups rows by `team_name`, validates one builder + one guider per
+  team, then creates the game, every participant (with a per-row
+  recovery token), and every pair in one transaction-equivalent
+  flow. Returns a populated CSV (header + rows + new `join_url`
+  column) in the JSON response body. The CSV is never persisted
+  server-side; the response *is* the artifact.
+- `POST /api/games/[code]/pairs/swap-all` — GM-gated bulk swap.
+  Same gating as the per-pair endpoint (refuses 409 mid-round).
+  Iterates pairs server-side via `repo.pairs.swapAllRoles(game_id)`,
+  emits exactly one `lobby_changed` broadcast at the end so player
+  tabs refetch once instead of N times.
+- `GET /api/templates/pairs` — tiny endpoint that returns the
+  downloadable CSV template via `pairsTemplateCsv()` (header + 5
+  example rows across 2 teams). Linked from the upload modal's
+  "Download template" CTA.
+
+**New repository methods:**
+- `PairStore.swapAllRoles(game_id) -> Promise<number>` — both backends
+  iterate fully-paired pairs and call swapRoles per pair. Memory
+  backend mutates in place; supabase backend issues 3 updates per
+  pair (pair row + 2 participants).
+
+**New library:**
+- `lib/csv/pairs.ts` — pure (no `server-only` import) so the
+  template generator can be reused on the client if we ever want to
+  generate it without a round-trip. RFC-4180-lite parser with quoted
+  fields + escaped doubled quotes; rejects rows with duplicate names
+  or invalid emails. Schema is `name, email, team_name, role`;
+  `email` is required only when the game uses Google Meet breakouts.
+- Adds `display_name: string | null` to `LobbyPair` so the new
+  fullscreen roster modal can show team names alongside member names.
+  Lobby route now selects `pairs.display_name` and exposes it.
+
+**New components:**
+- `components/master/PairsFullscreenModal.tsx` — opens from the
+  PairsPanel `⛶` button. Renders a participants table (one row per
+  player: name, role chip, team, partner / observing-of, swap
+  action) with a search input that filters by name, team, or
+  partner. Reuses the standard fullscreen-modal scaffold from
+  `SuperPowersRail.tsx` (role=dialog, backdrop click closes,
+  Esc-to-close, t-card with max-width 1100px, sticky table header).
+- `components/landing/PreBuiltGameModal.tsx` — opens from the
+  HostForm's `⬆ upload pre-built game (CSV)` button. Two-step flow:
+  setup (workshop name + complexity + briefs + CSV file picker)
+  → success (game code + populated-CSV download CTA + dashboard
+  shortcut). Errors come back from /upload with per-row line numbers
+  and per-team allocation problems; the modal renders both lists
+  inline so the GM can fix the CSV without re-trying blind.
+
+**Fixed:**
+- `components/canvas/CanvasGridBg.tsx` — the SVG `<pattern>` only
+  emitted the top + left edges of each cell, so the rightmost and
+  bottommost grid lines were never drawn. Added an explicit closing
+  `<rect fill="none" stroke="…">` overlay matching the pattern's
+  ink + stroke-width. (Surfaced by 2026-04-30 user screenshot —
+  appeared visually as the grid "clipping" past the card edge.)
 
 ## v1.1 changelog (key technical changes from v1.0)
 

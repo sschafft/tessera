@@ -138,7 +138,7 @@ export default function HowItWorksPage() {
       <p>
         At game-create, the GM picks <b>remote</b> (default) or{" "}
         <b>in-person</b>. Remote workshops can also opt into per-pair{" "}
-        <b>breakout calls</b> via Google Meet (with participant emails as
+        <b>breakout rooms</b> via Google Meet (with participant emails as
         attendees) or Jitsi (free, no sign-in for anyone). Each pair gets
         a private call link to talk on while they build, and the
         workshop&apos;s main video link demotes to a small &ldquo;Main

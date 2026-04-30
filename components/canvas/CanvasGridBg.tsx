@@ -54,6 +54,20 @@ export function CanvasGridBg({ width, height }: CanvasGridBgProps) {
         height={height - PADDING * 2}
         fill="url(#square-grid)"
       />
+      {/* The pattern only paints the TOP and LEFT edges of each cell, so
+          the rightmost vertical and bottommost horizontal grid lines
+          go undrawn — players see the rightmost column "extending" to
+          the card edge. Add an explicit closing border so the grid
+          reads as a finished rectangle. */}
+      <rect
+        x={PADDING}
+        y={PADDING}
+        width={width - PADDING * 2}
+        height={height - PADDING * 2}
+        fill="none"
+        stroke="rgba(60,40,10,.32)"
+        strokeWidth="1"
+      />
     </svg>
   );
 }

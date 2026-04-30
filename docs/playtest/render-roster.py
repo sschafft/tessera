@@ -171,18 +171,18 @@ PLAYBOOK = {
 
 # GM-side: fires when provider != none. Drives Step 4 of the setup
 # flow (the BreakoutsPanel) and asks the GM to read it as a
-# facilitator deciding whether per-pair calls earn their complexity.
+# facilitator deciding whether per-breakout rooms earn their complexity.
 gm_breakouts_segment_jitsi = (
-    "\n\n**Phase B.5 — per-pair breakout calls (Jitsi)**\n"
-    "After all 9 players are seated and pairs are allocated, scroll to **Step 4 · Per-pair breakout calls** in the setup flow. The header should read 'Jitsi — generate when pairs are ready.' (no Google sign-in CTA). Notes for your run:\n"
-    "- Click **Generate breakout calls** for the 3 pairs. There's no confirmation modal in Jitsi mode — calls should mint immediately, no API spinner.\n"
-    "- Verify the panel transitions to 'X of Y breakout calls ready' (green ✓) within ~1s.\n"
+    "\n\n**Phase B.5 — per-pair breakout rooms (Jitsi)**\n"
+    "After all 9 players are seated and pairs are allocated, scroll to **Step 4 · Per-pair breakout rooms** in the setup flow. The header should read 'Jitsi — generate when pairs are ready.' (no Google sign-in CTA). Notes for your run:\n"
+    "- Click **Generate breakout rooms** for the 3 pairs. There's no confirmation modal in Jitsi mode — calls should mint immediately, no API spinner.\n"
+    "- Verify the panel transitions to 'X of Y breakout rooms ready' (green ✓) within ~1s.\n"
     "- Open the focused-pair canvas and confirm the per-pair link is visible somewhere on the player surface (top bar / call CTA).\n"
     "- *Read the affordance as a facilitator*: Did 'Jitsi · Free, no sign-in' framing earn its place vs. just using one main video call? Was clicking Generate a clear act, or did it feel like another button to press?\n"
     "- Once pairs are running, try **Clear breakouts** mid-round and observe what happens to the per-pair links in player tabs. Did the cleanup feel safe or destructive?\n"
 )
 gm_breakouts_segment_google = (
-    "\n\n**Phase B.5 — per-pair breakout calls (Google Meet)**\n"
+    "\n\n**Phase B.5 — per-pair breakout rooms (Google Meet)**\n"
     "Step 4 should show 'Sign in with Google to mint Meet links per pair.' DO NOT actually sign in (the orchestrator agent has no Google account). Instead:\n"
     "- Note whether the Step 4 affordance is *clear* without signing in. Does the copy explain what would happen?\n"
     "- Try clicking 'Sign in with Google' and observe the redirect. Cancel out of the consent screen and confirm the dashboard recovers gracefully.\n"
@@ -190,30 +190,30 @@ gm_breakouts_segment_google = (
 )
 gm_breakouts_segment_none_remote = (
     "\n\n**Phase B.5 — verify breakouts step is hidden**\n"
-    "Step 4 (per-pair breakout calls) should NOT be visible — this game was created with breakout_provider='none'. Confirm the setup flow only shows steps 1, 2, 3.\n"
+    "Step 4 (per-pair breakout rooms) should NOT be visible — this game was created with breakout_provider='none'. Confirm the setup flow only shows steps 1, 2, 3.\n"
 )
 gm_inperson_segment = (
     "\n\n**Phase B.0 — verify in-person UX**\n"
     "This game was created with meeting_mode='in_person'. The dashboard should show:\n"
     "- NO 'Join the workshop call' CTA in the GM top bar.\n"
-    "- NO Step 4 (per-pair breakout calls).\n"
+    "- NO Step 4 (per-pair breakout rooms).\n"
     "- The lobby invite affordance should still surface the game code + join URL normally.\n"
     "Confirm both. *Read as a facilitator running an in-person workshop*: does the dashboard feel right-sized for the room, or are there phantom remote-only affordances cluttering it?\n"
 )
 
 # Player-side (builder/guider/observer): shorter snippets asking them
 # to look for the per-pair breakout link and report on whether the
-# top-bar hierarchy (workshop call vs pair call) makes sense.
+# top-bar hierarchy (workshop call vs breakout room) makes sense.
 player_breakouts_check_jitsi = (
-    "\n\n**Per-pair breakout call check**\n"
-    "After pairs are allocated and the GM clicks Generate breakouts, your top bar should surface a 'Join your pair's call' CTA pointing at a meet.jit.si URL. Click it and confirm a new tab opens (you can close it immediately). Was the relationship between the workshop call and your pair call obvious, or did you have to guess which to click?\n"
+    "\n\n**Per-pair breakout room check**\n"
+    "After pairs are allocated and the GM clicks Generate breakouts, your top bar should surface a 'Join your pair's call' CTA pointing at a meet.jit.si URL. Click it and confirm a new tab opens (you can close it immediately). Was the relationship between the workshop call and your breakout room obvious, or did you have to guess which to click?\n"
 )
 player_inperson_check = (
     "\n\n**In-person UX check**\n"
-    "This game was created in-person mode. Your top bar should NOT show any 'Join the call' CTAs (no workshop call, no pair call). Confirm. Did the absence feel right for a co-located workshop, or did the surface feel weirdly empty?\n"
+    "This game was created in-person mode. Your top bar should NOT show any 'Join the call' CTAs (no workshop call, no breakout room). Confirm. Did the absence feel right for a co-located workshop, or did the surface feel weirdly empty?\n"
 )
 player_googlemeet_check = (
-    "\n\n**Per-pair breakout call check (Google Meet)**\n"
+    "\n\n**Per-pair breakout room check (Google Meet)**\n"
     "The GM probably did not actually sign in with Google (orchestrator-only constraint), so you may not see a per-pair breakout CTA. If you do, it points at meet.google.com. Either way, note whether the absence of a working pair-call link confused you mid-round.\n"
 )
 
@@ -310,26 +310,26 @@ for i, entry in enumerate(ROSTER):
             "gm": (
                 "- Recover host session via host-recover URL → land on /master.\n"
                 "- Step 4 panel is visible (provider != 'none'). For Jitsi mode: header reads 'Jitsi — generate when pairs are ready.', NO 'Sign in with Google' CTA visible.\n"
-                "- After pairing, 'Generate breakout calls' mints links instantly (no confirm modal in Jitsi mode); panel transitions to '3 of 3 ready' within ~1s.\n"
-                "- Once the round starts: PairsPanel sidebar shows a 'Pair calls · Jitsi' strip with 'Clear all' affordance (mid-round reachable).\n"
+                "- After pairing, 'Generate breakout rooms' mints links instantly (no confirm modal in Jitsi mode); panel transitions to '3 of 3 ready' within ~1s.\n"
+                "- Once the round starts: PairsPanel sidebar shows a 'Breakout rooms · Jitsi' strip with 'Clear all' affordance (mid-round reachable).\n"
                 "- Top-bar shows 'End round' AND 'End game' buttons during a running round.\n"
                 "- Each pair row in PairsPanel shows the per-pair URL with a 'copy' button.\n"
                 "- FocusedPairPlaceholder during a running round shows the 'Click a pair on the left' hint.\n"
-                "- End the game; cleanup modal copy says 'Pair calls cleaned up' / 'Tearing down N pair call(s)…' (NOT calendar/Google for Jitsi mode).\n"
+                "- End the game; cleanup modal copy says 'Breakout rooms cleaned up' / 'Tearing down N breakout room(s)…' (NOT calendar/Google for Jitsi mode).\n"
                 "- GameEndedView header reads 'The game ends; the workshop begins.' Debrief prompts ordered tactical → structural.\n"
             ),
             "builder": (
                 "- Join via /g/{code}/join — display name only required (no email since provider=jitsi).\n"
                 "- Recovery URL modal shows 'Save this URL — it's your way back if your tab closes.' (NOT 'One-shot — keep this safe').\n"
                 "- Lobby waiting screen shows 'YOU'RE IN · WAITING' badge with green pulsing dot, body copy says 'You're seated' + 'while you wait' + 'no need to refresh'.\n"
-                "- Top-bar shows 'Pair call' chip (NOT 'Breakout') once breakouts mint, plus 'Main room' (NOT 'Video call').\n"
+                "- Top-bar shows 'Breakout room' chip (NOT 'Breakout') once breakouts mint, plus 'Main room' (NOT 'Video call').\n"
                 "- placeholder hosts (example.com): the top-bar chip should NOT render a row for an example.com URL; the lobby body copy should drop the 'hop on the call below' line.\n"
                 "- During the round: place ~5 pieces, hit Test solution, verify result card pulses + scoring annotation appears IF the GM toggles wrong-pts mid-round.\n"
                 "- Round-end footer reads 'Debrief on your call. Your facilitator will move the room next.' (NOT 'Waiting for the next round').\n"
             ),
             "guider": (
                 "- Same join + recovery + lobby checks as builder.\n"
-                "- Top-bar Pair call / Main room labels.\n"
+                "- Top-bar Breakout room / Main room labels.\n"
                 "- Round-end footer copy.\n"
                 "- Open the brief envelope; rules render correctly. If brief title matches one of the new themed briefs (Pirate's log, Star captain, Cooking show host, Acronym officer, Telegraph operator, Floop-doopy lexicon, Reluctant translator, Parts-shortage technician, The deck-hand, Half-tuned-in, Old-timey postman, Compass swap, Diagonal logic), confirm the rules read intact (no truncation, no markdown leak).\n"
             ),

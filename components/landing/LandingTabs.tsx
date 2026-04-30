@@ -11,6 +11,7 @@ import { Toggle } from "@/components/primitives/Toggle";
 import { CodeInput } from "@/components/primitives/CodeInput";
 import { isValidGameCode } from "@/lib/game/code";
 import type { TeamMode } from "@/lib/game/repository";
+import { PreBuiltGameModal } from "./PreBuiltGameModal";
 
 type Tab = "host" | "join";
 type TeamLabel = "Game master picks" | "Players pick";
@@ -119,6 +120,7 @@ function HostForm({ googleMeetAvailable }: { googleMeetAvailable: boolean }) {
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [created, setCreated] = useState<CreatedInfo | null>(null);
+  const [preBuiltOpen, setPreBuiltOpen] = useState(false);
 
   function validate(): Record<string, string> {
     const next: Record<string, string> = {};
@@ -405,13 +407,28 @@ function HostForm({ googleMeetAvailable }: { googleMeetAvailable: boolean }) {
         </p>
       )}
 
-      <button
-        type="submit"
-        className="t-btn t-btn--primary mt-1 self-start"
-        disabled={submitting}
-      >
-        {submitting ? "Creating…" : "Create game · get code →"}
-      </button>
+      <div className="mt-1 flex flex-wrap items-center gap-3">
+        <button
+          type="submit"
+          className="t-btn t-btn--primary"
+          disabled={submitting}
+        >
+          {submitting ? "Creating…" : "Create game · get code →"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setPreBuiltOpen(true)}
+          disabled={submitting}
+          className="t-mono text-[12px] underline text-[var(--color-ink-2)] disabled:opacity-50"
+          title="Already have a roster? Upload a CSV — Tessera will pre-build the pairs and hand you back per-person join URLs."
+        >
+          ⬆ upload pre-built game (CSV)
+        </button>
+      </div>
+      <PreBuiltGameModal
+        open={preBuiltOpen}
+        onClose={() => setPreBuiltOpen(false)}
+      />
     </form>
   );
 }

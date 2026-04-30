@@ -47,16 +47,34 @@ export interface PairNameModalProps {
   pairId: string;
   /** Called after save or skip. */
   onClose: () => void;
+  /**
+   * Initial value for the input. When omitted, a fresh random name is
+   * suggested (one-shot first-naming). When provided (e.g. opening
+   * from the badge to rename), the current name pre-fills so the
+   * player edits in place — they can still hit 🎲 again to re-roll.
+   */
+  initialName?: string;
+  /** Called once the new name lands so the parent can refetch. */
+  onSaved?: () => void;
 }
 
 /**
- * One-shot modal nudging a freshly-paired duo to give themselves a
- * shared name. Pre-fills a random "The Adjective Noun" suggestion they
- * can accept, override, or skip outright. Skipping is a first-class
- * choice — the inline PairNameBadge stays available either way.
+ * Modal for naming (or renaming) a pair. Either pre-fills with a
+ * random "The Adjective Noun" suggestion (first-naming) or with the
+ * current pair name (rename); 🎲 again re-rolls the suggestion in
+ * either case. Skipping is a first-class choice — the inline
+ * PairNameBadge stays available either way.
  */
-export function PairNameModal({ code, pairId, onClose }: PairNameModalProps) {
-  const [name, setName] = useState<string>(() => randomName());
+export function PairNameModal({
+  code,
+  pairId,
+  onClose,
+  initialName,
+  onSaved,
+}: PairNameModalProps) {
+  const [name, setName] = useState<string>(
+    () => initialName ?? randomName(),
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -87,6 +105,7 @@ export function PairNameModal({ code, pairId, onClose }: PairNameModalProps) {
         const j = await res.json().catch(() => ({}));
         throw new Error(j.error || `status ${res.status}`);
       }
+      onSaved?.();
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "rename failed");

@@ -22,6 +22,8 @@ export interface LobbyPair {
   builder_id: string | null;
   guider_id: string | null;
   created_at: string;
+  /** Self-chosen team name; null until the pair commits one. */
+  display_name: string | null;
   /** Per-pair breakout call URL. Null until the GM mints one. */
   breakout_call_url?: string | null;
   briefs: {

@@ -19,6 +19,16 @@ export interface PairsPanelProps {
    * to /api/games/[code]/pairs/[pair_id]/swap-roles.
    */
   onSwapRoles?: (pair_id: string) => void;
+  /**
+   * Pre-round only — flips builder ↔ guider for every fully-paired
+   * pair. Wired through to /api/games/[code]/pairs/swap-all.
+   */
+  onSwapAllRoles?: () => void;
+  /**
+   * Open the fullscreen pair-management modal (participant table +
+   * search). When omitted, the ⛶ expand button hides.
+   */
+  onExpand?: () => void;
   /** Optional breakouts strip — shows mid-round Generate / Clear when
    * the game uses jitsi or google_meet. Hidden when provider='none'. */
   breakouts?: {
@@ -37,6 +47,8 @@ export function PairsPanel({
   onFocus,
   roundRunning = false,
   onSwapRoles,
+  onSwapAllRoles,
+  onExpand,
   breakouts,
 }: PairsPanelProps) {
   const byId = new Map(participants.map((p) => [p.id, p]));
@@ -51,15 +63,48 @@ export function PairsPanel({
   const observerCount = participants.filter(
     (p) => p.role === "observer",
   ).length;
+  const fullyPairedCount = pairs.filter(
+    (p) => p.builder_id && p.guider_id,
+  ).length;
+  const canSwapAll =
+    !roundRunning && fullyPairedCount > 1 && Boolean(onSwapAllRoles);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-baseline justify-between border-t border-[var(--color-line)] px-5 pt-3.5 pb-2">
+      <div className="flex items-baseline justify-between gap-2 border-t border-[var(--color-line)] px-5 pt-3.5 pb-2">
         <span className="text-[12px] font-bold uppercase tracking-wide text-[var(--color-ink-2)]">
           Pairs · {pairs.length}
         </span>
-        <span className="t-mono text-[11px] text-[var(--color-ink-3)]">
-          {observerCount > 0 ? `+${observerCount} observer${observerCount === 1 ? "" : "s"}` : ""}
+        <span className="flex items-center gap-1.5">
+          {observerCount > 0 && (
+            <span className="t-mono text-[11px] text-[var(--color-ink-3)]">
+              +{observerCount} observer{observerCount === 1 ? "" : "s"}
+            </span>
+          )}
+          {canSwapAll && (
+            <button
+              type="button"
+              onClick={onSwapAllRoles}
+              className="t-mono rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide hover:bg-[var(--color-paper-2)]"
+              style={{ border: "1.5px solid var(--color-line)" }}
+              title={`Swap builder ↔ guider for all ${fullyPairedCount} fully-paired teams. Pre-round only.`}
+              aria-label="Swap all pair roles"
+            >
+              ⇄ swap all
+            </button>
+          )}
+          {onExpand && (
+            <button
+              type="button"
+              onClick={onExpand}
+              className="t-mono rounded-full px-2 py-0.5 text-[10px] font-bold hover:bg-[var(--color-paper-2)]"
+              style={{ border: "1.5px solid var(--color-line)" }}
+              title="Expand pair management to a fullscreen view with a participants table + search."
+              aria-label="Expand pair management"
+            >
+              ⛶
+            </button>
+          )}
         </span>
       </div>
 
@@ -128,7 +173,7 @@ function BreakoutsStrip({
     <div className="border-t border-[var(--color-line)] px-5 py-3">
       <div className="flex items-baseline justify-between pb-2">
         <span className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-ink-2)]">
-          Pair calls · {provider === "jitsi" ? "Jitsi" : "Google Meet"}
+          Breakout rooms · {provider === "jitsi" ? "Jitsi" : "Google Meet"}
         </span>
         <span className="t-mono text-[10px] text-[var(--color-ink-3)]">
           {mintedCount} of {mintedCount + missingCount} ready
@@ -146,7 +191,7 @@ function BreakoutsStrip({
               color: "var(--color-t-blue)",
               border: "1.5px solid var(--color-t-blue)",
             }}
-            title={`Mint ${missingCount} pair-call link${missingCount === 1 ? "" : "s"}`}
+            title={`Mint ${missingCount} breakout-room link${missingCount === 1 ? "" : "s"}`}
           >
             ↻ Generate {missingCount === 1 ? "the" : `${missingCount}`} missing
           </button>
@@ -348,19 +393,19 @@ function PairRow({
         </div>
       )}
       {pair.breakout_call_url && (
-        <PairCallLine url={pair.breakout_call_url} />
+        <BreakoutRoomLine url={pair.breakout_call_url} />
       )}
     </div>
   );
 }
 
-function PairCallLine({ url }: { url: string }) {
+function BreakoutRoomLine({ url }: { url: string }) {
   const [copied, setCopied] = useState(false);
   const host = (() => {
     try {
       return new URL(url).hostname;
     } catch {
-      return "pair call";
+      return "breakout room";
     }
   })();
   return (
@@ -399,7 +444,7 @@ function PairCallLine({ url }: { url: string }) {
           color: copied ? "#fff" : "var(--color-ink-2)",
           border: "1px solid var(--color-line)",
         }}
-        aria-label="Copy pair call link"
+        aria-label="Copy breakout room link"
       >
         {copied ? "✓" : "copy"}
       </button>
