@@ -331,6 +331,13 @@ export interface PairStore {
   swapRoles(pair_id: string): Promise<void>;
 
   /**
+   * Swap builder ↔ guider for every pair in the game. Same gating as
+   * swapRoles (pre-round only); the route handler enforces the
+   * round-not-running invariant. Returns the number of pairs swapped.
+   */
+  swapAllRoles(game_id: string): Promise<number>;
+
+  /**
    * Add a participant to an existing pair as an observer. Updates the
    * participant's role + pair_id; does not modify the pair row.
    */

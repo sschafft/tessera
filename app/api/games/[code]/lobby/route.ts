@@ -174,6 +174,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       builder_id: p.builder_id,
       guider_id: p.guider_id,
       created_at: p.created_at,
+      display_name: p.display_name ?? null,
       briefs: briefsByPair.get(p.id) ?? { builder: null, guider: null },
       progress: progressByPair.get(p.id) ?? null,
       breakout_call_url: p.breakout_call_url,

@@ -30,7 +30,7 @@ export interface BreakoutsPanelProps {
  *   - google_meet, not connected → "Sign in with Google" CTA. Hits
  *     /api/auth/google/start which 302s through Google's consent
  *     screen.
- *   - google_meet, connected → "Generate breakout calls" with a
+ *   - google_meet, connected → "Generate breakout rooms" with a
  *     confirmation modal explaining the calendar-event side effect.
  *   - jitsi → no auth needed. Straight to "Generate" — Jitsi rooms
  *     are deterministic URLs on meet.jit.si.
@@ -200,7 +200,7 @@ function ReadyState({
       >
         {pairCount === 0 ? (
           <span style={{ color: "var(--color-ink-3)" }}>
-            Allocate pairs above first — breakout calls are minted per
+            Allocate pairs above first — breakout rooms are minted per
             pair.
           </span>
         ) : allReady ? (
@@ -209,7 +209,7 @@ function ReadyState({
             style={{ color: "var(--color-t-green)" }}
           >
             <span aria-hidden>✓</span>
-            <b>{withBreakouts} of {pairCount}</b> breakout calls ready.
+            <b>{withBreakouts} of {pairCount}</b> breakout rooms ready.
           </span>
         ) : withBreakouts > 0 ? (
           <span>
@@ -244,7 +244,7 @@ function ReadyState({
               ? "Working…"
               : withBreakouts > 0
                 ? `Generate the missing ${missing} →`
-                : `Generate breakout calls →`}
+                : `Generate breakout rooms →`}
           </button>
         )}
         {withBreakouts > 0 && (
@@ -277,7 +277,7 @@ function ConfirmGenerateModal({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Confirm breakout call creation"
+      aria-label="Confirm breakout room creation"
       className="fixed inset-0 z-[80] flex items-center justify-center px-4"
       style={{ background: "rgba(31,26,20,0.62)" }}
       onClick={(e) => {
@@ -298,7 +298,7 @@ function ConfirmGenerateModal({
           className="t-display text-[20px] leading-tight"
           style={{ color: "var(--color-ink)" }}
         >
-          Create {missing} breakout call{missing === 1 ? "" : "s"} on
+          Create {missing} breakout room{missing === 1 ? "" : "s"} on
           your calendar?
         </h3>
         <ul
@@ -317,7 +317,7 @@ function ConfirmGenerateModal({
           <li>
             · Visibility is set to <b>private</b> — only you can see them.
             Each event has a Google Meet link auto-attached, which
-            becomes the pair&apos;s breakout call.
+            becomes the pair&apos;s breakout room.
           </li>
           <li>
             · When you end the game, Tessera <b>deletes every event
@@ -331,7 +331,7 @@ function ConfirmGenerateModal({
             className="t-btn t-btn--primary"
             autoFocus
           >
-            Create {missing} breakout call{missing === 1 ? "" : "s"} →
+            Create {missing} breakout room{missing === 1 ? "" : "s"} →
           </button>
           <button
             type="button"
@@ -389,19 +389,19 @@ export function BreakoutsCleanupModal({
     : done
       ? isGoogle
         ? "Calendar cleaned"
-        : "Pair calls cleaned up"
+        : "Breakout rooms cleaned up"
       : "";
   const titleActive = isGoogle
     ? `Deleting ${total} breakout calendar event${total === 1 ? "" : "s"}…`
-    : `Tearing down ${total} pair call${total === 1 ? "" : "s"}…`;
+    : `Tearing down ${total} breakout room${total === 1 ? "" : "s"}…`;
   const titleDone = isGoogle
     ? `Done — ${total} event${total === 1 ? "" : "s"} removed from your calendar.`
-    : `Done — ${total} pair call${total === 1 ? "" : "s"} cleared.`;
+    : `Done — ${total} breakout room${total === 1 ? "" : "s"} cleared.`;
   return (
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={isGoogle ? "Cleaning up breakout calendar events" : "Cleaning up pair calls"}
+      aria-label={isGoogle ? "Cleaning up breakout calendar events" : "Cleaning up breakout rooms"}
       className="fixed inset-0 z-[80] flex items-center justify-center px-4"
       style={{ background: "rgba(31,26,20,0.62)" }}
     >
@@ -424,7 +424,7 @@ export function BreakoutsCleanupModal({
             : warning
               ? isGoogle
                 ? `${deleted} of ${total} events deleted`
-                : `${deleted} of ${total} pair calls cleared`
+                : `${deleted} of ${total} breakout rooms cleared`
               : titleDone}
         </h3>
         <p
@@ -440,7 +440,7 @@ export function BreakoutsCleanupModal({
               : warning
                 ? isGoogle
                   ? "Some events couldn't be deleted automatically. Search your calendar for \"Tessera breakout\" to clean up any leftovers."
-                  : "Some pair calls couldn't be cleared automatically. The rooms themselves are stateless and will close on their own."
+                  : "Some breakout rooms couldn't be cleared automatically. The rooms themselves are stateless and will close on their own."
                 : isGoogle
                   ? "Per-pair breakout links are gone, the calendar events are deleted, and Tessera no longer has access to your Google account."
                   : "Per-pair Jitsi links are gone."}

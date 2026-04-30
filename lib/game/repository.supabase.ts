@@ -137,6 +137,7 @@ export class SupabaseGameRepository implements GameRepository {
     list: (game_id) => this.listPairs(game_id),
     findById: (pair_id) => this.findPairById(pair_id),
     swapRoles: (pair_id) => this.swapPairRoles(pair_id),
+    swapAllRoles: (game_id) => this.swapAllPairRoles(game_id),
     assignObserver: (pid, pair_id) => this.assignObserver(pid, pair_id),
     setDisplayName: (pair_id, name) => this.setPairDisplayName(pair_id, name),
     clearAllocations: (game_id) => this.clearAllocations(game_id),
@@ -372,6 +373,22 @@ export class SupabaseGameRepository implements GameRepository {
       .update({ role: "builder" })
       .eq("id", guider_id);
     if (bErr) throw new Error(`swapPairRoles: b ${bErr.message}`);
+  }
+
+  async swapAllPairRoles(game_id: string): Promise<number> {
+    const supabase = getServiceClient();
+    const { data: pairs, error } = await supabase
+      .from("pairs")
+      .select("id, builder_id, guider_id")
+      .eq("game_id", game_id);
+    if (error) throw new Error(`swapAllPairRoles: list ${error.message}`);
+    let count = 0;
+    for (const pair of pairs ?? []) {
+      if (!pair.builder_id || !pair.guider_id) continue;
+      await this.swapPairRoles(pair.id);
+      count += 1;
+    }
+    return count;
   }
 
   async createPair(
