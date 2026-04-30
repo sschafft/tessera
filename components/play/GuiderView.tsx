@@ -1,13 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PlayCanvas } from "@/components/canvas/PlayCanvas";
 import { BriefEnvelope } from "./BriefEnvelope";
-import { BriefGate } from "./BriefGate";
 import { Confetti } from "./Confetti";
 import { JoinCallCta } from "./JoinCallCta";
 import { PairNameBadge } from "./PairNameBadge";
-import { PairNameModal } from "./PairNameModal";
 import { SolvedBanner } from "./SolvedBanner";
 import { playSolved } from "@/lib/sound";
 import type { PlayState } from "./PlayContent";
@@ -17,45 +15,6 @@ export interface GuiderViewProps {
 }
 
 export function GuiderView({ state }: GuiderViewProps) {
-  const briefSignature =
-    state.brief?.title ?? (state.brief ? "(present)" : null);
-  const [briefOpened, setBriefOpened] = useState(briefSignature === null);
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- re-arms the brief gate when a super-power swaps the brief mid-round (mirrors BuilderView).
-    setBriefOpened(briefSignature === null);
-  }, [briefSignature]);
-
-  // Pair-name nudge — fires after the player closes their own brief if
-  // the pair is still anonymous. SessionStorage tracks dismissal per
-  // pair so this never pesters a player twice in a session.
-  const [showNameNudge, setShowNameNudge] = useState(false);
-  const onBriefClose = useCallback(() => {
-    const pair = state.pair;
-    if (!pair) return;
-    if (pair.display_name && pair.display_name.length > 0) return;
-    // Don't pop the naming modal mid-round — playtest #b4vnm8o20
-    // caught the modal sitting over the canvas and intercepting clicks
-    // on Test solution. Inline PairNameBadge stays available for
-    // mid-round renames.
-    if (state.round?.status === "running") return;
-    const key = `tessera_pair_name_dismissed_${pair.id}`;
-    if (
-      typeof window !== "undefined" &&
-      window.sessionStorage.getItem(key) === "1"
-    ) {
-      return;
-    }
-    setShowNameNudge(true);
-  }, [state.pair, state.round?.status]);
-  const dismissNameNudge = useCallback(() => {
-    if (state.pair && typeof window !== "undefined") {
-      window.sessionStorage.setItem(
-        `tessera_pair_name_dismissed_${state.pair.id}`,
-        "1",
-      );
-    }
-    setShowNameNudge(false);
-  }, [state.pair]);
 
   // Celebration plumbing — fires off the live_score that's broadcast
   // to both roles whenever Test Build is on (or the round ends). The
@@ -114,7 +73,7 @@ export function GuiderView({ state }: GuiderViewProps) {
             pairId={state.pair.id}
             displayName={state.pair.display_name}
             defaultName={defaultPairName}
-            showRenameTip={briefOpened}
+            showRenameTip
           />
         </div>
       )}
@@ -211,18 +170,11 @@ export function GuiderView({ state }: GuiderViewProps) {
         style={{ width: 320, zIndex: 30 }}
       >
         {state.brief && state.brief.role === "guider" && (
-          // Remount on title change so super-power brief swaps reset
-          // the envelope's internal view to sealed; otherwise the gate
-          // re-arms but the envelope is stuck in `open` state and the
-          // player has no sealed button to tap to dismiss the gate.
           <BriefEnvelope
             key={state.brief.title}
             role="guider"
             title={state.brief.title}
             rules={state.brief.rules}
-            onOpen={() => setBriefOpened(true)}
-            onClose={onBriefClose}
-            emphasize={!briefOpened}
           />
         )}
         {state.partner_brief && (
@@ -230,7 +182,6 @@ export function GuiderView({ state }: GuiderViewProps) {
             role={state.partner_brief.role}
             title={state.partner_brief.title}
             rules={state.partner_brief.rules}
-            defaultOpen
             revealedPartner
           />
         )}
@@ -246,14 +197,6 @@ export function GuiderView({ state }: GuiderViewProps) {
       </aside>
       )}
 
-      {!briefOpened && <BriefGate role="guider" />}
-      {showNameNudge && state.pair && (
-        <PairNameModal
-          code={state.code}
-          pairId={state.pair.id}
-          onClose={dismissNameNudge}
-        />
-      )}
       {solvedShown && (
         <SolvedBanner
           pairName={state.pair?.display_name ?? null}

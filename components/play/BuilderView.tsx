@@ -13,15 +13,9 @@ import { InteractiveCanvas } from "@/components/canvas/InteractiveCanvas";
 import { BriefEnvelope } from "./BriefEnvelope";
 import { Confetti } from "./Confetti";
 import { BUILDER_SHAPES, paletteColorsFor } from "@/lib/pattern/palette";
-import { playSolved, playTestSolution } from "@/lib/sound";
-import { BriefGate } from "./BriefGate";
+import { playSolved } from "@/lib/sound";
 import { PairNameBadge } from "./PairNameBadge";
-import { PairNameModal } from "./PairNameModal";
 import { SolvedBanner } from "./SolvedBanner";
-import {
-  TestSolutionCTA,
-  type TestResult,
-} from "./builder/TestSolutionCTA";
 import { WaitingForRound } from "./builder/WaitingForRound";
 import { PrototypeOverlay } from "./builder/PrototypeOverlay";
 import type { PlacedPiece, PlayState } from "./PlayContent";
@@ -74,22 +68,6 @@ function BuilderInteractive({ state }: { state: PlayState }) {
   >(() => new Map());
   const [error, setError] = useState<string | null>(null);
   const [sharingProgress, setSharingProgress] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<TestResult | null>(null);
-  /**
-   * Per-placement correctness map keyed by id. Populated from the
-   * /test-solution response so the green/red marks fire instantly
-   * (no realtime-broadcast latency). Cleared on any mutation so
-   * pieces placed AFTER the last test stay neutral until the builder
-   * tests again — fixes the "everything I add is shown as wrong"
-   * confusion.
-   */
-  const [localCorrect, setLocalCorrect] = useState<Map<string, boolean>>(
-    () => new Map(),
-  );
-  const clearLocalCorrect = useCallback(() => {
-    setLocalCorrect((prev) => (prev.size === 0 ? prev : new Map()));
-  }, []);
 
   // Snap selected color to a value in the active palette if complexity
   // shrinks the palette mid-round (super-power side-effect).
@@ -148,24 +126,22 @@ function BuilderInteractive({ state }: { state: PlayState }) {
   }, [state.placements, optimistic.length]);
 
   // Server placements + local optimistic adds, minus locally-pending
-  // deletes, with optimistic patches merged on top. The server's
-  // `correct` flag is intentionally ignored — we use the local
-  // localCorrect map (populated only by the latest Test solution)
-  // so pieces added after testing stay neutral until re-tested.
-  // Memoised so re-renders triggered by unrelated state (cursor
-  // position inside InteractiveCanvas, etc.) don't churn the
-  // placements array and cascade through every Tile.
+  // deletes, with optimistic patches merged on top. v1.3 made testing
+  // live by default — `correct` flows from the server's per-placement
+  // computation (test_enabled defaults to true), so pieces light up
+  // green / red as they're placed without an explicit Test solution
+  // step. Optimistic temp pieces (id startsWith "temp-") have no
+  // server correct flag yet — they read as null until the GC effect
+  // swaps them for the server-confirmed row.
   const visiblePieces = useMemo(
     () =>
       [...state.placements, ...optimistic]
         .filter((p) => !pendingDeletes.has(p.id))
         .map((p) => {
           const patch = optimisticPatches.get(p.id);
-          const merged = patch ? { ...p, ...patch } : p;
-          const localFlag = localCorrect.get(merged.id);
-          return { ...merged, correct: localFlag };
+          return patch ? { ...p, ...patch } : p;
         }),
-    [state.placements, optimistic, pendingDeletes, optimisticPatches, localCorrect],
+    [state.placements, optimistic, pendingDeletes, optimisticPatches],
   );
   const editingPiece =
     editingId === null
@@ -198,7 +174,6 @@ function BuilderInteractive({ state }: { state: PlayState }) {
         rot: selectedRotation,
       };
       setOptimistic((prev) => [...prev, optimisticPiece]);
-      clearLocalCorrect();
       setError(null);
 
       try {
@@ -225,7 +200,7 @@ function BuilderInteractive({ state }: { state: PlayState }) {
         setError(err instanceof Error ? err.message : "place failed");
       }
     },
-    [selectedShape, selectedColor, selectedRotation, state.code, clearLocalCorrect],
+    [selectedShape, selectedColor, selectedRotation, state.code],
   );
 
   /**
@@ -244,7 +219,6 @@ function BuilderInteractive({ state }: { state: PlayState }) {
       formatError: (raw: string) => string = (s) => s,
     ) => {
       setError(null);
-      clearLocalCorrect();
       const patchedKeys = Object.keys(patch) as Array<keyof PlacedPiece>;
       setOptimisticPatches((prev) => {
         const next = new Map(prev);
@@ -283,7 +257,7 @@ function BuilderInteractive({ state }: { state: PlayState }) {
         setError(formatError(reason));
       }
     },
-    [state.code, clearLocalCorrect],
+    [state.code],
   );
 
   const moveEditingTo = useCallback(
@@ -371,7 +345,6 @@ function BuilderInteractive({ state }: { state: PlayState }) {
   const deleteEditing = useCallback(async () => {
     if (!editingPiece) return;
     if (editingPiece.id.startsWith("temp-")) return;
-    clearLocalCorrect();
     setPendingDeletes((prev) => new Set(prev).add(editingPiece.id));
     setError(null);
     try {
@@ -392,7 +365,7 @@ function BuilderInteractive({ state }: { state: PlayState }) {
       });
       setError(err instanceof Error ? err.message : "delete failed");
     }
-  }, [editingPiece, state.code, clearLocalCorrect]);
+  }, [editingPiece, state.code]);
 
   const shareProgress = useCallback(async () => {
     setSharingProgress(true);
@@ -429,7 +402,6 @@ function BuilderInteractive({ state }: { state: PlayState }) {
     setError(null);
     setEditingId(null);
     setSelectedShape(null);
-    clearLocalCorrect();
     try {
       const res = await fetch(`/api/games/${state.code}/placements`, {
         method: "DELETE",
@@ -446,77 +418,30 @@ function BuilderInteractive({ state }: { state: PlayState }) {
       setClearing(false);
       setClearArmed(false);
     }
-  }, [clearArmed, state.code, clearLocalCorrect]);
-
-  const testSolution = useCallback(async () => {
-    if (testing) return;
-    setTesting(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/games/${state.code}/test-solution`, {
-        method: "POST",
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.error || `status ${res.status}`);
-      }
-      const j = (await res.json()) as {
-        correct: number;
-        wrong: number;
-        total: number;
-        score: number;
-        penalty_applied: boolean;
-        correct_pts: number;
-        wrong_pts: number;
-        correctness?: Record<string, boolean>;
-        tested_at?: string;
-      };
-      setTestResult({
-        correct: j.correct,
-        wrong: j.wrong,
-        total: j.total,
-        score: j.score,
-        penaltyApplied: j.penalty_applied,
-        correctPts: j.correct_pts,
-        wrongPts: j.wrong_pts,
-        at: Date.now(),
-      });
-      // Apply per-piece highlights instantly from the response. The
-      // realtime broadcast also fires but this avoids the visible
-      // wait.
-      if (j.correctness) {
-        setLocalCorrect(new Map(Object.entries(j.correctness)));
-      }
-      if (state.sound_on) playTestSolution(j.correct);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "test failed");
-    } finally {
-      setTesting(false);
-    }
-  }, [state.code, state.sound_on, testing]);
+  }, [clearArmed, state.code]);
 
   const showCoords = (state.round?.complexity ?? 5) <= 4;
 
-  // Celebration plumbing — small confetti per Test-solution submission
-  // with at least one correct piece, and a major SolvedBanner the
-  // first time correct === total > 0 in the current round. The
-  // SolvedBanner is also driven off `live_score` (not just the
-  // testResult chip) so it fires off realtime updates from the
-  // server-side correctness check too — keeps it in lock-step with
-  // the guider's banner.
+  // SolvedBanner plumbing — fires the first time live_score reports
+  // correct === total > 0 in the current round. v1.3 dropped the
+  // builder-side test-solution celebration in favour of the always-on
+  // live correctness — confetti per partial-correct moment now lives
+  // on the rising edge of `live_score.correct` rather than a Test
+  // submission count.
   const [partialCelebrationKey, setPartialCelebrationKey] = useState(0);
   const [solvedShown, setSolvedShown] = useState(false);
   const solvedFiredForRoundRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!testResult) return;
-    if (testResult.correct > 0 && testResult.correct < testResult.total) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- re-keys the partial-celebration confetti per Test-solution submission.
-      setPartialCelebrationKey((k) => k + 1);
-    }
-  }, [testResult]);
   const liveCorrect = state.live_score?.correct ?? 0;
   const liveTotal = state.live_score?.total ?? 0;
   const liveScoreVal = state.live_score?.score ?? 0;
+  const prevLiveCorrectRef = useRef(0);
+  useEffect(() => {
+    const prev = prevLiveCorrectRef.current;
+    if (liveCorrect > prev && liveCorrect < liveTotal) {
+      setPartialCelebrationKey((k) => k + 1);
+    }
+    prevLiveCorrectRef.current = liveCorrect;
+  }, [liveCorrect, liveTotal]);
   useEffect(() => {
     const roundId = state.round?.id ?? null;
     if (!roundId) return;
@@ -526,60 +451,14 @@ function BuilderInteractive({ state }: { state: PlayState }) {
       solvedFiredForRoundRef.current !== roundId
     ) {
       solvedFiredForRoundRef.current = roundId;
-       
       setSolvedShown(true);
       if (state.sound_on) playSolved();
     }
   }, [liveCorrect, liveTotal, state.round?.id, state.sound_on]);
 
-  // Brief-open gate: if the builder has a brief, dim the canvas + tray
-  // until they open it. Resets when the brief changes (super-power
-  // re-roll, new round, etc).
-  const briefSignature =
-    state.brief?.title ?? (state.brief ? "(present)" : null);
-  const [briefOpened, setBriefOpened] = useState(briefSignature === null);
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- re-arms the brief gate when a super-power swaps the brief mid-round.
-    setBriefOpened(briefSignature === null);
-  }, [briefSignature]);
-
   const partnerName = state.partner?.display_name ?? "guider";
   const meName = state.me.display_name;
   const defaultPairName = `${meName} ↔ ${partnerName}`;
-
-  // Pair-name nudge: pop a one-shot modal when the player closes their
-  // brief and the pair still has no name set. SessionStorage keeps the
-  // dismissal sticky per pair so we don't pester them.
-  const [showNameNudge, setShowNameNudge] = useState(false);
-  const pairNeedsName =
-    state.pair !== null &&
-    (state.pair.display_name === null || state.pair.display_name === "");
-  const onBriefClose = useCallback(() => {
-    if (!state.pair || !pairNeedsName) return;
-    // Don't pop the naming modal mid-round. Playtest #b4vnm8o20 caught
-    // a builder unable to click `Test solution` because the modal was
-    // sitting over the canvas. The inline `PairNameBadge` stays
-    // available either way, so naming after the round starts can flow
-    // through that affordance instead of a blocking dialog.
-    if (state.round?.status === "running") return;
-    const key = `tessera_pair_name_dismissed_${state.pair.id}`;
-    if (
-      typeof window !== "undefined" &&
-      window.sessionStorage.getItem(key) === "1"
-    ) {
-      return;
-    }
-    setShowNameNudge(true);
-  }, [state.pair, pairNeedsName, state.round?.status]);
-  const dismissNameNudge = useCallback(() => {
-    if (state.pair && typeof window !== "undefined") {
-      window.sessionStorage.setItem(
-        `tessera_pair_name_dismissed_${state.pair.id}`,
-        "1",
-      );
-    }
-    setShowNameNudge(false);
-  }, [state.pair]);
 
   return (
     <div className="grid w-full relative" style={{ gridTemplateColumns: "280px 1fr" }}>
@@ -590,7 +469,7 @@ function BuilderInteractive({ state }: { state: PlayState }) {
             pairId={state.pair.id}
             displayName={state.pair.display_name}
             defaultName={defaultPairName}
-            showRenameTip={briefOpened}
+            showRenameTip
           />
         )}
         <ModeBanner
@@ -635,7 +514,6 @@ function BuilderInteractive({ state }: { state: PlayState }) {
         )}
       </aside>
       <section className="relative flex items-start gap-4 overflow-auto p-6">
-        {!briefOpened && <BriefGate role="builder" />}
         <div className="flex flex-1 flex-col items-center gap-3">
           <PrototypeOverlay
             prototype={state.prototype}
@@ -643,10 +521,8 @@ function BuilderInteractive({ state }: { state: PlayState }) {
           />
 
           <div className="relative">
-            {/* Per-Test partial-success confetti, anchored over the
-                canvas. Re-keyed via partialCelebrationKey so each
-                Test-solution submission with ≥1 correct fires its
-                own burst. */}
+            {/* Partial-success confetti anchored over the canvas, fired
+                on the rising edge of correct count (live testing). */}
             {partialCelebrationKey > 0 && (
               <Confetti key={partialCelebrationKey} intensity="small" />
             )}
@@ -778,12 +654,6 @@ function BuilderInteractive({ state }: { state: PlayState }) {
             )}
           </div>
 
-          <TestSolutionCTA
-            disabled={visiblePieces.length === 0}
-            testing={testing}
-            result={testResult}
-            onTest={testSolution}
-          />
         </div>
         <aside
           className="relative flex flex-shrink-0 flex-col items-end gap-3 self-start"
@@ -791,20 +661,13 @@ function BuilderInteractive({ state }: { state: PlayState }) {
         >
           {state.brief && state.brief.role === "builder" && (
             // Key on the brief title so a super-power-driven brief
-            // swap (Change builder brief) remounts the envelope —
-            // resets it to the sealed view so the player taps to
-            // re-open and the gate re-arms cleanly. Without this
-            // remount, the envelope keeps showing the old `view: open`
-            // state with the new brief content, while the parent gate
-            // re-arms; the player has no way to dismiss the gate.
+            // swap (Change builder brief) remounts the envelope and
+            // surfaces the new content cleanly.
             <BriefEnvelope
               key={state.brief.title}
               role="builder"
               title={state.brief.title}
               rules={state.brief.rules}
-              onOpen={() => setBriefOpened(true)}
-              onClose={onBriefClose}
-              emphasize={!briefOpened}
             />
           )}
           {state.partner_brief && (
@@ -812,19 +675,11 @@ function BuilderInteractive({ state }: { state: PlayState }) {
               role={state.partner_brief.role}
               title={state.partner_brief.title}
               rules={state.partner_brief.rules}
-              defaultOpen
               revealedPartner
             />
           )}
         </aside>
       </section>
-      {showNameNudge && state.pair && (
-        <PairNameModal
-          code={state.code}
-          pairId={state.pair.id}
-          onClose={dismissNameNudge}
-        />
-      )}
       {solvedShown && (
         <SolvedBanner
           pairName={state.pair?.display_name ?? null}
