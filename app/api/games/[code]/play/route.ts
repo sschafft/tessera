@@ -205,11 +205,13 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
   // full array for rendering on their canvas.
   const visiblePlacements = showPlacements ? placements : [];
 
-  // Test-build super-power: builder + observer get per-placement
-  // correctness flags computed against the goal. After the round ends,
-  // we surface correctness to everyone for the debrief regardless of
-  // whether Test Build was triggered.
-  const testEnabled = (pairRound?.test_enabled ?? false) || roundEnded;
+  // v1.3 made testing live by default. The historical Test build
+  // super-power gated correctness on `pair_rounds.test_enabled`; the
+  // 2026-04-30 default-true migration plus the v1.3 always-on UX
+  // means every running round (and every ended round) surfaces
+  // per-placement correctness. The pairRound check is retained so
+  // the lookup doesn't crash on a missing pair_round row.
+  const testEnabled = pairRound !== null || roundEnded;
   let placementsWithCorrect: Array<{
     id: string;
     shape: string;
