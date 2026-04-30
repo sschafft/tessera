@@ -1,15 +1,66 @@
-# Tessera — Product Requirements (PRD v1.2)
+# Tessera — Product Requirements (PRD v1.3)
 
-> **Status:** v1.2 shipped 2026-04-30 — pair-management batch (CSV
-> upload pre-built games, fullscreen roster table + search, swap-all
-> pairs CTA, "pair call" → "breakout room" rename, name-your-pair
-> modal restored as the click target on the badge, grid clipping
-> fix). v1.1 (2026-04-27) was the canvas + scoring rewrite. v1.0
-> highlights still apply: cookie-based resume on home,
-> How-it-works + Facilitator-guide pages, custom briefs, Gemini brief
-> generation, host recovery, role-pill palette, game-end leaderboard.
+> **Status:** v1.3 shipped 2026-04-30 (late) — play-surface reshape +
+> mechanics. Live testing default (drops the explicit Test solution
+> step; pieces light green/red as they land); always-visible brief
+> (drops the seal/minimize states); end-of-round 2-question reflection
+> survey with anonymised game-end aggregate; reset-all-pairs CTA;
+> mutation super-power respects the round's complexity-bounded
+> palette; builder rotation affordances inline in the tray; placement
+> realtime broadcasts on a tighter 50ms debounce. v1.2 (earlier same
+> day) was the pair-management batch. v1.1 (2026-04-27) was the
+> canvas + scoring rewrite.
 > **Sources:** User brief + Claude Design handoff bundle + playtest
-> follow-ups + 2026-04-30 user feedback batch.
+> follow-ups + 2026-04-30 user feedback batches.
+
+## v1.3 changelog (key product changes from v1.2)
+
+- **Live testing default.** Removed the explicit Test solution CTA.
+  Per-placement correctness flows through `state.placements[].correct`
+  on every play-state read, so pieces light green / red the moment
+  they land. The /play route now treats `testEnabled` as
+  unconditional (the 2026-04-29 default-true migration plus the v1.3
+  always-on UX make the gate redundant); old games immediately get
+  correctness too. Partial-success confetti now fires on the rising
+  edge of `live_score.correct`.
+- **Always-visible brief.** Dropped the seal / open / minimized
+  envelope states. The brief card stays open the entire round. Players
+  were re-tucking the envelope and forgetting their own constraint;
+  the seal-tap intro added friction without payoff after round 1.
+  `BriefGate` (the canvas-dimming overlay) is gone too — no gate, no
+  need.
+- **End-of-round 2-question reflection.** New `round_surveys` table.
+  Each player on a pair (builder/guider) gets a card on RoundEndedView
+  with two prompts: a slider for "who carried the communication, you
+  or your partner" (0..100) and a 4-way pick for "what made the round
+  harder" (me / partner / briefs / puzzle). Both required; idempotent
+  upsert keyed by (round_id, participant_id). The game-end view shows
+  an anonymised per-round aggregate (counts + averages) for everyone
+  to use as a debrief starter. Observers + lobby + GM don't see the
+  prompt — the question is partner-relative.
+- **Reset-all-pairs.** New `↺ reset pairs` button on the PairsPanel
+  header (pre-round only). Wipes every pair allocation + returns
+  participants to lobby for re-pairing. Uses the existing
+  `repo.pairs.clearAllocations` repo hook + a new
+  `POST /api/games/[code]/lobby/reset` endpoint, with a `confirm()`
+  dialog before firing.
+- **Requirement-change palette respects complexity.** `mutateOne` on
+  the requirement-change super-power was picking colours from the full
+  `BUILDER_COLORS` set; at low complexity (palette = [red, blue]) it
+  could mutate to orange / purple — colours the builder's tray
+  doesn't expose, leaving an unsolvable goal. Now uses
+  `paletteColorsFor(complexity)`.
+- **Builder rotation affordances.** Three Figma-pattern moves:
+  inline rotation row in the Tray panel, mini `↻ N°` chip on the
+  selected tray tile, and a faint `↻ N°` hint under the canvas hover
+  ghost. Tools-panel rotate stays as the keyboard-shortcut authority;
+  the floating EditingActionBar `↻` on a piece in edit mode is
+  unchanged.
+- **Placement broadcast latency tightened.** `useGameEvents` split
+  into two debounce lanes — placement-loop events (placement_added /
+  _moved / _removed / _changed / test_result) at 50ms, everything
+  else at 200ms. Burst placements still coalesce to one refetch on
+  the fast lane.
 
 ## v1.2 changelog (key product changes from v1.1)
 
