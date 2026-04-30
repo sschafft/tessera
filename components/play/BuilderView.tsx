@@ -612,6 +612,7 @@ function BuilderInteractive({ state }: { state: PlayState }) {
           onSelect={pickShape}
           color={selectedColor}
           rotation={selectedRotation}
+          setRotation={setSelectedRotation}
         />
         <Palette
           selected={selectedColor}
@@ -1025,12 +1026,15 @@ function Tray({
   onSelect,
   color,
   rotation,
+  setRotation,
 }: {
   selected: TileShape | null;
   onSelect: (shape: TileShape | null) => void;
   color: TileColor;
   rotation: number;
+  setRotation: (r: number) => void;
 }) {
+  const cycleRotation = () => setRotation((rotation + 1) % 4);
   return (
     <div>
       <div className="mb-2.5 flex items-baseline justify-between">
@@ -1077,10 +1081,68 @@ function Tray({
                 size={48}
                 rotate={rotation * 90}
               />
+              {/* Inline rotation chip on the selected tile — Figma-
+                  pattern affordance. Same control as the Tools panel
+                  below and the keyboard `R`, but right next to the
+                  preview the user is looking at. e.stopPropagation so
+                  clicking the chip doesn't deselect the shape. */}
+              {isSelected && (
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    cycleRotation();
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      cycleRotation();
+                    }
+                  }}
+                  className="t-mono absolute -right-1.5 -top-1.5 inline-flex items-center gap-0.5 rounded-full bg-white px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide hover:bg-[var(--color-paper-2)]"
+                  style={{
+                    border: "1.5px solid var(--color-ink)",
+                    color: "var(--color-ink)",
+                    boxShadow: "0 1px 0 rgba(0,0,0,.10)",
+                  }}
+                  aria-label={`Rotate, currently ${rotation * 90}°`}
+                  title={`Rotate · ${rotation * 90}° (R)`}
+                >
+                  ↻ {rotation * 90}°
+                </span>
+              )}
             </button>
           );
         })}
       </div>
+      {/* Inline rotation row — shows whenever a shape is in the tray
+          (regardless of selection) so the affordance is discoverable
+          before the user has picked. Tap the row to cycle the
+          rotation that the next placement will use. */}
+      <button
+        type="button"
+        onClick={cycleRotation}
+        className="mt-2 flex w-full items-center justify-between rounded-[10px] border border-[var(--color-line)] bg-white px-3 py-2 text-left text-[12px] font-medium hover:bg-[var(--color-paper-2)]"
+        title="Rotate the next-placed piece (cycles 0° / 90° / 180° / 270°)"
+        aria-label={`Rotate next-placed piece, currently ${rotation * 90}°`}
+      >
+        <span className="flex items-center gap-2">
+          <span className="text-[16px]" aria-hidden="true">
+            ↻
+          </span>
+          <span>
+            Rotate{" "}
+            <span className="t-mono text-[var(--color-ink-2)]">
+              {rotation * 90}°
+            </span>
+          </span>
+        </span>
+        <span className="t-mono text-[10px] text-[var(--color-ink-3)]">
+          R
+        </span>
+      </button>
     </div>
   );
 }

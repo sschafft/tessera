@@ -258,21 +258,49 @@ export function InteractiveCanvas({
         );
       })}
 
-      {/* Add-mode ghost: selected tray shape on hovered empty cell */}
+      {/* Add-mode ghost: selected tray shape on hovered empty cell.
+          Pairs with a faint "↻ N°" hint below the ghost so the
+          rotation control reads as part of the canvas affordance,
+          not just a sidebar tool — Figma-pattern teaching nudge for
+          first-time players. */}
       {showAddGhost && hover && selectedShape && (() => {
         const { x, y } = cellToPixel(hover);
         const size = tileSizeFor(selectedShape);
         const offset = (size - CELL) / 2;
         return (
-          <Tile
-            kind={selectedShape}
-            color={selectedColor}
-            x={x - offset}
-            y={y - offset}
-            size={size}
-            rotate={selectedRotation * 90}
-            ghost
-          />
+          <>
+            <Tile
+              kind={selectedShape}
+              color={selectedColor}
+              x={x - offset}
+              y={y - offset}
+              size={size}
+              rotate={selectedRotation * 90}
+              ghost
+            />
+            {selectedRotation !== 0 && (
+              <span
+                aria-hidden="true"
+                className="t-mono"
+                style={{
+                  position: "absolute",
+                  left: x + CELL / 2 - 22,
+                  top: y + CELL + 6,
+                  width: 44,
+                  fontSize: 9,
+                  fontWeight: 700,
+                  letterSpacing: ".08em",
+                  textTransform: "uppercase",
+                  color: "var(--color-ink-3)",
+                  textAlign: "center",
+                  pointerEvents: "none",
+                  opacity: 0.85,
+                }}
+              >
+                ↻ {selectedRotation * 90}°
+              </span>
+            )}
+          </>
         );
       })()}
 
