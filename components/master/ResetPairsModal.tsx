@@ -74,7 +74,7 @@ export function ResetPairsModal({
               className="text-[14px] text-[var(--color-ink-2)]"
               style={{ lineHeight: 1.5 }}
             >
-              All <b>{pairCount}</b> {pluralise} will be wiped and every
+              All <b>{pairCount}</b>{" "}{pluralise}{" "}will be wiped and every
               participant returned to the lobby. You&apos;ll re-pair from
               scratch — useful when you accidentally pair the wrong
               people, or want a fresh allocation.

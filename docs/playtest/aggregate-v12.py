@@ -29,7 +29,14 @@ def fetch_codex_log(traj):
     except Exception:
         files = []
     log_path = next(
-        (f["path"] for f in files if f.get("path", "").endswith("agent_codex.txt")),
+        (
+            f["path"]
+            for f in files
+            if (
+                f.get("path", "").endswith("agent_codex.txt")
+                or f.get("path", "").endswith("agent--codex.txt")
+            )
+        ),
         None,
     )
     if not log_path:
