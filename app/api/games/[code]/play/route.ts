@@ -220,6 +220,18 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     r: number;
     rot: number;
     correct?: boolean;
+    /**
+     * When `correct === false` AND a goal piece exists at the same
+     * cell, a per-attribute breakdown of which axes are wrong (used
+     * by the BuilderView wrong-because tooltip). `null` when the
+     * placement is correct or when the cell has no goal piece —
+     * leaking the goal layout would break the asymmetry.
+     */
+    wrong_reasons?: {
+      shape: boolean;
+      color: boolean;
+      rotation: boolean;
+    } | null;
   }> = visiblePlacements.map((p) => ({
     id: p.id,
     shape: p.shape,
@@ -254,9 +266,13 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     const correctById = new Map(
       breakdown.placements.map((p) => [p.id, p.correct]),
     );
+    const wrongReasonsById = new Map(
+      breakdown.placements.map((p) => [p.id, p.wrong_reasons]),
+    );
     placementsWithCorrect = placementsWithCorrect.map((p) => ({
       ...p,
       correct: correctById.get(p.id) ?? false,
+      wrong_reasons: wrongReasonsById.get(p.id) ?? null,
     }));
     accuracy = { correct: breakdown.correct, total: breakdown.total };
     liveScore = {

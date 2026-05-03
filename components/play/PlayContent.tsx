@@ -26,6 +26,18 @@ export interface PlacedPiece {
   rot: number;
   /** Set when test_enabled is true; matches goal pattern equality. */
   correct?: boolean;
+  /**
+   * Per-attribute breakdown surfaced when the placement is wrong AND
+   * a goal piece exists at the same cell. `null` for correct placements
+   * or "extra" placements (no goal piece in this cell — surfacing
+   * "wrong position" would leak the goal layout). Drives the
+   * wrong-because hover tooltip in BuilderView.
+   */
+  wrong_reasons?: {
+    shape: boolean;
+    color: boolean;
+    rotation: boolean;
+  } | null;
 }
 
 export interface BriefSummary {
