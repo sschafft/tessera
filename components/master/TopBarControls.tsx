@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Wordmark } from "@/components/primitives/Wordmark";
 import { RoleChip } from "@/components/primitives/RoleChip";
+import { timerPhaseFor, timerPhaseStyle } from "@/lib/util/timerPhase";
 import type { LobbyRound } from "./MasterContent";
 
 export interface TopBarControlsProps {
@@ -67,7 +68,8 @@ export function TopBarControls({
   const remaining = useTimer(round, durationSeconds);
   const isRunning = round?.status === "running";
   const isRoundEnded = round?.status === "ended";
-  const isLastTwoMinutes = isRunning && remaining > 0 && remaining <= 120;
+  const timerPhase = timerPhaseFor(remaining, isRunning);
+  const timerStyle = timerPhaseStyle(timerPhase);
   const idx = round?.index ?? 1;
   const nextIdx = isRoundEnded ? idx + 1 : idx;
   const startComplexityDefault = isRoundEnded ? complexity : complexity;
@@ -159,16 +161,7 @@ export function TopBarControls({
           className="t-mono rounded-full px-3.5 py-2 text-[14px] font-bold"
           aria-label="Round timer"
           style={{
-            background: isLastTwoMinutes
-              ? "var(--color-tint-red)"
-              : "var(--color-paper-2)",
-            color: isLastTwoMinutes ? "var(--color-t-red)" : "inherit",
-            boxShadow: isLastTwoMinutes
-              ? "inset 0 0 0 1.5px var(--color-t-red)"
-              : "none",
-            animation: isLastTwoMinutes
-              ? "tessera-jiggle 700ms ease-in-out infinite"
-              : "none",
+            ...timerStyle,
             transition: "background 200ms, color 200ms",
           }}
         >

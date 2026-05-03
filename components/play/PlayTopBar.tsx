@@ -5,6 +5,7 @@ import { Wordmark } from "@/components/primitives/Wordmark";
 import { RoleChip, type Role } from "@/components/primitives/RoleChip";
 import { Avatar } from "@/components/primitives/Avatar";
 import type { TileColor } from "@/components/canvas/Tile";
+import { timerPhaseFor, timerPhaseStyle } from "@/lib/util/timerPhase";
 import { usableCallUrl } from "@/lib/util/url";
 
 export interface PlayTopBarProps {
@@ -41,8 +42,8 @@ export function PlayTopBar({
   breakoutCallUrl,
 }: PlayTopBarProps) {
   const remaining = useTimer(round);
-  const isLastTwoMinutes =
-    round?.status === "running" && remaining > 0 && remaining <= 120;
+  const phase = timerPhaseFor(remaining, round?.status === "running");
+  const style = timerPhaseStyle(phase);
   return (
     <header className="flex h-15 flex-shrink-0 items-center justify-between border-b border-[var(--color-line)] bg-white px-6 py-3">
       <div className="flex items-center gap-4">
@@ -66,16 +67,7 @@ export function PlayTopBar({
         <span
           className="t-mono rounded-full px-3 py-1.5 text-[14px] font-bold"
           style={{
-            background: isLastTwoMinutes
-              ? "var(--color-tint-red)"
-              : "var(--color-paper-2)",
-            color: isLastTwoMinutes ? "var(--color-t-red)" : "inherit",
-            boxShadow: isLastTwoMinutes
-              ? "inset 0 0 0 1.5px var(--color-t-red)"
-              : "none",
-            animation: isLastTwoMinutes
-              ? "tessera-jiggle 700ms ease-in-out infinite"
-              : "none",
+            ...style,
             transition: "background 200ms, color 200ms",
           }}
         >
