@@ -2,7 +2,6 @@
 
 import { memo, useMemo, useRef, useState, type PointerEvent } from "react";
 import { CanvasGridBg } from "@/components/canvas/CanvasGridBg";
-import { CoordinateLabels } from "@/components/canvas/CoordinateLabels";
 import { Tile, type TileColor, type TileShape } from "@/components/canvas/Tile";
 import {
   CELL,
@@ -41,7 +40,6 @@ export interface BuilderCanvasProps {
   defaultShape: TileShape;
   defaultColor: TileColor;
   defaultRotation: number;
-  showCoords?: boolean;
   /**
    * Click handler for ANY cell — empty or occupied. The parent
    * interprets the (q, r) and the current target to decide whether
@@ -86,7 +84,6 @@ function BuilderCanvasImpl({
   defaultShape,
   defaultColor,
   defaultRotation,
-  showCoords = false,
   onCellClick,
   onPieceClick,
 }: BuilderCanvasProps) {
@@ -190,7 +187,6 @@ function BuilderCanvasImpl({
         }}
       >
         <CanvasGridBg width={width} height={height} />
-        {showCoords && <CoordinateLabels width={grid.w} height={grid.h} />}
 
         {/* Correctness wash — paints behind the tile when the server has
             evaluated this placement. Decoupled from Tile (PR #70) so
