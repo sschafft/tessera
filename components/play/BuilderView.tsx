@@ -18,6 +18,7 @@ import { SolvedBanner } from "./SolvedBanner";
 import { WaitingForRound } from "./builder/WaitingForRound";
 import { PrototypeOverlay } from "./builder/PrototypeOverlay";
 import { BuilderCanvas, type BuilderTarget } from "./builder/BuilderCanvas";
+import { DeleteUndoToast } from "./builder/DeleteUndoToast";
 import { Dock, type DockTargetKind } from "./builder/Dock";
 import { ProgressBar } from "./builder/ProgressBar";
 import { cellLabel } from "./builder/CoordRulers";
@@ -485,31 +486,99 @@ function BuilderInteractive({ state }: { state: PlayState }) {
 
   const onDoneEditing = useCallback(() => setTarget(null), []);
 
-  const onRemove = useCallback(async () => {
+  // Deferred-delete: when a piece is removed, hold the network DELETE
+  // for UNDO_WINDOW_MS so an UndoToast can offer a quick reversal.
+  // Two collisions to think about:
+  //   - Multiple deletes in quick succession: each new delete commits
+  //     the previous one immediately (its window is already in flight,
+  //     no need to keep waiting).
+  //   - Component unmount: flush the pending delete so we don't orphan
+  //     a local-only "removed" state that the server never sees.
+  const undoTimerRef = useRef<number | null>(null);
+  const undoTargetRef = useRef<string | null>(null);
+  const [undoableDelete, setUndoableDelete] = useState<{
+    pieceId: string;
+    expiresAt: number;
+  } | null>(null);
+
+  const flushDelete = useCallback(
+    async (pieceId: string) => {
+      try {
+        const res = await fetch(
+          `/api/games/${state.code}/placements/${pieceId}`,
+          { method: "DELETE" },
+        );
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          throw new Error(j.error || `status ${res.status}`);
+        }
+      } catch (err) {
+        // Restore the piece optimistically — pendingDeletes was its only
+        // hiding mechanism, so pulling it out brings the piece back.
+        setPendingDeletes((prev) => {
+          const next = new Set(prev);
+          next.delete(pieceId);
+          return next;
+        });
+        setError(err instanceof Error ? err.message : "delete failed");
+      }
+    },
+    [state.code],
+  );
+
+  const UNDO_WINDOW_MS = 5000;
+
+  const onRemove = useCallback(() => {
     if (target?.kind !== "piece") return;
     const pieceId = target.id;
     if (pieceId.startsWith("temp-")) return;
+    // If a previous delete is still pending its window, commit it now —
+    // the user has moved on and shouldn't be able to undo two deletes.
+    if (undoTimerRef.current !== null && undoTargetRef.current) {
+      window.clearTimeout(undoTimerRef.current);
+      flushDelete(undoTargetRef.current);
+    }
     setTarget(null);
     setPendingDeletes((prev) => new Set(prev).add(pieceId));
     setError(null);
-    try {
-      const res = await fetch(
-        `/api/games/${state.code}/placements/${pieceId}`,
-        { method: "DELETE" },
-      );
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.error || `status ${res.status}`);
-      }
-    } catch (err) {
+    const expiresAt = Date.now() + UNDO_WINDOW_MS;
+    undoTargetRef.current = pieceId;
+    setUndoableDelete({ pieceId, expiresAt });
+    undoTimerRef.current = window.setTimeout(() => {
+      undoTimerRef.current = null;
+      undoTargetRef.current = null;
+      setUndoableDelete((cur) => (cur?.pieceId === pieceId ? null : cur));
+      flushDelete(pieceId);
+    }, UNDO_WINDOW_MS);
+  }, [target, flushDelete]);
+
+  const onUndoDelete = useCallback(() => {
+    if (undoTimerRef.current !== null) {
+      window.clearTimeout(undoTimerRef.current);
+      undoTimerRef.current = null;
+    }
+    const pieceId = undoTargetRef.current;
+    undoTargetRef.current = null;
+    if (pieceId) {
       setPendingDeletes((prev) => {
         const next = new Set(prev);
         next.delete(pieceId);
         return next;
       });
-      setError(err instanceof Error ? err.message : "delete failed");
     }
-  }, [target, state.code]);
+    setUndoableDelete(null);
+  }, []);
+
+  // Flush any pending delete on unmount so we don't leave the server
+  // showing a piece the player thought was gone.
+  useEffect(() => {
+    return () => {
+      if (undoTimerRef.current !== null && undoTargetRef.current) {
+        window.clearTimeout(undoTimerRef.current);
+        flushDelete(undoTargetRef.current);
+      }
+    };
+  }, [flushDelete]);
 
   // ── Share progress (preserved) ────────────────────────────────────
   const shareProgress = useCallback(async () => {
@@ -828,6 +897,12 @@ function BuilderInteractive({ state }: { state: PlayState }) {
           onDismiss={dismissBriefIntro}
         />
       )}
+      <DeleteUndoToast
+        expiresAt={undoableDelete?.expiresAt ?? null}
+        durationMs={UNDO_WINDOW_MS}
+        label="Piece removed"
+        onUndo={onUndoDelete}
+      />
     </div>
   );
 }
