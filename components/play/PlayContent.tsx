@@ -12,6 +12,7 @@ import {
   playTimePressure,
 } from "@/lib/sound";
 import { useGameEvents } from "@/lib/realtime/useGameEvents";
+import { usePartnerActivity } from "@/lib/realtime/usePartnerActivity";
 import { SuperPowerToast } from "./SuperPowerToast";
 import { WelcomeToast } from "./WelcomeToast";
 import { BriefsRevealedModal } from "./BriefsRevealedModal";
@@ -304,6 +305,10 @@ export function PlayContent({ code, initial }: PlayContentProps) {
         role: state.partner.role,
       }
     : null;
+  const partnerActiveAt = usePartnerActivity(
+    state.game_id,
+    state.role === "builder" || state.role === "guider" ? state.role : null,
+  );
 
   return (
     <div className="flex min-h-screen flex-col bg-[var(--color-paper)]">
@@ -315,6 +320,7 @@ export function PlayContent({ code, initial }: PlayContentProps) {
         videoCallUrl={state.video_call_url}
         whiteboardUrl={state.whiteboard_url}
         breakoutCallUrl={state.pair?.breakout_call_url ?? null}
+        partnerLastActiveAt={partnerActiveAt}
       />
       <main className="relative flex flex-1 overflow-hidden">
         {renderBody(state)}
