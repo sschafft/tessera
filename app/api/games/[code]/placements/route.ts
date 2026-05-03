@@ -9,6 +9,8 @@ import {
   BUILDER_COLOR_SET,
   BUILDER_SHAPE_SET,
 } from "@/lib/pattern/palette";
+import { scorePlacements } from "@/lib/scoring/score";
+import type { GoalPattern } from "@/lib/pattern/types";
 
 export const runtime = "nodejs";
 
@@ -86,7 +88,17 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "not_in_pair" }, { status: 400 });
   }
 
-  const round = await repo.rounds.findLatest(session.claims.game_id);
+  // Load game + round in parallel — game is needed for scoring config
+  // (we annotate the POST response with `correct` + `wrong_reasons` so
+  // the builder UX renders correctness without waiting for the realtime
+  // broadcast → /play refetch round-trip).
+  const [game, round] = await Promise.all([
+    repo.games.findByCode(code),
+    repo.rounds.findLatest(session.claims.game_id),
+  ]);
+  if (!game || game.id !== session.claims.game_id) {
+    return NextResponse.json({ error: "game_not_found" }, { status: 404 });
+  }
   if (!round || round.status !== "running") {
     return NextResponse.json({ error: "round_not_running" }, { status: 400 });
   }
@@ -122,10 +134,51 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       rot: body.rot,
       placed_by: me.id,
     });
+    // Score the new placement against the goal so the response can
+    // carry correctness directly. The builder UX (single-target model,
+    // wash + badge + wrong-because tooltip) needs `correct` AND
+    // `wrong_reasons` to render feedback; without this, the player
+    // would have to wait for the realtime broadcast → /play refetch
+    // (~50–100ms) just for the wash to appear under a freshly-placed
+    // piece. Goal scoring is O(N + G) on small workshop-scale arrays
+    // — cheap to do inline.
+    let placementCorrect: boolean | undefined;
+    let placementWrongReasons:
+      | { shape: boolean; color: boolean; rotation: boolean }
+      | null
+      | undefined;
+    {
+      const goal = (pairRound.goal_pattern as GoalPattern) ?? [];
+      const allPlacements = (await repo.placements.list(pairRound.id)).map(
+        (p) => ({
+          id: p.id,
+          shape: p.shape,
+          color: p.color,
+          q: p.q,
+          r: p.r,
+          rot: p.rot,
+        }),
+      );
+      const breakdown = scorePlacements(allPlacements, goal, {
+        correctPts: game.scoring_correct_pts,
+        wrongPts: game.scoring_wrong_pts,
+      });
+      const scoredNew = breakdown.placements.find(
+        (p) => p.id === placement.id,
+      );
+      if (scoredNew) {
+        placementCorrect = scoredNew.correct;
+        placementWrongReasons = scoredNew.wrong_reasons;
+      }
+    }
     await publishGameEvent(session.claims.game_id, "placement_added");
     return NextResponse.json({
       ok: true,
-      placement,
+      placement: {
+        ...placement,
+        correct: placementCorrect,
+        wrong_reasons: placementWrongReasons ?? null,
+      },
       replaced: collision?.id ?? null,
     });
   } catch (err) {
