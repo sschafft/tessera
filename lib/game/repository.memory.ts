@@ -147,6 +147,7 @@ class MemoryGameRepository implements GameRepository {
   placements: PlacementStore = {
     create: (input) => this.createPlacement(input),
     list: (pr_id) => this.listPlacements(pr_id),
+    listByPairRoundIds: (ids) => this.listPlacementsByPairRoundIds(ids),
     find: (id) => this.findPlacement(id),
     delete: (id) => this.deletePlacement(id),
     clear: (pr_id) => this.clearPlacements(pr_id),
@@ -157,6 +158,7 @@ class MemoryGameRepository implements GameRepository {
     upsert: (input) => this.upsertBrief(input),
     find: (pr_id, role) => this.findBrief(pr_id, role),
     listForPairRound: (pr_id) => this.listBriefsForPairRound(pr_id),
+    listByPairRoundIds: (ids) => this.listBriefsByPairRoundIds(ids),
     listLibrary: (input) => this.listLibraryBriefs(input),
   };
 
@@ -591,6 +593,22 @@ class MemoryGameRepository implements GameRepository {
       .sort((a, b) => a.placed_at.localeCompare(b.placed_at));
   }
 
+  async listPlacementsByPairRoundIds(
+    pair_round_ids: string[],
+  ): Promise<Map<string, PlacementRecord[]>> {
+    const wanted = new Set(pair_round_ids);
+    const out = new Map<string, PlacementRecord[]>();
+    for (const id of pair_round_ids) out.set(id, []);
+    for (const p of this._placementTable.values()) {
+      if (!wanted.has(p.pair_round_id)) continue;
+      out.get(p.pair_round_id)!.push(p);
+    }
+    for (const list of out.values()) {
+      list.sort((a, b) => a.placed_at.localeCompare(b.placed_at));
+    }
+    return out;
+  }
+
   async findPlacement(id: string): Promise<PlacementRecord | null> {
     return this._placementTable.get(id) ?? null;
   }
@@ -687,6 +705,19 @@ class MemoryGameRepository implements GameRepository {
     return [...this._briefTable.values()].filter(
       (b) => b.pair_round_id === pair_round_id,
     );
+  }
+
+  async listBriefsByPairRoundIds(
+    pair_round_ids: string[],
+  ): Promise<Map<string, BriefRecord[]>> {
+    const wanted = new Set(pair_round_ids);
+    const out = new Map<string, BriefRecord[]>();
+    for (const id of pair_round_ids) out.set(id, []);
+    for (const b of this._briefTable.values()) {
+      if (!wanted.has(b.pair_round_id)) continue;
+      out.get(b.pair_round_id)!.push(b);
+    }
+    return out;
   }
 
   // The in-memory backend has no library — Supabase is authoritative.

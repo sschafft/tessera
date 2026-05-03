@@ -493,6 +493,17 @@ export interface PlacementStore {
   /** Returns placements ordered by placed_at ascending. */
   list(pair_round_id: string): Promise<PlacementRecord[]>;
 
+  /**
+   * Bulk variant of `list` keyed by pair_round_id. Used by the GM
+   * dashboard's lobby snapshot, which would otherwise issue one
+   * `list` per pair (~25 round-trips at workshop scale, every refetch).
+   * Map values keep the placed_at-ascending order; missing keys mean
+   * no placements rather than an absent pair_round.
+   */
+  listByPairRoundIds(
+    pair_round_ids: string[],
+  ): Promise<Map<string, PlacementRecord[]>>;
+
   /** Read a single placement (for ownership check before delete). */
   find(id: string): Promise<PlacementRecord | null>;
 
@@ -543,6 +554,17 @@ export interface BriefStore {
 
   /** Read both briefs for a pair_round (used by the GM dashboard). */
   listForPairRound(pair_round_id: string): Promise<BriefRecord[]>;
+
+  /**
+   * Bulk variant of `listForPairRound`. Same motivation as
+   * `placements.listByPairRoundIds`: the GM dashboard fans across
+   * every pair on every refetch, and a per-pair query is the wrong
+   * shape under realtime traffic. Map values are unordered; each key
+   * holds at most two rows (builder + guider).
+   */
+  listByPairRoundIds(
+    pair_round_ids: string[],
+  ): Promise<Map<string, BriefRecord[]>>;
 
   /**
    * Read library briefs matching a role + complexity, optionally

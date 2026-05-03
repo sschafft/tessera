@@ -52,11 +52,12 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     ? await repo.superPowers.listEvents(round.id)
     : [];
 
-  // Build a map of (pair_id → { builder_brief, guider_brief, progress })
-  // for the current round. Per-pair progress drives the GM dashboard's
-  // completion overlay — green tint + ✓/% chip per row when a pair has
-  // satisfied the goal. We only compute progress for the running round;
-  // pre-round and ended-round pairs surface no chip.
+  // Per-pair briefs + progress for the current round. Earlier this
+  // ran one `pairRounds.find` + one briefs query + one placements
+  // query *per pair* — at workshop scale (~25 pairs) that's 75
+  // round-trips fired on every realtime refetch. The route now batches
+  // all three into pair_round / briefs / placements list-by-ids calls
+  // (3 queries total) and assembles per-pair maps in memory.
   const briefsByPair = new Map<
     string,
     {
@@ -76,49 +77,41 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     }
   >();
   if (round) {
-    const entries = await Promise.all(
-      pairs.map(async (pair) => {
-        const pr = await repo.pairRounds.find(round.id, pair.id);
-        if (!pr) return null;
-        const [list, placements] = await Promise.all([
-          repo.briefs.listForPairRound(pr.id),
-          repo.placements.list(pr.id),
-        ]);
-        const builder = list.find((b) => b.role === "builder");
-        const guider = list.find((b) => b.role === "guider");
-        const goal = (pr.goal_pattern as GoalPattern) ?? [];
-        const breakdown = scorePlacements(placements, goal, {
-          correctPts: game.scoring_correct_pts,
-          wrongPts: game.scoring_wrong_pts,
-        });
-        const total = breakdown.total;
-        const percent =
-          total > 0 ? Math.round((breakdown.correct / total) * 100) : 0;
-        return {
-          pair_id: pair.id,
-          briefs: {
-            builder: builder
-              ? { title: builder.title, rules: builder.rules }
-              : null,
-            guider: guider
-              ? { title: guider.title, rules: guider.rules }
-              : null,
-          },
-          progress: {
-            correct: breakdown.correct,
-            total,
-            placed: placements.length,
-            percent,
-            complete: total > 0 && breakdown.correct === total,
-            score: breakdown.score,
-          },
-        };
-      }),
-    );
-    for (const e of entries) {
-      if (!e) continue;
-      briefsByPair.set(e.pair_id, e.briefs);
-      progressByPair.set(e.pair_id, e.progress);
+    const pairRoundsForRound = await repo.pairRounds.listForRound(round.id);
+    const pairRoundIds = pairRoundsForRound.map((pr) => pr.id);
+    const [briefsByPairRoundId, placementsByPairRoundId] = await Promise.all([
+      repo.briefs.listByPairRoundIds(pairRoundIds),
+      repo.placements.listByPairRoundIds(pairRoundIds),
+    ]);
+    for (const pr of pairRoundsForRound) {
+      const briefList = briefsByPairRoundId.get(pr.id) ?? [];
+      const placements = placementsByPairRoundId.get(pr.id) ?? [];
+      const builder = briefList.find((b) => b.role === "builder");
+      const guider = briefList.find((b) => b.role === "guider");
+      const goal = (pr.goal_pattern as GoalPattern) ?? [];
+      const breakdown = scorePlacements(placements, goal, {
+        correctPts: game.scoring_correct_pts,
+        wrongPts: game.scoring_wrong_pts,
+      });
+      const total = breakdown.total;
+      const percent =
+        total > 0 ? Math.round((breakdown.correct / total) * 100) : 0;
+      briefsByPair.set(pr.pair_id, {
+        builder: builder
+          ? { title: builder.title, rules: builder.rules }
+          : null,
+        guider: guider
+          ? { title: guider.title, rules: guider.rules }
+          : null,
+      });
+      progressByPair.set(pr.pair_id, {
+        correct: breakdown.correct,
+        total,
+        placed: placements.length,
+        percent,
+        complete: total > 0 && breakdown.correct === total,
+        score: breakdown.score,
+      });
     }
   }
 
