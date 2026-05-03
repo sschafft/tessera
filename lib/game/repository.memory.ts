@@ -112,6 +112,7 @@ class MemoryGameRepository implements GameRepository {
     assignObserver: (pid, pair_id) => this.assignObserver(pid, pair_id),
     setDisplayName: (pair_id, name) => this.setPairDisplayName(pair_id, name),
     clearAllocations: (game_id) => this.clearAllocations(game_id),
+    disband: (pair_id) => this.disbandPair(pair_id),
     setBreakout: (pair_id, breakout) => this.setPairBreakout(pair_id, breakout),
     clearBreakout: (pair_id) => this.clearPairBreakout(pair_id),
     listWithBreakouts: (game_id) => this.listPairsWithBreakouts(game_id),
@@ -369,6 +370,17 @@ class MemoryGameRepository implements GameRepository {
     for (const [id, pair] of this._pairTable.entries()) {
       if (pair.game_id === game_id) this._pairTable.delete(id);
     }
+  }
+
+  async disbandPair(pair_id: string): Promise<void> {
+    if (!this._pairTable.has(pair_id)) return;
+    for (const p of this._participantTable.values()) {
+      if (p.pair_id === pair_id && p.role !== "gm") {
+        p.pair_id = null;
+        p.role = "lobby";
+      }
+    }
+    this._pairTable.delete(pair_id);
   }
 
   async createRound(input: {
