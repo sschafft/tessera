@@ -590,7 +590,6 @@ function BuilderInteractive({ state }: { state: PlayState }) {
 
   // ── Render ────────────────────────────────────────────────────────
 
-  const showCoords = (state.round?.complexity ?? 5) <= 4;
   const partnerName = state.partner?.display_name ?? "guider";
   const meName = state.me.display_name;
   const defaultPairName = `${meName} ↔ ${partnerName}`;
@@ -739,7 +738,6 @@ function BuilderInteractive({ state }: { state: PlayState }) {
             defaultShape={nextShape}
             defaultColor={nextColor}
             defaultRotation={nextRotation}
-            showCoords={showCoords}
             onCellClick={onCellClick}
             onPieceClick={onPieceClick}
           />
