@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isPlaceholderUrl, usableCallUrl } from "./url";
+import { isHttpUrl, isPlaceholderUrl, usableCallUrl } from "./url";
 
 describe("isPlaceholderUrl", () => {
   it("flags example.* hosts", () => {
@@ -45,5 +45,36 @@ describe("usableCallUrl", () => {
 
   it("handles empty string", () => {
     expect(usableCallUrl("")).toBeNull();
+  });
+
+  it("rejects non-http(s) schemes — defence in depth against bad backfill", () => {
+    expect(usableCallUrl("javascript:alert(1)")).toBeNull();
+    expect(usableCallUrl("data:text/html,<script>alert(1)</script>")).toBeNull();
+    expect(usableCallUrl("file:///etc/passwd")).toBeNull();
+    expect(usableCallUrl("ftp://example.org/x")).toBeNull();
+    expect(usableCallUrl("custom-scheme://anything")).toBeNull();
+  });
+});
+
+describe("isHttpUrl", () => {
+  it("accepts http and https", () => {
+    expect(isHttpUrl("http://example.com")).toBe(true);
+    expect(isHttpUrl("https://example.com/foo?q=1")).toBe(true);
+  });
+
+  it("rejects non-web schemes", () => {
+    expect(isHttpUrl("javascript:alert(1)")).toBe(false);
+    expect(isHttpUrl("data:text/html,foo")).toBe(false);
+    expect(isHttpUrl("file:///x")).toBe(false);
+    expect(isHttpUrl("ftp://example.org/")).toBe(false);
+    expect(isHttpUrl("custom-scheme://x")).toBe(false);
+  });
+
+  it("rejects unparseable strings + non-strings", () => {
+    expect(isHttpUrl("garbage")).toBe(false);
+    expect(isHttpUrl("")).toBe(false);
+    expect(isHttpUrl(undefined)).toBe(false);
+    expect(isHttpUrl(null)).toBe(false);
+    expect(isHttpUrl(42)).toBe(false);
   });
 });

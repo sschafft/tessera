@@ -11,6 +11,7 @@ import {
   AI_PARTICIPANT_CAP_MAX,
   usesAIBriefs,
 } from "@/lib/briefs/limits";
+import { isHttpUrl } from "@/lib/util/url";
 import type {
   BriefSource,
   CreateGameInput,
@@ -69,16 +70,6 @@ function sanitiseCustom(b: CustomBriefPayload | null | undefined) {
   return { title, rules };
 }
 
-function isUrl(s: unknown): s is string {
-  if (typeof s !== "string") return false;
-  try {
-    const u = new URL(s);
-    return u.protocol === "https:" || u.protocol === "http:";
-  } catch {
-    return false;
-  }
-}
-
 function validate(payload: CreateGamePayload): CreateGameInput | { error: string } {
   if (!payload.workshop_name || typeof payload.workshop_name !== "string") {
     return { error: "workshop_name is required" };
@@ -90,14 +81,14 @@ function validate(payload: CreateGamePayload): CreateGameInput | { error: string
   if (
     payload.video_call_url != null &&
     payload.video_call_url !== "" &&
-    !isUrl(payload.video_call_url)
+    !isHttpUrl(payload.video_call_url)
   ) {
     return { error: "video_call_url must be a valid URL when provided" };
   }
   if (
     payload.whiteboard_url != null &&
     payload.whiteboard_url !== "" &&
-    !isUrl(payload.whiteboard_url)
+    !isHttpUrl(payload.whiteboard_url)
   ) {
     return { error: "whiteboard_url must be a valid URL when provided" };
   }

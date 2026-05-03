@@ -32,6 +32,7 @@ const MAX_REQUESTS = 60;
 // abuse.
 const GUARDED_PATTERNS: RegExp[] = [
   /^\/api\/games$/, // POST: create game (bcrypt, expensive)
+  /^\/api\/games\/upload$/, // POST: CSV upload — multipart parse + many bcrypt hashes
   /^\/api\/games\/[A-Z0-9-]+\/host-recover$/, // POST: bcrypt verify
   /^\/api\/games\/[A-Z0-9-]+\/recover$/, // POST: bcrypt verify
   /^\/api\/games\/[A-Z0-9-]+\/join$/, // POST: bcrypt for player_token
