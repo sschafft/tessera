@@ -1,35 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
 export interface PartnerActiveDotProps {
-  /** Wallclock ms of the partner's most recent realtime event, or null. */
-  lastActiveAt: number | null;
-  /** How long after the last event to keep showing "active". */
-  windowMs?: number;
+  /** Is the partner currently subscribed to the game's presence channel. */
+  present: boolean;
 }
 
 /**
- * Tiny pulsing presence dot — green when the partner has fired a
- * realtime event inside `windowMs`, hidden otherwise. Pure visual,
- * driven by `lib/realtime/usePartnerActivity`.
+ * Tiny pulsing presence dot — green when the partner is connected to
+ * the per-game presence channel, hidden otherwise. Driven by
+ * `lib/realtime/usePartnerPresence`.
  */
-export function PartnerActiveDot({
-  lastActiveAt,
-  windowMs = 30_000,
-}: PartnerActiveDotProps) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (lastActiveAt == null) return;
-    const id = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(id);
-  }, [lastActiveAt]);
-  if (lastActiveAt == null) return null;
-  const fresh = now - lastActiveAt <= windowMs;
-  if (!fresh) return null;
+export function PartnerActiveDot({ present }: PartnerActiveDotProps) {
+  if (!present) return null;
   return (
     <span
-      aria-label="Partner active just now"
+      aria-label="Partner online"
       className="inline-block"
       style={{
         width: 8,
