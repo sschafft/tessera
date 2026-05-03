@@ -52,6 +52,23 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "cannot_release_gm" }, { status: 400 });
   }
 
+  // Releasing a builder/guider used to leave a ghost pair: the
+  // participant row got marked released_at + pair_id null, but the
+  // pairs row still pointed at the released id and the partner stayed
+  // attached to that half-pair, with no UI path to re-pair them. The
+  // 2026-05-03 tessera-tl review flagged it as the recovery tool not
+  // actually recovering. The fix: when the released seat is a
+  // builder or guider, disband the pair first — that bounces the
+  // partner (and any observers) back to the lobby so the GM can use
+  // the normal allocation flow to seat them with someone else.
+  // Releasing a pure observer doesn't disturb the pair (they're a
+  // spectator; no pair invariant is broken).
+  if (
+    target.pair_id &&
+    (target.role === "builder" || target.role === "guider")
+  ) {
+    await repo.pairs.disband(target.pair_id);
+  }
   await repo.participants.release(id);
   await publishGameEvent(game.id, "lobby_changed");
   return NextResponse.json({ ok: true });

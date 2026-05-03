@@ -144,6 +144,7 @@ export class SupabaseGameRepository implements GameRepository {
     assignObserver: (pid, pair_id) => this.assignObserver(pid, pair_id),
     setDisplayName: (pair_id, name) => this.setPairDisplayName(pair_id, name),
     clearAllocations: (game_id) => this.clearAllocations(game_id),
+    disband: (pair_id) => this.disbandPair(pair_id),
     setBreakout: (pair_id, breakout) => this.setPairBreakout(pair_id, breakout),
     clearBreakout: (pair_id) => this.clearPairBreakout(pair_id),
     listWithBreakouts: (game_id) => this.listPairsWithBreakouts(game_id),
@@ -465,6 +466,31 @@ export class SupabaseGameRepository implements GameRepository {
       p_game_id: game_id,
     });
     if (error) throw new Error(`clearAllocations: ${error.message}`);
+  }
+
+  async disbandPair(pair_id: string): Promise<void> {
+    const supabase = getServiceClient();
+    // Two writes; partial failure leaves the pair row gone but
+    // participants still attached, which the GM dashboard can recover
+    // from on the next refetch (the participants would render as
+    // "stuck in a missing pair" → easier to spot than the ghost-pair
+    // bug this method exists to fix). Wrap in an RPC if/when this
+    // becomes a hot path.
+    const { error: updateErr } = await supabase
+      .from("participants")
+      .update({ pair_id: null, role: "lobby" })
+      .eq("pair_id", pair_id)
+      .neq("role", "gm");
+    if (updateErr) {
+      throw new Error(`disbandPair (participants): ${updateErr.message}`);
+    }
+    const { error: deleteErr } = await supabase
+      .from("pairs")
+      .delete()
+      .eq("id", pair_id);
+    if (deleteErr) {
+      throw new Error(`disbandPair (pairs): ${deleteErr.message}`);
+    }
   }
 
   async createRound(input: {

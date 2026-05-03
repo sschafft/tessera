@@ -36,6 +36,7 @@ describe("repository batched lookups", () => {
       round_count: 1,
       round_duration_seconds: 600,
       participant_cap: 4,
+      sound_on: true,
     });
     game_id = game.id;
     const builderA = await repo.participants.create({
@@ -77,13 +78,13 @@ describe("repository batched lookups", () => {
       round_id,
       pair_id: pair_a_id,
       goal_pattern: [],
-      goal_seed: "seedA",
+      pattern_seed: "seedA",
     });
     const prB = await repo.pairRounds.create({
       round_id,
       pair_id: pair_b_id,
       goal_pattern: [],
-      goal_seed: "seedB",
+      pattern_seed: "seedB",
     });
     pr_a_id = prA.id;
     pr_b_id = prB.id;

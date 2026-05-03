@@ -356,6 +356,16 @@ export interface PairStore {
   clearAllocations(game_id: string): Promise<void>;
 
   /**
+   * Disband a single pair: delete the pair row and move every
+   * participant whose `pair_id` referenced it back to the lobby
+   * (`pair_id = null`, `role = "lobby"`). Used when a builder/guider
+   * is released mid-game — without this, the partner stays attached
+   * to a half-pair pointing at a released participant. Observers on
+   * the same pair return to the lobby with the rest.
+   */
+  disband(pair_id: string): Promise<void>;
+
+  /**
    * Persist the per-pair breakout link + originating calendar event.
    * Called by /breakouts/generate after a successful Calendar API
    * mint. Both fields move together so end-game cleanup never lacks
