@@ -126,6 +126,8 @@ class MemoryGameRepository implements GameRepository {
     list: (game_id) => this.listRounds(game_id),
     decrementDuration: (round_id, delta) =>
       this.decrementRoundDuration(round_id, delta),
+    setComplexity: (round_id, complexity) =>
+      this.setRoundComplexity(round_id, complexity),
   };
 
   pairRounds: PairRoundStore = {
@@ -813,6 +815,14 @@ class MemoryGameRepository implements GameRepository {
   ): Promise<void> {
     const pr = this._pairRoundTable.get(pair_round_id);
     if (pr) pr.prototype_until = until.toISOString();
+  }
+
+  async setRoundComplexity(
+    round_id: string,
+    complexity: number,
+  ): Promise<void> {
+    const r = this._roundTable.get(round_id);
+    if (r) r.complexity = complexity;
   }
 
   async captureBuilderSnapshot(

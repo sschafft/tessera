@@ -19,6 +19,7 @@ import { TopBarControls } from "./TopBarControls";
 import { SuperPowersRail } from "./SuperPowersRail";
 import { ScoringPanel } from "./ScoringPanel";
 import { EndGameModal } from "./EndGameModal";
+import { ResetPairsModal } from "./ResetPairsModal";
 import { GeminiFallbackModal } from "./GeminiFallbackModal";
 import {
   BreakoutsPanel,
@@ -170,10 +171,19 @@ export function MasterContent({
     [doAction],
   );
 
-  const resetAllPairs = useCallback(
-    () => doAction("reset-pairs", "/lobby/reset", null, clearSelection),
-    [doAction, clearSelection],
+  const [resetPairsModalOpen, setResetPairsModalOpen] = useState(false);
+  const requestResetPairs = useCallback(
+    () => setResetPairsModalOpen(true),
+    [],
   );
+  const cancelResetPairs = useCallback(
+    () => setResetPairsModalOpen(false),
+    [],
+  );
+  const confirmResetPairs = useCallback(async () => {
+    await doAction("reset-pairs", "/lobby/reset", null, clearSelection);
+    setResetPairsModalOpen(false);
+  }, [doAction, clearSelection]);
 
   const pullBackToMain = useCallback(
     () => doAction("return-to-main", "/return-to-main", null),
@@ -669,7 +679,7 @@ export function MasterContent({
                     roundRunning={round?.status === "running"}
                     onSwapRoles={swapPairRoles}
                     onSwapAllRoles={swapAllPairRoles}
-                    onResetPairs={resetAllPairs}
+                    onResetPairs={requestResetPairs}
                     onExpand={() => setPairsExpanded(true)}
                   />
                 </SetupStep>
@@ -768,7 +778,7 @@ export function MasterContent({
                 roundRunning={round?.status === "running"}
                 onSwapRoles={swapPairRoles}
                 onSwapAllRoles={swapAllPairRoles}
-                onResetPairs={resetAllPairs}
+                onResetPairs={requestResetPairs}
                 onExpand={() => setPairsExpanded(true)}
                 breakouts={
                   data?.breakouts
@@ -828,6 +838,13 @@ export function MasterContent({
         busy={busy}
         onConfirm={confirmEndGame}
         onCancel={cancelEndGame}
+      />
+      <ResetPairsModal
+        open={resetPairsModalOpen}
+        busy={busy}
+        pairCount={pairs.length}
+        onConfirm={confirmResetPairs}
+        onCancel={cancelResetPairs}
       />
       <GeminiFallbackModal
         open={geminiFallback !== null}

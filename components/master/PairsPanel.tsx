@@ -106,17 +106,7 @@ export function PairsPanel({
           {canResetPairs && (
             <button
               type="button"
-              onClick={() => {
-                if (
-                  typeof window !== "undefined" &&
-                  !window.confirm(
-                    `Wipe all ${pairs.length} pair${pairs.length === 1 ? "" : "s"}? Everyone returns to the lobby and you'll re-allocate.`,
-                  )
-                ) {
-                  return;
-                }
-                onResetPairs?.();
-              }}
+              onClick={onResetPairs}
               className="t-mono rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide hover:bg-[var(--color-tint-red)]"
               style={{
                 border: "1.5px solid var(--color-line)",

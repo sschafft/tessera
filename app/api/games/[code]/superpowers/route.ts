@@ -214,6 +214,16 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           await repo.pairRounds.updateGoalPattern(pr.id, newPattern, newSeed);
         }),
       );
+      // Persist the new complexity on the round so downstream readers
+      // (builder tray palette via /play, requirement_change mutation,
+      // post-round score breakdowns) all see the same level the goal
+      // was generated at. Without this, harder/easier shifted the
+      // goal's palette but left round.complexity stale — surfacing
+      // green/orange goal pieces on a builder tray that still showed
+      // the lower-complexity colour set.
+      if (newComplexity !== round.complexity) {
+        await repo.rounds.setComplexity(round.id, newComplexity);
+      }
       break;
     }
 
