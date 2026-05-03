@@ -179,6 +179,7 @@ export class SupabaseGameRepository implements GameRepository {
   placements: PlacementStore = {
     create: (input) => this.createPlacement(input),
     list: (pr_id) => this.listPlacements(pr_id),
+    listByPairRoundIds: (ids) => this.listPlacementsByPairRoundIds(ids),
     find: (id) => this.findPlacement(id),
     delete: (id) => this.deletePlacement(id),
     clear: (pr_id) => this.clearPlacements(pr_id),
@@ -189,6 +190,7 @@ export class SupabaseGameRepository implements GameRepository {
     upsert: (input) => this.upsertBrief(input),
     find: (pr_id, role) => this.findBrief(pr_id, role),
     listForPairRound: (pr_id) => this.listBriefsForPairRound(pr_id),
+    listByPairRoundIds: (ids) => this.listBriefsByPairRoundIds(ids),
     listLibrary: (input) => this.listLibraryBriefs(input),
   };
 
@@ -736,6 +738,26 @@ export class SupabaseGameRepository implements GameRepository {
     return (data ?? []).map(toPlacementRecord);
   }
 
+  async listPlacementsByPairRoundIds(
+    pair_round_ids: string[],
+  ): Promise<Map<string, PlacementRecord[]>> {
+    const out = new Map<string, PlacementRecord[]>();
+    for (const id of pair_round_ids) out.set(id, []);
+    if (pair_round_ids.length === 0) return out;
+    const supabase = getServiceClient();
+    const { data, error } = await supabase
+      .from("placements")
+      .select("*")
+      .in("pair_round_id", pair_round_ids)
+      .order("placed_at", { ascending: true });
+    if (error) throw new Error(`listPlacementsByPairRoundIds: ${error.message}`);
+    for (const row of data ?? []) {
+      const rec = toPlacementRecord(row);
+      out.get(rec.pair_round_id)?.push(rec);
+    }
+    return out;
+  }
+
   async findPlacement(id: string): Promise<PlacementRecord | null> {
     const supabase = getServiceClient();
     const { data, error } = await supabase
@@ -854,6 +876,25 @@ export class SupabaseGameRepository implements GameRepository {
       .eq("pair_round_id", pair_round_id);
     if (error) throw new Error(`listBriefsForPairRound: ${error.message}`);
     return (data ?? []).map(toBriefRecord);
+  }
+
+  async listBriefsByPairRoundIds(
+    pair_round_ids: string[],
+  ): Promise<Map<string, BriefRecord[]>> {
+    const out = new Map<string, BriefRecord[]>();
+    for (const id of pair_round_ids) out.set(id, []);
+    if (pair_round_ids.length === 0) return out;
+    const supabase = getServiceClient();
+    const { data, error } = await supabase
+      .from("briefs")
+      .select("*")
+      .in("pair_round_id", pair_round_ids);
+    if (error) throw new Error(`listBriefsByPairRoundIds: ${error.message}`);
+    for (const row of data ?? []) {
+      const rec = toBriefRecord(row);
+      out.get(rec.pair_round_id)?.push(rec);
+    }
+    return out;
   }
 
   async createSuperPowerEvent(input: {
