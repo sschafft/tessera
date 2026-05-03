@@ -7,7 +7,7 @@ brief is valid at every complexity (`complexity_min = 1`,
 `complexity_max = 8`). Player experience stays consistent regardless
 of difficulty dial.
 
-Counts: 12 builder briefs + 17 guider briefs = 29 total.
+Counts: 13 builder briefs + 17 guider briefs = 30 total.
 
 Edit titles and rules freely; ping me when you're done and I'll fold
 the changes back into a new SQL migration.
@@ -77,6 +77,10 @@ following directions while quietly doing something else.
 ### Politeness focus
 - Require that the guider speak politely and end every request with 'please' — otherwise you ignore it.
 - They must also say 'thank you' after you place each item, or you're upset.
+
+### Distracted
+- Talk about anything other than the game.
+- You can only respond to guidance if explicitly asked — otherwise, talk about anything else.
 
 ---
 
