@@ -138,17 +138,28 @@ function BuilderInteractive({ state }: { state: PlayState }) {
   }, [state.placements, optimistic.length]);
 
   // ── Visible pieces — server placements + optimistic, minus deletes,
-  //    with patches merged on top.
-  const visiblePieces = useMemo(
-    () =>
-      [...state.placements, ...optimistic]
-        .filter((p) => !pendingDeletes.has(p.id))
-        .map((p) => {
-          const patch = optimisticPatches.get(p.id);
-          return patch ? { ...p, ...patch } : p;
-        }),
-    [state.placements, optimistic, pendingDeletes, optimisticPatches],
-  );
+  //    with patches merged on top. Dedupes by id so a piece that's
+  //    been promoted from temp → real (POST returned correctness +
+  //    we swapped the optimistic entry's id) doesn't render twice
+  //    when /play eventually echoes the same placement back into
+  //    state.placements.
+  const visiblePieces = useMemo(() => {
+    const seen = new Set<string>();
+    const out: PlacedPiece[] = [];
+    for (const p of state.placements) {
+      if (seen.has(p.id) || pendingDeletes.has(p.id)) continue;
+      seen.add(p.id);
+      const patch = optimisticPatches.get(p.id);
+      out.push(patch ? { ...p, ...patch } : p);
+    }
+    for (const p of optimistic) {
+      if (seen.has(p.id) || pendingDeletes.has(p.id)) continue;
+      seen.add(p.id);
+      const patch = optimisticPatches.get(p.id);
+      out.push(patch ? { ...p, ...patch } : p);
+    }
+    return out;
+  }, [state.placements, optimistic, pendingDeletes, optimisticPatches]);
 
   // The piece currently being edited (target.kind === "piece"). Derived
   // — no separate state. Auto-cleared when the piece disappears (e.g.
@@ -189,7 +200,19 @@ function BuilderInteractive({ state }: { state: PlayState }) {
 
   // ── Server actions ─────────────────────────────────────────────────
 
-  /** Optimistic add + POST /placements. Used by phantom commit. */
+  /**
+   * Optimistic add + POST /placements. Used by phantom commit.
+   *
+   * Latency-aware response handling: the POST response now carries
+   * `correct` + `wrong_reasons` (annotated server-side after the
+   * insert — see /api/games/[code]/placements/route.ts). On success
+   * we swap the optimistic temp for the real placement with
+   * correctness attached so the wash + badge appear in one paint
+   * after the POST RTT, instead of waiting another ~50–100ms for the
+   * realtime broadcast → /play refetch round-trip. The visiblePieces
+   * memo dedupes by id, so when /play eventually echoes the same
+   * piece back into state.placements, we don't render it twice.
+   */
   const place = useCallback(
     async (
       q: number,
@@ -221,7 +244,48 @@ function BuilderInteractive({ state }: { state: PlayState }) {
           const j = await res.json().catch(() => ({}));
           throw new Error(j.error || `status ${res.status}`);
         }
-        // GC effect drops the temp once the server piece echoes back.
+        const j = (await res.json()) as {
+          ok: boolean;
+          placement?: {
+            id: string;
+            shape: TileShape;
+            color: TileColor;
+            q: number;
+            r: number;
+            rot: number;
+            correct?: boolean;
+            wrong_reasons?: {
+              shape: boolean;
+              color: boolean;
+              rotation: boolean;
+            } | null;
+          };
+        };
+        const real = j.placement;
+        if (real?.id) {
+          // Swap the temp for the real placement so the wash + badge
+          // can render this paint. The id swap also means the GC
+          // effect won't try to drop us — content matches now sit in
+          // optimistic with the real id, deduped against
+          // state.placements when /play echoes it back.
+          setOptimistic((prev) =>
+            prev
+              .filter((p) => p.id !== tempId)
+              .concat({
+                id: real.id,
+                shape: real.shape,
+                color: real.color,
+                q: real.q,
+                r: real.r,
+                rot: real.rot,
+                correct: real.correct,
+                wrong_reasons: real.wrong_reasons ?? null,
+              }),
+          );
+        }
+        // If the response shape was unexpected, fall through — the
+        // GC effect will eventually drop the temp once /play
+        // catches up.
       } catch (err) {
         setOptimistic((prev) => prev.filter((p) => p.id !== tempId));
         setError(err instanceof Error ? err.message : "place failed");
