@@ -1,8 +1,33 @@
 "use client";
 
 import { PlayCanvas } from "@/components/canvas/PlayCanvas";
+import { Confetti } from "./Confetti";
 import { RoundSurvey } from "./RoundSurvey";
 import type { PlayState } from "./PlayContent";
+
+/**
+ * Map an accuracy ratio (0..1) to a debrief headline + tone.
+ * The current copy is intentionally supportive at every tier so
+ * partial-completion players don't read the screen as a graded
+ * report card.
+ */
+function debriefTone(correct: number, total: number) {
+  if (total === 0) return { headline: "Round complete", tint: "ink-3" as const };
+  const ratio = correct / total;
+  if (ratio >= 1) {
+    return { headline: "Perfect round! 🎉", tint: "green" as const };
+  }
+  if (ratio >= 0.8) {
+    return {
+      headline: "So close — that was a great round.",
+      tint: "green" as const,
+    };
+  }
+  if (ratio >= 0.5) {
+    return { headline: "Solid effort.", tint: "orange" as const };
+  }
+  return { headline: "Tough one. Onto the next.", tint: "ink-2" as const };
+}
 
 export interface RoundEndedViewProps {
   state: PlayState;
@@ -20,16 +45,40 @@ export function RoundEndedView({ state }: RoundEndedViewProps) {
   const briefs = collectBriefs(state);
   const showCoords = (state.round?.complexity ?? 5) <= 4;
 
+  const tone = accuracy
+    ? debriefTone(accuracy.correct, accuracy.total)
+    : { headline: "Round complete", tint: "ink-3" as const };
+  const ratio = accuracy && accuracy.total > 0 ? accuracy.correct / accuracy.total : 0;
+  // Mount-only confetti burst sized by accuracy: high accuracy gets a
+  // celebratory pop, partial gets a gentle sprinkle, near-miss gets
+  // nothing.
+  const confettiIntensity =
+    ratio >= 1 ? "large" : ratio >= 0.8 ? "small" : null;
+
   return (
-    <section className="mx-auto flex w-full max-w-[1100px] flex-1 flex-col gap-6 p-6">
+    <section className="relative mx-auto flex w-full max-w-[1100px] flex-1 flex-col gap-6 p-6">
+      {confettiIntensity && <Confetti intensity={confettiIntensity} />}
       <header className="flex items-end justify-between">
         <div>
           <div className="t-mono text-[11px] tracking-widest text-[var(--color-ink-3)]">
             ROUND ENDED
           </div>
-          <h1 className="t-display mt-1 text-[32px]">
-            Round {state.round?.index} · debrief
+          <h1
+            className="t-display mt-1 text-[32px]"
+            style={{
+              color:
+                tone.tint === "green"
+                  ? "var(--color-t-green)"
+                  : tone.tint === "orange"
+                    ? "var(--color-t-orange)"
+                    : "var(--color-ink)",
+            }}
+          >
+            {tone.headline}
           </h1>
+          <p className="t-mono mt-1 text-[12px] text-[var(--color-ink-3)]">
+            Round {state.round?.index} · debrief
+          </p>
         </div>
         {accuracy && (
           <span

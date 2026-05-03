@@ -7,6 +7,7 @@ import { Avatar } from "@/components/primitives/Avatar";
 import type { TileColor } from "@/components/canvas/Tile";
 import { timerPhaseFor, timerPhaseStyle } from "@/lib/util/timerPhase";
 import { usableCallUrl } from "@/lib/util/url";
+import { PartnerActiveDot } from "./PartnerActiveDot";
 
 export interface PlayTopBarProps {
   code: string;
@@ -30,6 +31,11 @@ export interface PlayTopBarProps {
    * `videoCallUrl` demotes to a small "main room ↗" secondary link.
    */
   breakoutCallUrl?: string | null;
+  /**
+   * Wallclock ms of the partner's most recent realtime event, or
+   * null. Drives the active-now dot beside the partner avatar.
+   */
+  partnerLastActiveAt?: number | null;
 }
 
 export function PlayTopBar({
@@ -40,6 +46,7 @@ export function PlayTopBar({
   videoCallUrl,
   whiteboardUrl,
   breakoutCallUrl,
+  partnerLastActiveAt = null,
 }: PlayTopBarProps) {
   const remaining = useTimer(round);
   const phase = timerPhaseFor(remaining, round?.status === "running");
@@ -85,6 +92,7 @@ export function PlayTopBar({
             <span className="text-[11px] text-[var(--color-ink-3)]">
               · {partner.role}
             </span>
+            <PartnerActiveDot lastActiveAt={partnerLastActiveAt} />
           </div>
         )}
       </div>
