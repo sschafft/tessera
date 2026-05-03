@@ -9,6 +9,7 @@ import {
 } from "react";
 import { type TileColor, type TileShape } from "@/components/canvas/Tile";
 import { BriefEnvelope } from "./BriefEnvelope";
+import { BriefIntroModal, briefIntroSeenKey } from "./BriefIntroModal";
 import { Confetti } from "./Confetti";
 import { BUILDER_SHAPES, paletteColorsFor } from "@/lib/pattern/palette";
 import { playSolved } from "@/lib/sound";
@@ -84,6 +85,29 @@ function BuilderInteractive({ state }: { state: PlayState }) {
   >(() => new Map());
   const [error, setError] = useState<string | null>(null);
   const [sharingProgress, setSharingProgress] = useState(false);
+
+  // Brief intro modal — first-time-per-(game, role) explainer that
+  // frames *why* the brief sidebar is there. Gated by localStorage so
+  // the modal doesn't re-fire on round 2/3 or after a tab refresh.
+  const [briefIntroOpen, setBriefIntroOpen] = useState(false);
+  useEffect(() => {
+    if (!state.brief || state.brief.role !== "builder") return;
+    if (typeof window === "undefined") return;
+    if (window.localStorage.getItem(briefIntroSeenKey(state.code, "builder"))) {
+      return;
+    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage read is client-only and runs once per (game, role); SSR can't seed this.
+    setBriefIntroOpen(true);
+  }, [state.brief, state.code]);
+  const dismissBriefIntro = useCallback(() => {
+    setBriefIntroOpen(false);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(
+        briefIntroSeenKey(state.code, "builder"),
+        "1",
+      );
+    }
+  }, [state.code]);
 
   // Snap next-color into the active palette if complexity shrinks
   // (super-power side effect).
@@ -553,10 +577,17 @@ function BuilderInteractive({ state }: { state: PlayState }) {
         onDockRotation((dockRotation + 1) % 4);
       }
       if (e.key === "Enter" && target?.kind === "phantom") onPlace();
+      if (
+        (e.key === "Delete" || e.key === "Backspace") &&
+        target?.kind === "piece"
+      ) {
+        e.preventDefault();
+        onRemove();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [target, dockRotation, onDockRotation, onPlace]);
+  }, [target, dockRotation, onDockRotation, onPlace, onRemove]);
 
   // ── Solved celebration plumbing (preserved) ───────────────────────
   const [partialCelebrationKey, setPartialCelebrationKey] = useState(0);
@@ -613,12 +644,11 @@ function BuilderInteractive({ state }: { state: PlayState }) {
 
   return (
     <div
-      className="grid w-full relative"
-      style={{ gridTemplateColumns: "320px 1fr 320px" }}
+      className="relative grid w-full grid-cols-1 min-[1180px]:[grid-template-columns:320px_minmax(0,1fr)_320px]"
     >
       {/* ── LEFT: Dock + secondary actions ── */}
       <aside
-        className="flex flex-col gap-4 border-r border-[var(--color-line)] bg-[var(--color-paper-2)] p-5"
+        className="flex flex-col gap-4 border-b border-[var(--color-line)] bg-[var(--color-paper-2)] p-5 min-[1180px]:border-b-0 min-[1180px]:border-r"
       >
         {state.pair && (
           <PairNameBadge
@@ -787,6 +817,15 @@ function BuilderInteractive({ state }: { state: PlayState }) {
           score={liveScoreVal}
           role="builder"
           onDismiss={() => setSolvedShown(false)}
+        />
+      )}
+      {state.brief && state.brief.role === "builder" && (
+        <BriefIntroModal
+          open={briefIntroOpen}
+          role="builder"
+          title={state.brief.title}
+          rules={state.brief.rules}
+          onDismiss={dismissBriefIntro}
         />
       )}
     </div>
