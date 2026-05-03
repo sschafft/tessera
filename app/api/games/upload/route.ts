@@ -14,6 +14,7 @@ import {
   parsePairsCsv,
   type ParsedRow,
 } from "@/lib/csv/pairs";
+import { isHttpUrl } from "@/lib/util/url";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -144,6 +145,22 @@ export async function POST(req: NextRequest) {
   if (meetingMode === "in_person" && provider !== "none") {
     return NextResponse.json(
       { error: "in_person cannot have breakouts" },
+      { status: 400 },
+    );
+  }
+  // Validate the workshop call URL when provided. Mirrors the gate in
+  // /api/games and stops `javascript:` / `data:` strings from being
+  // persisted via the CSV path. The 2026-05-03 tessera-tl review
+  // flagged this route as the only place a non-http(s) value could
+  // reach `games.video_call_url`.
+  if (
+    meetingMode !== "in_person" &&
+    settings.video_call_url != null &&
+    settings.video_call_url !== "" &&
+    !isHttpUrl(settings.video_call_url)
+  ) {
+    return NextResponse.json(
+      { error: "video_call_url must be a valid http(s) URL when provided" },
       { status: 400 },
     );
   }
