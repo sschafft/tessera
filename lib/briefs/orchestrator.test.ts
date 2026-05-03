@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // Mock server-only so we can import a "server-only" module under test.
 vi.mock("server-only", () => ({}));
 
-// Repository + Gemini are mocked at module level. Each test resets the
-// mock implementations so we don't bleed state across cases.
+// Repository + AI router are mocked at module level. Each test resets
+// the mock implementations so we don't bleed state across cases.
 vi.mock("@/lib/game/getRepository", () => {
   return {
     getRepository: () => ({
@@ -14,20 +14,33 @@ vi.mock("@/lib/game/getRepository", () => {
   };
 });
 
-vi.mock("./gemini", () => ({
-  generateBriefViaGemini: (...args: unknown[]) => geminiMock(...args),
-  GeminiUnavailableError: class GeminiUnavailableError extends Error {},
-  GeminiResponseError: class GeminiResponseError extends Error {},
+// The orchestrator delegates AI brief generation to lib/briefs/router,
+// which fans across providers (currently openai → gemini, library is
+// the orchestrator-level final fallback). Mocking the router lets us
+// drive every fallback branch without touching provider internals;
+// the per-provider call sequence is the router's responsibility and
+// is covered by router-level tests rather than here.
+vi.mock("./router", () => ({
+  generateBriefViaAI: (...args: unknown[]) => routerMock(...args),
+  AIBriefRouterError: class AIBriefRouterError extends Error {
+    constructor(
+      public readonly reason: string,
+      public readonly attempts: Array<{ provider: string; ok: boolean }>,
+    ) {
+      super(`router exhausted: ${reason}`);
+      this.name = "AIBriefRouterError";
+    }
+  },
 }));
 
 let reserveGeminiMock = vi.fn();
 let listLibraryMock = vi.fn();
-let geminiMock = vi.fn();
+let routerMock = vi.fn();
 
 beforeEach(() => {
   reserveGeminiMock = vi.fn();
   listLibraryMock = vi.fn();
-  geminiMock = vi.fn();
+  routerMock = vi.fn();
 });
 afterEach(() => {
   vi.clearAllMocks();
@@ -37,6 +50,7 @@ import {
   GeminiBriefFailedError,
   pickBrief,
 } from "./orchestrator";
+import { AIBriefRouterError } from "./router";
 
 describe("pickBrief — gm source", () => {
   it("returns the GM-supplied custom brief verbatim", async () => {
@@ -52,10 +66,10 @@ describe("pickBrief — gm source", () => {
       title: "Custom B",
       rules: ["one rule"],
     });
-    // Should NOT have hit Gemini or the library.
+    // Should NOT have hit the AI router or the library.
     expect(reserveGeminiMock).not.toHaveBeenCalled();
     expect(listLibraryMock).not.toHaveBeenCalled();
-    expect(geminiMock).not.toHaveBeenCalled();
+    expect(routerMock).not.toHaveBeenCalled();
   });
 
   it("falls back to library when source=gm but custom is null", async () => {
@@ -80,13 +94,12 @@ describe("pickBrief — gm source", () => {
   });
 });
 
-describe("pickBrief — gemini path", () => {
-  it("succeeds when reservation OK and Gemini returns a brief", async () => {
+describe("pickBrief — gemini path (AI router)", () => {
+  it("returns the router brief when reservation OK and router resolves", async () => {
     reserveGeminiMock.mockResolvedValue({ ok: true, perGame: 1, perDay: 1 });
-    geminiMock.mockResolvedValue({
-      source: "gemini",
-      title: "AI Brief",
-      rules: ["AI rule"],
+    routerMock.mockResolvedValue({
+      brief: { source: "gemini", title: "AI Brief", rules: ["AI rule"] },
+      attempts: [{ provider: "openai", ok: true }],
     });
     const r = await pickBrief({
       role: "builder",
@@ -97,7 +110,7 @@ describe("pickBrief — gemini path", () => {
     expect(r.source).toBe("gemini");
     expect(r.title).toBe("AI Brief");
     expect(reserveGeminiMock).toHaveBeenCalledOnce();
-    expect(geminiMock).toHaveBeenCalledOnce();
+    expect(routerMock).toHaveBeenCalledOnce();
     expect(listLibraryMock).not.toHaveBeenCalled();
   });
 
@@ -120,7 +133,7 @@ describe("pickBrief — gemini path", () => {
     });
     expect(r.source).toBe("library");
     expect(r.title).toBe("Fallback B");
-    expect(geminiMock).not.toHaveBeenCalled();
+    expect(routerMock).not.toHaveBeenCalled();
   });
 
   it("throws GeminiBriefFailedError when budget exhausted and fallback disabled", async () => {
@@ -136,9 +149,14 @@ describe("pickBrief — gemini path", () => {
     ).rejects.toBeInstanceOf(GeminiBriefFailedError);
   });
 
-  it("falls back to library when Gemini call rejects and fallback enabled", async () => {
+  it("falls back to library when the router throws AIBriefRouterError and fallback enabled", async () => {
     reserveGeminiMock.mockResolvedValue({ ok: true, perGame: 1, perDay: 1 });
-    geminiMock.mockRejectedValue(new Error("network"));
+    routerMock.mockRejectedValue(
+      new AIBriefRouterError("all_providers_failed", [
+        { provider: "openai", ok: false },
+        { provider: "gemini", ok: false },
+      ]),
+    );
     listLibraryMock.mockResolvedValue([
       {
         id: "lib1",
@@ -158,9 +176,11 @@ describe("pickBrief — gemini path", () => {
     expect(r.source).toBe("library");
   });
 
-  it("throws GeminiBriefFailedError when Gemini call rejects and fallback disabled", async () => {
+  it("throws GeminiBriefFailedError when router fails and fallback disabled", async () => {
     reserveGeminiMock.mockResolvedValue({ ok: true, perGame: 1, perDay: 1 });
-    geminiMock.mockRejectedValue(new Error("timeout"));
+    routerMock.mockRejectedValue(
+      new AIBriefRouterError("all_providers_failed", []),
+    );
     await expect(
       pickBrief({
         role: "builder",
@@ -172,8 +192,29 @@ describe("pickBrief — gemini path", () => {
     ).rejects.toBeInstanceOf(GeminiBriefFailedError);
   });
 
-  it("Gemini reservation throw also routes through fallback semantics", async () => {
+  it("library fallback also triggers when reservation throws unexpectedly", async () => {
     reserveGeminiMock.mockRejectedValue(new Error("rpc oops"));
+    listLibraryMock.mockResolvedValue([
+      {
+        id: "lib1",
+        role: "builder",
+        complexity: 5,
+        title: "FB",
+        rules: ["x"],
+      },
+    ]);
+    const r = await pickBrief({
+      role: "builder",
+      complexity: 5,
+      source: "gemini",
+      game_id: "g1",
+    });
+    expect(r.source).toBe("library");
+  });
+
+  it("library fallback also triggers when the router throws a non-AIBriefRouterError", async () => {
+    reserveGeminiMock.mockResolvedValue({ ok: true, perGame: 1, perDay: 1 });
+    routerMock.mockRejectedValue(new Error("network blip"));
     listLibraryMock.mockResolvedValue([
       {
         id: "lib1",
@@ -213,7 +254,7 @@ describe("pickBrief — library source", () => {
     expect(r.source).toBe("library");
     expect(r.title).toBe("L1");
     expect(reserveGeminiMock).not.toHaveBeenCalled();
-    expect(geminiMock).not.toHaveBeenCalled();
+    expect(routerMock).not.toHaveBeenCalled();
   });
 
   it("library passes exclude_titles through (caller is responsible for matching)", async () => {

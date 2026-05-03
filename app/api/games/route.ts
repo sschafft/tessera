@@ -7,6 +7,10 @@ import {
 } from "@/lib/auth/recoveryToken";
 import { generateGameCode } from "@/lib/game/code";
 import { getRepository } from "@/lib/game/getRepository";
+import {
+  AI_PARTICIPANT_CAP_MAX,
+  usesAIBriefs,
+} from "@/lib/briefs/limits";
 import type {
   BriefSource,
   CreateGameInput,
@@ -121,6 +125,21 @@ function validate(payload: CreateGamePayload): CreateGameInput | { error: string
     if (src !== "library" && src !== "gm" && src !== "gemini") {
       return { error: `${role}_brief_source must be library, gm, or gemini` };
     }
+  }
+
+  // AI brief paths preflight pairs sequentially with ~6s per call;
+  // round-start scales linearly with pair count. Hold AI games to a
+  // smaller cap so the worst-case start fits the route's maxDuration.
+  // Library-only games keep the larger cap.
+  const aiOn =
+    (payload.builder_brief_on &&
+      usesAIBriefs(payload.builder_brief_source, null)) ||
+    (payload.guider_brief_on &&
+      usesAIBriefs(null, payload.guider_brief_source));
+  if (aiOn && cap > AI_PARTICIPANT_CAP_MAX) {
+    return {
+      error: `participant_cap must be 3..${AI_PARTICIPANT_CAP_MAX} when AI briefs are on`,
+    };
   }
 
   // Validate custom briefs when source='gm'.

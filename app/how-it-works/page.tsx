@@ -47,10 +47,13 @@ export default function HowItWorksPage() {
         The twist: secret briefs
       </h2>
       <p>
-        Each player gets a sealed envelope before the round begins. The brief
-        is a private rule that distorts the conversation — for example, the
+        Each player gets a private brief before the round begins, framed by a
+        one-shot intro overlay so the constraint lands before the canvas does.
+        The brief is a rule that distorts the conversation — for example, the
         builder must <i>place pieces opposite</i> from the direction the guider
         says, or the guider can only describe shapes using nautical terms.
+        After the intro is dismissed, the brief stays open in the side rail
+        for the whole round.
       </p>
       <p>
         Players can&apos;t reveal their brief to their partner. They can ask
@@ -63,20 +66,22 @@ export default function HowItWorksPage() {
         hand-written entries, <b>custom</b> free-text briefs the GM
         authors to point the lesson at a specific theme, or{" "}
         <b>AI-generated</b> for fresh constraints every game. Every option
-        produces the same envelope on the player&apos;s screen.
+        produces the same intro overlay + side-rail card on the
+        player&apos;s screen.
       </p>
 
       <h2 className="t-display mt-6 text-[28px] font-bold tracking-tight">
-        Mirrored feedback during a round
+        Live feedback during a round
       </h2>
       <p>
-        The builder can hit a <b>Test solution</b> button at any time —
-        green halos light up correct pieces, red ones flag wrong placements,
-        and the score updates live. The same green halos and a live
-        &ldquo;X / Y placed&rdquo; chip appear on the guider&apos;s goal
-        canvas, so both partners see the same feedback at the same moment.
-        Pairs that complete a round get a celebratory banner + confetti so
-        the room knows when someone solves it.
+        Pieces score continuously as they land — green halos for correct
+        placements, red for wrong, and the score updates the moment a piece
+        commits. The guider&apos;s goal canvas mirrors the same green halos
+        and a live &ldquo;X / Y placed&rdquo; chip, so both partners see
+        the same feedback at the same moment. Pairs that complete a round
+        get a celebratory banner + confetti; partial completions get a
+        tone-aware debrief headline so the wrap never feels like a graded
+        report card.
       </p>
 
       <h2 className="t-display mt-6 text-[28px] font-bold tracking-tight">
