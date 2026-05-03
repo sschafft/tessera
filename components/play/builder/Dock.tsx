@@ -302,6 +302,17 @@ function DockImpl({
         <span className="text-[10px]" style={{ color: "var(--color-ink-3)" }}>
           {targetKind === "phantom" ? "place" : "confirm"}
         </span>
+        {targetKind === "piece" && (
+          <>
+            <Kbd>Del</Kbd>
+            <span
+              className="text-[10px]"
+              style={{ color: "var(--color-ink-3)" }}
+            >
+              remove
+            </span>
+          </>
+        )}
       </div>
     </div>
   );

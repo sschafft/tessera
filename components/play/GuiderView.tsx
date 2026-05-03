@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { PlayCanvas } from "@/components/canvas/PlayCanvas";
 import { BriefEnvelope } from "./BriefEnvelope";
+import { BriefIntroModal, briefIntroSeenKey } from "./BriefIntroModal";
 import { Confetti } from "./Confetti";
 import { JoinCallCta } from "./JoinCallCta";
 import { PairNameBadge } from "./PairNameBadge";
@@ -46,11 +47,34 @@ export function GuiderView({ state }: GuiderViewProps) {
       solvedFiredForRoundRef.current !== roundId
     ) {
       solvedFiredForRoundRef.current = roundId;
-       
+
       setSolvedShown(true);
       if (state.sound_on) playSolved();
     }
   }, [liveCorrect, liveTotal, state.round?.id, state.sound_on]);
+
+  // Brief intro overlay — frames *why* the brief sidebar exists the
+  // first time a guider lands here. Persists per (game, role) so the
+  // explainer doesn't re-fire on round 2/3.
+  const [briefIntroOpen, setBriefIntroOpen] = useState(false);
+  useEffect(() => {
+    if (!state.brief || state.brief.role !== "guider") return;
+    if (typeof window === "undefined") return;
+    if (window.localStorage.getItem(briefIntroSeenKey(state.code, "guider"))) {
+      return;
+    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- localStorage read is client-only and runs once per (game, role); SSR can't seed this.
+    setBriefIntroOpen(true);
+  }, [state.brief, state.code]);
+  const dismissBriefIntro = useCallback(() => {
+    setBriefIntroOpen(false);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(
+        briefIntroSeenKey(state.code, "guider"),
+        "1",
+      );
+    }
+  }, [state.code]);
 
   if (!state.round || state.round.status !== "running" || !state.goal) {
     return <WaitingForRound state={state} />;
@@ -65,7 +89,7 @@ export function GuiderView({ state }: GuiderViewProps) {
     (state.brief && state.brief.role === "guider") || state.partner_brief,
   );
   return (
-    <section className="relative flex w-full flex-1 gap-4 p-6">
+    <section className="relative flex w-full flex-1 flex-col gap-4 p-6 min-[1180px]:flex-row">
       {state.pair && (
         <div className="absolute left-6 top-6 z-30">
           <PairNameBadge
@@ -166,8 +190,8 @@ export function GuiderView({ state }: GuiderViewProps) {
       </div>
       {hasAside && (
       <aside
-        className="relative flex flex-shrink-0 flex-col items-end gap-3 pt-4"
-        style={{ width: 320, zIndex: 30 }}
+        className="relative flex flex-shrink-0 flex-col items-stretch gap-3 pt-4 min-[1180px]:w-[320px] min-[1180px]:items-end"
+        style={{ zIndex: 30 }}
       >
         {state.brief && state.brief.role === "guider" && (
           <BriefEnvelope
@@ -206,6 +230,15 @@ export function GuiderView({ state }: GuiderViewProps) {
           score={liveScore}
           role="guider"
           onDismiss={() => setSolvedShown(false)}
+        />
+      )}
+      {state.brief && state.brief.role === "guider" && (
+        <BriefIntroModal
+          open={briefIntroOpen}
+          role="guider"
+          title={state.brief.title}
+          rules={state.brief.rules}
+          onDismiss={dismissBriefIntro}
         />
       )}
     </section>
