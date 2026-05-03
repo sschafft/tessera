@@ -210,7 +210,15 @@ function HostForm({ googleMeetAvailable }: { googleMeetAvailable: boolean }) {
               : null,
           round_count: 1,
           round_duration_seconds: 900,
-          participant_cap: 50,
+          // AI brief generation runs sequentially per pair; round-start
+          // latency scales linearly. Library-only games keep the
+          // larger cap; AI games drop to a smaller one. Mirrors the
+          // server-side gate in `/api/games`.
+          participant_cap:
+            (builderBrief && builderBriefSource === "gemini") ||
+            (guiderBrief && guiderBriefSource === "gemini")
+              ? 15
+              : 50,
           sound_on: true,
         }),
       });

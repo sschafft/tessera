@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { isValidGameCode } from "@/lib/game/code";
-import { readSessionForGame } from "@/lib/auth/session";
+import { readSessionAndParticipant } from "@/lib/auth/session";
 import { getRepository } from "@/lib/game/getRepository";
 import { PlayContent, type PlayState } from "@/components/play/PlayContent";
 import type { GoalPattern } from "@/lib/pattern/types";
@@ -31,15 +31,20 @@ export default async function PlayPage({ params }: PageProps) {
   const { code } = await params;
   if (!isValidGameCode(code)) notFound();
 
-  const claims = await readSessionForGame(code);
-  if (!claims) redirect(`/g/${code}/join`);
+  // Pull the live participant row (not just the JWT claim) so the SSR
+  // payload honours the same revocation gate the snapshot API enforces
+  // (see app/api/games/[code]/play/route.ts:39). Without this, a
+  // released observer/guider could hard-refresh /play and walk away
+  // with a stale SSR copy of the goal + brief data.
+  const session = await readSessionAndParticipant(code);
+  if (!session) redirect(`/g/${code}/join`);
+  const { claims, me } = session;
   if (claims.role === "gm") redirect(`/g/${code}/master`);
+  if (me.released_at !== null) redirect(`/g/${code}/join`);
 
   const repo = getRepository();
   const game = await repo.games.findByCode(code);
   if (!game || game.id !== claims.game_id) notFound();
-  const me = await repo.participants.findById(claims.sub);
-  if (!me) redirect(`/g/${code}/join`);
 
   const round = await repo.rounds.findLatest(game.id);
   let pair = null;
