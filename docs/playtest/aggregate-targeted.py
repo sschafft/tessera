@@ -36,8 +36,17 @@ def fetch_codex_log(traj):
         files = json.loads(meta)["steps"]["play"]["outputs"]["files"]
     except Exception:
         files = []
+    # Jetty's naming has flipped between agent_codex.txt and
+    # agent--codex.txt at least once; accept both.
     log_path = next(
-        (f["path"] for f in files if f.get("path", "").endswith("agent_codex.txt")),
+        (
+            f["path"]
+            for f in files
+            if (
+                f.get("path", "").endswith("agent_codex.txt")
+                or f.get("path", "").endswith("agent--codex.txt")
+            )
+        ),
         None,
     )
     if not log_path:
