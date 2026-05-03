@@ -32,10 +32,10 @@ export interface PlayTopBarProps {
    */
   breakoutCallUrl?: string | null;
   /**
-   * Wallclock ms of the partner's most recent realtime event, or
-   * null. Drives the active-now dot beside the partner avatar.
+   * True when the partner is subscribed to the game's presence channel.
+   * Drives the small online dot beside the partner avatar.
    */
-  partnerLastActiveAt?: number | null;
+  partnerPresent?: boolean;
 }
 
 export function PlayTopBar({
@@ -46,7 +46,7 @@ export function PlayTopBar({
   videoCallUrl,
   whiteboardUrl,
   breakoutCallUrl,
-  partnerLastActiveAt = null,
+  partnerPresent = false,
 }: PlayTopBarProps) {
   const remaining = useTimer(round);
   const phase = timerPhaseFor(remaining, round?.status === "running");
@@ -92,7 +92,7 @@ export function PlayTopBar({
             <span className="text-[11px] text-[var(--color-ink-3)]">
               · {partner.role}
             </span>
-            <PartnerActiveDot lastActiveAt={partnerLastActiveAt} />
+            <PartnerActiveDot present={partnerPresent} />
           </div>
         )}
       </div>
