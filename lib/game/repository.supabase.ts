@@ -158,6 +158,8 @@ export class SupabaseGameRepository implements GameRepository {
     list: (game_id) => this.listRounds(game_id),
     decrementDuration: (round_id, delta) =>
       this.decrementRoundDuration(round_id, delta),
+    setComplexity: (round_id, complexity) =>
+      this.setRoundComplexity(round_id, complexity),
   };
 
   pairRounds: PairRoundStore = {
@@ -1028,6 +1030,18 @@ export class SupabaseGameRepository implements GameRepository {
         `decrementRoundDuration: ${j?.reason ?? "unknown"}`,
       );
     }
+  }
+
+  async setRoundComplexity(
+    round_id: string,
+    complexity: number,
+  ): Promise<void> {
+    const supabase = getServiceClient();
+    const { error } = await supabase
+      .from("rounds")
+      .update({ complexity })
+      .eq("id", round_id);
+    if (error) throw new Error(`setRoundComplexity: ${error.message}`);
   }
 
   async setPrototypeUntil(

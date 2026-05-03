@@ -414,6 +414,15 @@ export interface RoundStore {
 
   /** Subtract `delta` seconds from a round's duration (Time pressure). */
   decrementDuration(round_id: string, delta: number): Promise<void>;
+
+  /**
+   * Persist a new complexity on a running round. Used by the
+   * harder / easier super-powers when they regenerate the goal at a
+   * different complexity — the persisted value drives the builder's
+   * tray palette + the requirement-change mutation palette, so it
+   * has to track the goal's actual generation level.
+   */
+  setComplexity(round_id: string, complexity: number): Promise<void>;
 }
 
 export interface PairRoundStore {
