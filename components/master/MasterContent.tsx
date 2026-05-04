@@ -19,6 +19,7 @@ import { TopBarControls } from "./TopBarControls";
 import { SuperPowersRail } from "./SuperPowersRail";
 import { ScoringPanel } from "./ScoringPanel";
 import { EndGameModal } from "./EndGameModal";
+import { EndRoundModal } from "./EndRoundModal";
 import { ResetPairsModal } from "./ResetPairsModal";
 import { GeminiFallbackModal } from "./GeminiFallbackModal";
 import {
@@ -254,8 +255,31 @@ export function MasterContent({
     setGeminiFallback(null);
   }, []);
 
-  const endRound = useCallback(
-    () => doAction("end", "/rounds/end", {}),
+  // End-round flow has two paths:
+  //   1. GM clicks "End round" → opens EndRoundModal asking whether
+  //      to ask players for the reflection survey.
+  //   2. Timer auto-expires → fires `endRoundAuto` directly,
+  //      bypassing the modal (an absent / idle GM can't make the
+  //      survey call).
+  //
+  // The modal's two CTAs commit via `endRoundCommit(requestSurvey)`
+  // which posts `{ request_survey }` to /rounds/end; the route
+  // flips `rounds.reflection_survey_requested` before sealing the
+  // round so the player-side card knows to mount.
+  const [endRoundModalOpen, setEndRoundModalOpen] = useState(false);
+  const requestEndRound = useCallback(() => setEndRoundModalOpen(true), []);
+  const cancelEndRound = useCallback(() => setEndRoundModalOpen(false), []);
+  const endRoundCommit = useCallback(
+    async (requestSurvey: boolean) => {
+      setEndRoundModalOpen(false);
+      await doAction("end", "/rounds/end", {
+        request_survey: requestSurvey,
+      });
+    },
+    [doAction],
+  );
+  const endRoundAuto = useCallback(
+    () => doAction("end", "/rounds/end", { request_survey: false }),
     [doAction],
   );
 
@@ -571,7 +595,8 @@ export function MasterContent({
         actionError={actionError}
         pairsCount={pairs.length}
         onStart={startRoundDefault}
-        onEnd={endRound}
+        onEnd={requestEndRound}
+        onEndAutoExpiry={endRoundAuto}
         onEndGame={requestEndGame}
         onExtend={extendRound}
         onPullBackToMain={pullBackToMain}
@@ -838,6 +863,18 @@ export function MasterContent({
         busy={busy}
         onConfirm={confirmEndGame}
         onCancel={cancelEndGame}
+      />
+      <EndRoundModal
+        open={endRoundModalOpen}
+        busy={busy}
+        // 2-pair floor — anything below that lacks anonymity cover
+        // for the aggregate. The CTA hides client-side and the
+        // aggregator suppresses below 4 responses server-side; both
+        // are intentional belt-and-braces.
+        surveyAvailable={pairs.length >= 2}
+        onConfirmWithSurvey={() => endRoundCommit(true)}
+        onConfirmSkip={() => endRoundCommit(false)}
+        onCancel={cancelEndRound}
       />
       <ResetPairsModal
         open={resetPairsModalOpen}

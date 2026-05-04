@@ -120,6 +120,7 @@ export default async function PlayPage({ params }: PageProps) {
           status: round.status,
           started_at: round.started_at,
           ended_at: round.ended_at,
+          reflection_survey_requested: round.reflection_survey_requested,
         }
       : null,
     pair_round: pairRound

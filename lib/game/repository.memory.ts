@@ -22,7 +22,6 @@ import type {
   RoundSurveyRecord,
   RoundSurveyStore,
   SuperPowerStore,
-  SurveyHarderReason,
 } from "./repository";
 
 export class DuplicateNameError extends Error {
@@ -123,6 +122,8 @@ class MemoryGameRepository implements GameRepository {
     create: (input) => this.createRound(input),
     start: (round_id) => this.startRound(round_id),
     end: (round_id) => this.endRound(round_id),
+    setReflectionSurveyRequested: (round_id, requested) =>
+      this.setReflectionSurveyRequested(round_id, requested),
     delete: (round_id) => this.deleteRound(round_id),
     findLatest: (game_id) => this.findLatestRound(game_id),
     list: (game_id) => this.listRounds(game_id),
@@ -448,9 +449,18 @@ class MemoryGameRepository implements GameRepository {
       status: "pending",
       started_at: null,
       ended_at: null,
+      reflection_survey_requested: false,
     };
     this._roundTable.set(round.id, round);
     return round;
+  }
+
+  async setReflectionSurveyRequested(
+    round_id: string,
+    requested: boolean,
+  ): Promise<void> {
+    const r = this._roundTable.get(round_id);
+    if (r) r.reflection_survey_requested = requested;
   }
 
   async startRound(round_id: string): Promise<void> {
@@ -953,7 +963,9 @@ class MemoryGameRepository implements GameRepository {
     round_id: string;
     participant_id: string;
     comm_balance: number;
-    what_made_harder: SurveyHarderReason;
+    attr_self: number;
+    attr_partner: number;
+    attr_system: number;
   }): Promise<RoundSurveyRecord> {
     const key = this.surveyKey(input.round_id, input.participant_id);
     const existing = this._roundSurveyTable.get(key);
@@ -961,7 +973,9 @@ class MemoryGameRepository implements GameRepository {
       ? {
           ...existing,
           comm_balance: input.comm_balance,
-          what_made_harder: input.what_made_harder,
+          attr_self: input.attr_self,
+          attr_partner: input.attr_partner,
+          attr_system: input.attr_system,
           submitted_at: new Date().toISOString(),
         }
       : {
@@ -969,7 +983,9 @@ class MemoryGameRepository implements GameRepository {
           round_id: input.round_id,
           participant_id: input.participant_id,
           comm_balance: input.comm_balance,
-          what_made_harder: input.what_made_harder,
+          attr_self: input.attr_self,
+          attr_partner: input.attr_partner,
+          attr_system: input.attr_system,
           submitted_at: new Date().toISOString(),
         };
     this._roundSurveyTable.set(key, record);

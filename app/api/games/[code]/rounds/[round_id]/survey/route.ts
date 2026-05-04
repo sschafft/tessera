@@ -2,7 +2,6 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isValidGameCode } from "@/lib/game/code";
 import { readSessionAndParticipant } from "@/lib/auth/session";
 import { getRepository } from "@/lib/game/getRepository";
-import type { SurveyHarderReason } from "@/lib/game/repository";
 
 export const runtime = "nodejs";
 
@@ -12,26 +11,29 @@ interface RouteParams {
 
 interface SurveyPayload {
   comm_balance?: number;
-  what_made_harder?: string;
+  attr_self?: number;
+  attr_partner?: number;
+  attr_system?: number;
 }
 
-const HARDER_REASONS: ReadonlySet<SurveyHarderReason> = new Set([
-  "me",
-  "partner",
-  "briefs",
-  "puzzle",
-]);
-
 /**
- * Player-side end-of-round 2-question reflection.
+ * Player-side end-of-round reflection. Two questions:
+ *
+ *   1. comm_balance (0..100): who carried the communication.
+ *   2. friction attribution (3 sliders summing to 100): how much of
+ *      the round's friction came from the player themself, the
+ *      partner, and the game/system. Replaces the v1 4-way
+ *      `what_made_harder` enum (2026-05-04 design pass) so the
+ *      aggregator can surface magnitudes + builder-vs-guider
+ *      asymmetry instead of just a coarse pick.
  *
  *   POST → idempotent upsert keyed by (round_id, participant_id).
  *   GET  → returns this participant's previous response, or null.
  *
- * Both reasons (comm_balance, what_made_harder) are required on
- * write. Only the player whose JWT matches `participant_id` can
- * submit; the GM can read aggregated responses through a separate
- * /survey/aggregate route (added in a follow-up).
+ * Only builders + guiders submit (observers + GM are excluded server-
+ * side). The route also rejects writes when the round didn't have
+ * `reflection_survey_requested` set — players can't surface a
+ * survey card the GM didn't opt into.
  */
 export async function POST(req: NextRequest, { params }: RouteParams) {
   const { code, round_id } = await params;
@@ -65,10 +67,32 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       { status: 400 },
     );
   }
-  const harder = (body.what_made_harder ?? "") as SurveyHarderReason;
-  if (!HARDER_REASONS.has(harder)) {
+
+  const attrSelf = Number(body.attr_self);
+  const attrPartner = Number(body.attr_partner);
+  const attrSystem = Number(body.attr_system);
+  for (const [name, v] of [
+    ["attr_self", attrSelf],
+    ["attr_partner", attrPartner],
+    ["attr_system", attrSystem],
+  ] as const) {
+    if (!Number.isFinite(v) || v < 0 || v > 100) {
+      return NextResponse.json(
+        { error: `${name} must be a number 0..100` },
+        { status: 400 },
+      );
+    }
+  }
+  // Forced-choice contract: the three axes must sum to exactly 100.
+  // The DB CHECK enforces the same, but rejecting here returns a
+  // typed error instead of letting the upsert throw a 5xx.
+  const sum = attrSelf + attrPartner + attrSystem;
+  if (sum !== 100) {
     return NextResponse.json(
-      { error: "what_made_harder must be one of me|partner|briefs|puzzle" },
+      {
+        error: "attr_sum_must_equal_100",
+        message: `attr_self + attr_partner + attr_system must sum to 100 (got ${sum}).`,
+      },
       { status: 400 },
     );
   }
@@ -81,18 +105,31 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   if (!round || round.id !== round_id) {
     return NextResponse.json({ error: "round_not_found" }, { status: 404 });
   }
+  // Only accept submissions for rounds the GM opted into. Without
+  // this gate, a player could POST a fabricated survey for a round
+  // that never asked for one and pollute the aggregate.
+  if (!round.reflection_survey_requested) {
+    return NextResponse.json(
+      { error: "survey_not_requested" },
+      { status: 400 },
+    );
+  }
 
   const record = await repo.roundSurveys.upsert({
     round_id,
     participant_id: me.id,
     comm_balance: Math.round(balance),
-    what_made_harder: harder,
+    attr_self: Math.round(attrSelf),
+    attr_partner: Math.round(attrPartner),
+    attr_system: Math.round(attrSystem),
   });
   return NextResponse.json({
     ok: true,
     survey: {
       comm_balance: record.comm_balance,
-      what_made_harder: record.what_made_harder,
+      attr_self: record.attr_self,
+      attr_partner: record.attr_partner,
+      attr_system: record.attr_system,
       submitted_at: record.submitted_at,
     },
   });
@@ -116,7 +153,9 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
     survey: record
       ? {
           comm_balance: record.comm_balance,
-          what_made_harder: record.what_made_harder,
+          attr_self: record.attr_self,
+          attr_partner: record.attr_partner,
+          attr_system: record.attr_system,
           submitted_at: record.submitted_at,
         }
       : null,

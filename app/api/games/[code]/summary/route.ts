@@ -5,6 +5,7 @@ import { getRepository } from "@/lib/game/getRepository";
 import { scorePlacements } from "@/lib/scoring/score";
 import type { GoalPattern } from "@/lib/pattern/types";
 import type { PairRoundRecord } from "@/lib/game/repository";
+import { aggregateFrictionByRound } from "@/lib/game/frictionAggregate";
 
 export const runtime = "nodejs";
 
@@ -188,35 +189,36 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     return rb - ra;
   });
 
-  // Per-round survey aggregate. Surfaces what the pair players self-
-  // reported about who carried the conversation + what made the round
-  // hard. Anonymised — only counts + averages, no individual responses.
-  // Empty when nobody filled out the prompt.
+  // Per-round survey aggregate. Surfaces what pair players self-
+  // reported about who carried the conversation + how the round's
+  // friction split across self / partner / system. Anonymised — only
+  // counts + averages, no individual responses, and rounds with
+  // fewer than 4 responses suppress entirely (see
+  // MIN_RESPONSES_FOR_AGGREGATE in lib/game/frictionAggregate).
   const surveysByRound = await Promise.all(
     allRounds.map(async (round) => ({
       round,
       responses: await repo.roundSurveys.listForRound(round.id),
     })),
   );
-  const surveys = surveysByRound
-    .filter(({ responses }) => responses.length > 0)
-    .map(({ round, responses }) => {
-      const reasons = { me: 0, partner: 0, briefs: 0, puzzle: 0 };
-      let balanceSum = 0;
-      for (const r of responses) {
-        balanceSum += r.comm_balance;
-        if (r.what_made_harder in reasons) {
-          reasons[r.what_made_harder as keyof typeof reasons] += 1;
-        }
-      }
-      return {
-        round_id: round.id,
-        round_index: round.index,
-        response_count: responses.length,
-        avg_comm_balance: Math.round(balanceSum / responses.length),
-        harder_reasons: reasons,
-      };
-    });
+  // Role lookup feeds the by-role split inside the aggregator. The
+  // GM dashboard's `byId` map is built from listActive participants
+  // above; reuse it but narrow to builder/guider since observers
+  // don't fill the survey anyway.
+  const roleByParticipantId = new Map<string, "builder" | "guider">();
+  for (const p of allParticipants) {
+    if (p.role === "builder" || p.role === "guider") {
+      roleByParticipantId.set(p.id, p.role);
+    }
+  }
+  const surveys = aggregateFrictionByRound(
+    surveysByRound.map(({ round, responses }) => ({
+      round_id: round.id,
+      round_index: round.index,
+      responses,
+      roleByParticipantId,
+    })),
+  );
 
   return NextResponse.json({
     code,

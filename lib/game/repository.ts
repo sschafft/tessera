@@ -157,6 +157,14 @@ export interface RoundRecord {
   status: RoundStatus;
   started_at: string | null;
   ended_at: string | null;
+  /**
+   * GM opt-in: when true, the player-side RoundSurvey card mounts at
+   * round-end. Set by `setReflectionSurveyRequested` from the
+   * `/api/games/[code]/rounds/end` route when the GM picks "Yes" in
+   * the EndRoundModal. Default false so the survey never fires
+   * unprompted.
+   */
+  reflection_survey_requested: boolean;
 }
 
 export interface PairRoundRecord {
@@ -424,6 +432,18 @@ export interface RoundStore {
   end(round_id: string): Promise<void>;
 
   /**
+   * Flip `rounds.reflection_survey_requested` so the player-side
+   * RoundSurvey card knows whether to mount. Called by the
+   * `/rounds/end` route before `end()` when the GM ticked the
+   * "ask players a quick reflection" option in the EndRoundModal.
+   * Idempotent — re-calls just rewrite the same boolean.
+   */
+  setReflectionSurveyRequested(
+    round_id: string,
+    requested: boolean,
+  ): Promise<void>;
+
+  /**
    * Delete a round (and via cascade, its pair_rounds and briefs).
    * Used to clean up half-started rounds left behind by a failed
    * /rounds/start so the GM can retry.
@@ -627,14 +647,26 @@ export interface SuperPowerStore {
   >;
 }
 
-export type SurveyHarderReason = "me" | "partner" | "briefs" | "puzzle";
-
 export interface RoundSurveyRecord {
   id: string;
   round_id: string;
   participant_id: string;
+  /**
+   * 0..100 slider — who carried the communication. 0 = "I did
+   * most", 100 = "my partner did most", 50 = even.
+   */
   comm_balance: number;
-  what_made_harder: SurveyHarderReason;
+  /**
+   * Forced-choice friction attribution: how the round's friction
+   * split across self / partner / system. Each axis is 0..100 and
+   * the three sum to exactly 100. The 2026-05-04 design pass
+   * replaced the v1 4-way `what_made_harder` enum with this; the
+   * magnitude lets the aggregator surface asymmetry between
+   * builders and guiders, which is the actual debrief insight.
+   */
+  attr_self: number;
+  attr_partner: number;
+  attr_system: number;
   submitted_at: string;
 }
 
@@ -649,7 +681,9 @@ export interface RoundSurveyStore {
     round_id: string;
     participant_id: string;
     comm_balance: number;
-    what_made_harder: SurveyHarderReason;
+    attr_self: number;
+    attr_partner: number;
+    attr_system: number;
   }): Promise<RoundSurveyRecord>;
 
   /** Find this participant's existing response for a round, or null. */
