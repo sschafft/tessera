@@ -211,7 +211,12 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       roleByParticipantId.set(p.id, p.role);
     }
   }
-  const surveys = aggregateFrictionByRound(
+  // The aggregator returns { rounds, suppressed } — qualifying rounds
+  // (>= MIN_RESPONSES_FOR_AGGREGATE) and rounds that got responses
+  // but didn't clear the anonymity floor. We surface both so the
+  // GameEndedView can show a "below the floor" hint when the GM's
+  // expecting an aggregate that won't render.
+  const surveyAggregate = aggregateFrictionByRound(
     surveysByRound.map(({ round, responses }) => ({
       round_id: round.id,
       round_index: round.index,
@@ -219,6 +224,8 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       roleByParticipantId,
     })),
   );
+  const surveys = surveyAggregate.rounds;
+  const surveysSuppressed = surveyAggregate.suppressed;
 
   return NextResponse.json({
     code,
@@ -232,5 +239,6 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     },
     pairs: summary,
     surveys,
+    surveys_suppressed: surveysSuppressed,
   });
 }

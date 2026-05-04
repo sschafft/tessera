@@ -58,9 +58,18 @@ interface SurveyAggregate {
   asymmetry: FrictionAsymmetry[];
 }
 
+interface SurveyAggregateSuppressed {
+  round_id: string;
+  round_index: number;
+  response_count: number;
+}
+
 export function GameEndedView({ code, workshopName }: GameEndedViewProps) {
   const [summary, setSummary] = useState<PairSummary[] | null>(null);
   const [surveys, setSurveys] = useState<SurveyAggregate[] | null>(null);
+  const [surveysSuppressed, setSurveysSuppressed] = useState<
+    SurveyAggregateSuppressed[]
+  >([]);
   const [callUrl, setCallUrl] = useState<string | null>(null);
   const [whiteboardUrl, setWhiteboardUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -72,6 +81,9 @@ export function GameEndedView({ code, workshopName }: GameEndedViewProps) {
         if (Array.isArray(d.pairs)) setSummary(d.pairs);
         else setError(d.error ?? "Could not load summary.");
         if (Array.isArray(d.surveys)) setSurveys(d.surveys);
+        if (Array.isArray(d.surveys_suppressed)) {
+          setSurveysSuppressed(d.surveys_suppressed);
+        }
         if (typeof d.video_call_url === "string") setCallUrl(d.video_call_url);
         if (typeof d.whiteboard_url === "string")
           setWhiteboardUrl(d.whiteboard_url);
@@ -181,8 +193,11 @@ export function GameEndedView({ code, workshopName }: GameEndedViewProps) {
         </p>
       )}
 
-      {surveys && surveys.length > 0 && (
-        <SurveyAggregateCard surveys={surveys} />
+      {((surveys && surveys.length > 0) || surveysSuppressed.length > 0) && (
+        <SurveyAggregateCard
+          surveys={surveys ?? []}
+          suppressed={surveysSuppressed}
+        />
       )}
 
       <div className="t-card flex w-full flex-col gap-2.5 p-5 text-left">
@@ -262,7 +277,13 @@ const AXIS_TINT: Record<FrictionAsymmetry["axis"], string> = {
  *  bar across self / partner / system, plus a callout when the
  *  builder-vs-guider delta on any axis exceeds the threshold —
  *  that's where the facilitator can start a conversation. */
-function SurveyAggregateCard({ surveys }: { surveys: SurveyAggregate[] }) {
+function SurveyAggregateCard({
+  surveys,
+  suppressed,
+}: {
+  surveys: SurveyAggregate[];
+  suppressed: SurveyAggregateSuppressed[];
+}) {
   return (
     <div className="t-card flex w-full flex-col gap-3 p-5 text-left">
       <span
@@ -316,6 +337,22 @@ function SurveyAggregateCard({ surveys }: { surveys: SurveyAggregate[] }) {
           </li>
         ))}
       </ul>
+      {suppressed.length > 0 && (
+        <p className="t-mono text-[11px] text-[var(--color-ink-3)]">
+          {/* The 4-response anonymity floor in the aggregator means a
+              round with only 1–3 responses gets no aggregate. Surfacing
+              the round + count tells the GM "this round saw the survey
+              but not enough people answered" instead of letting the
+              card vanish silently. */}
+          {suppressed
+            .map(
+              (s) =>
+                `Round ${s.round_index} had ${s.response_count} response${s.response_count === 1 ? "" : "s"}`,
+            )
+            .join("; ")}
+          {" — below the 4-response anonymity floor, so no aggregate."}
+        </p>
+      )}
     </div>
   );
 }

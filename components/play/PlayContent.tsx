@@ -336,13 +336,25 @@ export function PlayContent({ code, initial }: PlayContentProps) {
       <SuperPowerToast gameId={state.game_id} />
       <WelcomeToast code={code} />
       <ReturnToMainModal gameId={state.game_id ?? null} />
-      {state.partner_brief && state.round?.id && (
-        <BriefsRevealedModal
-          roundId={state.round.id}
-          myBrief={state.brief}
-          partnerBrief={state.partner_brief}
-        />
-      )}
+      {state.partner_brief &&
+        state.round?.id &&
+        // Don't surface the Reveal-briefs modal during the round-
+        // ended view: if the GM also requested a reflection survey,
+        // this modal would mount on top of the survey card and
+        // intercept pointer events on its CTA. The reveal moment
+        // belongs to live play; once the round wraps the briefs are
+        // already visible in the side rail and in the debrief.
+        // Caught in the 2026-05-04 friction-survey playtest.
+        !(
+          state.round.status === "ended" &&
+          state.round.reflection_survey_requested
+        ) && (
+          <BriefsRevealedModal
+            roundId={state.round.id}
+            myBrief={state.brief}
+            partnerBrief={state.partner_brief}
+          />
+        )}
       {sessionLost && (
         <SessionLostBanner code={code} />
       )}

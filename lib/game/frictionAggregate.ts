@@ -66,6 +66,25 @@ export interface PerRoundFriction {
   asymmetry: FrictionAsymmetry[];
 }
 
+/**
+ * Round that received at least one v2 response but didn't clear
+ * `MIN_RESPONSES_FOR_AGGREGATE`. Surfaced separately so the GM
+ * debrief view can show "Round X had N responses — below the
+ * anonymity floor" instead of silently hiding the card and leaving
+ * the GM thinking the survey was broken. Never includes
+ * round_ids with zero responses (no signal worth surfacing).
+ */
+export interface SuppressedRoundFriction {
+  round_id: string;
+  round_index: number;
+  response_count: number;
+}
+
+export interface FrictionAggregate {
+  rounds: PerRoundFriction[];
+  suppressed: SuppressedRoundFriction[];
+}
+
 interface AggregateInput {
   round_id: string;
   round_index: number;
@@ -110,11 +129,20 @@ function meanOf(rs: RoundSurveyRecord[]): FrictionMeans {
 
 export function aggregateFrictionByRound(
   inputs: AggregateInput[],
-): PerRoundFriction[] {
+): FrictionAggregate {
   const out: PerRoundFriction[] = [];
+  const suppressed: SuppressedRoundFriction[] = [];
   for (const { round_id, round_index, responses, roleByParticipantId } of inputs) {
     const v2 = responses.filter(isV2Response);
-    if (v2.length < MIN_RESPONSES_FOR_AGGREGATE) continue;
+    if (v2.length === 0) continue;
+    if (v2.length < MIN_RESPONSES_FOR_AGGREGATE) {
+      suppressed.push({
+        round_id,
+        round_index,
+        response_count: v2.length,
+      });
+      continue;
+    }
 
     const builderRows: RoundSurveyRecord[] = [];
     const guiderRows: RoundSurveyRecord[] = [];
@@ -154,5 +182,5 @@ export function aggregateFrictionByRound(
       asymmetry,
     });
   }
-  return out;
+  return { rounds: out, suppressed };
 }
