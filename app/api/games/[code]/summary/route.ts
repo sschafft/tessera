@@ -4,6 +4,7 @@ import { readSessionForGame } from "@/lib/auth/session";
 import { getRepository } from "@/lib/game/getRepository";
 import { scorePlacements } from "@/lib/scoring/score";
 import type { GoalPattern } from "@/lib/pattern/types";
+import type { PairRoundRecord } from "@/lib/game/repository";
 
 export const runtime = "nodejs";
 
@@ -41,9 +42,24 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
   const allParticipants = await repo.participants.listActive(game.id);
   const byId = new Map(allParticipants.map((p) => [p.id, p]));
 
-  // Pre-fetch all pair_rounds + placements grouped by round, so the
-  // leaderboard summation is O(rounds × pairs) without N+1 round trips
-  // mid-loop.
+  // Pre-fetch every round's pair_rounds, then the placements for the
+  // whole set in one batched call. Was previously a per-pair × per-
+  // round nested fetch — at a 25-pair × 3-round game that's 150
+  // round-trips per /summary call. Now it's `rounds.length` listForRound
+  // queries + 1 placements.listByPairRoundIds = 4. Mirrors the same
+  // pattern landed for the GM lobby route in PR #89.
+  const pairRoundsByRound = new Map<string, PairRoundRecord[]>();
+  const allPairRoundIds: string[] = [];
+  await Promise.all(
+    allRounds.map(async (round) => {
+      const list = await repo.pairRounds.listForRound(round.id);
+      pairRoundsByRound.set(round.id, list);
+      for (const pr of list) allPairRoundIds.push(pr.id);
+    }),
+  );
+  const placementsByPairRoundId =
+    await repo.placements.listByPairRoundIds(allPairRoundIds);
+
   const summary: Array<{
     pair_id: string;
     builder: string | null;
@@ -77,19 +93,26 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
   // remain hidden too since they're derived from `correct`.
   const gameEnded = game.status === "ended";
 
-  // Parallelise the per-pair per-round fetch — was sequential
-  // pairs × rounds × 2 awaits, blew the dashboard / debrief load
-  // budget on long games. Same shape, batched.
-  const pairResults = await Promise.all(
-    pairs.map(async (pair) => {
+  // Build a (round_id → pair_id → pair_round) lookup so the per-pair
+  // inner loop is an in-memory join, not another fetch.
+  const pairRoundsByRoundAndPair = new Map<
+    string,
+    Map<string, PairRoundRecord>
+  >();
+  for (const [round_id, list] of pairRoundsByRound) {
+    const inner = new Map<string, PairRoundRecord>();
+    for (const pr of list) inner.set(pr.pair_id, pr);
+    pairRoundsByRoundAndPair.set(round_id, inner);
+  }
+
+  const pairResults = pairs.map((pair) => {
       const builder = pair.builder_id ? byId.get(pair.builder_id) : undefined;
       const guider = pair.guider_id ? byId.get(pair.guider_id) : undefined;
-      const roundResults = await Promise.all(
-        allRounds.map(async (round) => {
-          const pr = await repo.pairRounds.find(round.id, pair.id);
+      const roundResults = allRounds.map((round) => {
+          const pr = pairRoundsByRoundAndPair.get(round.id)?.get(pair.id);
           if (!pr) return null;
           const goal = (pr.goal_pattern as GoalPattern) ?? [];
-          const placements = await repo.placements.list(pr.id);
+          const placements = placementsByPairRoundId.get(pr.id) ?? [];
           const breakdown = scorePlacements(placements, goal, {
             correctPts: game.scoring_correct_pts,
             wrongPts: game.scoring_wrong_pts,
@@ -102,8 +125,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
             placements_count: placements.length,
             breakdown,
           };
-        }),
-      );
+        });
       let correct = 0;
       let placed = 0;
       let total = 0;
@@ -154,8 +176,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
         total_score: totalScore,
         rounds: perRound,
       };
-    }),
-  );
+    });
   summary.push(...pairResults);
 
   // Sort by total_score desc, then completeness, then accuracy ratio.
