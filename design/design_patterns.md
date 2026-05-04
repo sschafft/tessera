@@ -34,6 +34,16 @@ For builder placements, brief envelopes, scoring tweaks, and other interactive p
 
 **Polling fallback** at 30s catches dropped sockets / backgrounded tabs (browsers pause sockets aggressively). Don't poll faster — that defeats the realtime path.
 
+### Refetch-on-realtime snapshot routes batch child lookups — *canonical*
+
+Snapshot routes that fan across pairs/rounds (`/api/games/[code]/lobby`, `/api/games/[code]/summary`) MUST batch their per-pair / per-round child queries. The canonical broadcast→refetch model fires every snapshot route on every mutation; an O(pairs) or O(pairs × rounds) inner loop turns ordinary builder activity into N+1 storms — the GM dashboard buckles first.
+
+The pattern: one `pairRounds.listForRound(round_id)` to get the pair_round set, then **one** `placements.listByPairRoundIds(ids)` and **one** `briefs.listByPairRoundIds(ids)` (added 2026-05-03 in PRs #89, after-tl tech-debt cleanup). Per-pair state is assembled in memory from the result Maps. New batched repo methods take `string[]` and return `Map<id, T[]>` with empty arrays for missing keys.
+
+**Don't:** use `Promise.all(pairs.map(p => repo.x.list(p.id)))` to "parallelise". That keeps the round-trip count at N — it just opens the connections concurrently. Add a batched repo method instead.
+
+**Do:** when introducing a new snapshot route, write the batched repo method first. Two consumers exist (lobby + summary); a third without the batch shape is the wrong default.
+
 ### Single source of truth for scoring — *canonical*
 
 `lib/scoring/score.ts` is the only scorer. Every consumer (`/api/games/[code]/test-solution`, `/api/games/[code]/play`, `/api/games/[code]/summary`) imports `scorePlacements` and uses `breakdown.score / .correct / .placements / .penaltyApplied`.
@@ -93,6 +103,19 @@ window.sessionStorage.setItem(key, "1");
 
 Use sessionStorage (not localStorage) so a fresh-tab GM doesn't carry a previous workshop's dismissals.
 
+### LocalStorage scoped by game code for cross-tab once-per-game dismissals — *emerging*
+
+When a one-shot dismissal should persist across tabs *within the same game* but reset for a new game, key with the game code instead of using sessionStorage. `BriefIntroModal` uses `tessera_brief_intro_seen_<game_code>_<role>`:
+
+```ts
+const key = `tessera_<feature>_seen_${gameCode}_<scope>`;
+if (window.localStorage.getItem(key)) return;
+// ... show
+window.localStorage.setItem(key, "1");
+```
+
+The game code is the natural eviction signal — new game = new key, no stale carry-over. Use this when re-pestering the user across a single tab refresh would feel hostile (intro overlays, role explainers).
+
 ### No localStorage for game state — *canonical*
 
 Game state always comes from the server; the client is a view. The single exception is the player's session cookie (signed JWT), set by the join API.
@@ -106,6 +129,16 @@ Game state always comes from the server; the client is a view. The single except
 Server routes validate every field (shape ∈ enum, q/r in range, rot ∈ 0..3, code is alphanumeric, etc.). Once data is past the route handler, internal libs (`lib/scoring`, `lib/pattern`, `lib/game/repository`) trust their inputs.
 
 **Don't** layer redundant validation across function calls. Don't add nullish guards on params your TypeScript types already say are non-null.
+
+### Alternate public create flows reuse primary validation + throttling — *canonical*
+
+When a second route lets the public create the same resource as a primary route (`/api/games` ←→ `/api/games/upload`), the secondary path MUST reuse the primary's validators (URL schemes, brief sources, scoring ranges) AND be added to `middleware.ts`'s `GUARDED_PATTERNS` for rate limiting. Rule of thumb: every public mutation that costs as much as the primary route gets the same gate.
+
+Reference: `isHttpUrl()` lives in `lib/util/url.ts` so both create routes share the same boundary check; `usableCallUrl()` defends in depth at render time so even malformed values already in the database can't reach a clickable href.
+
+**Why this matters:** the 2026-05-03 tessera-tl review caught the CSV upload route persisting `javascript:` URLs because it had been re-implementing settings validation inline and skipping the workshop URL check the primary route enforced. Same pattern made the upload path the most expensive un-rate-limited public mutation we shipped.
+
+**Don't** copy-paste validation into the new route — extract to `lib/util/` or `lib/<domain>/` and import. Don't omit the `GUARDED_PATTERNS` entry "because the primary route already covers it" — middleware matches by path, not by handler.
 
 ### Repository pattern with two backends — *canonical*
 
