@@ -131,6 +131,7 @@ See [`design/TDD.md` §11](./design/TDD.md) for the full setup including Vercel 
 | `SUPABASE_SERVICE_ROLE_KEY` | server only | Used by route handlers; bypasses RLS |
 | `TESSERA_JWT_SECRET` | server | Signs our session JWTs (independent of Supabase's JWT secret) |
 | `TESSERA_PUBLIC_URL` | server | Used in host-recovery URLs |
+| `NEXT_PUBLIC_APP_ORIGIN` | server | Optional. Override for the base URL embedded in CSV-upload `join_url` rows. Falls back to the request's origin when unset, which works on every Vercel deployment; only set this if you need the join URLs to point at a different host than the one minting them (custom domain behind a proxy, etc.). |
 | `OPENAI_API_KEY` | server only | Optional. Primary AI provider for brief generation (`gpt-4o-mini`). When set, the AI brief router prefers OpenAI over Gemini for higher-volume workshops where the free Gemini tier exhausts. |
 | `GEMINI_API_KEY` | server only | Optional. Free-tier fallback AI provider for brief generation (`gemini-2.5-flash-lite`). When neither AI key is set, every "AI-generated" brief is silently library-sourced. |
 | `GOOGLE_OAUTH_CLIENT_ID` | server only | Optional. Required only for the **Google Meet** breakout provider. Set both this and `GOOGLE_OAUTH_CLIENT_SECRET` to enable the Google Meet option in the host form's breakout-provider picker; the OAuth client must list `<host>/api/auth/google/callback` in its Authorized redirect URIs. The Jitsi provider needs no env vars. |
@@ -178,7 +179,7 @@ tessera/
 │   ├── sound/                 # Tone.js wrappers
 │   └── superpowers/           # Per-super-power policy + cooldown enforcement
 ├── styles/                    # globals.css + tessera.css design tokens
-├── supabase/migrations/       # 21 SQL migrations applied to tessera-dev
+├── supabase/migrations/       # 26 SQL migrations applied to tessera-dev
 ├── public/                    # Static assets
 └── design/                    # PRD, TDD, design_patterns, Claude Design handoff bundle
 ```

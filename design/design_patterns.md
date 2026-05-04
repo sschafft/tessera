@@ -32,7 +32,7 @@ For builder placements, brief envelopes, scoring tweaks, and other interactive p
 
 **Why refetch instead of carrying payloads:** every consumer (builder, guider, observer, GM) materializes a different view of the same game state. A snapshot endpoint per role keeps role-specific filtering server-side; the broadcast is just an "invalidate" signal.
 
-**Polling fallback** at 30s catches dropped sockets / backgrounded tabs (browsers pause sockets aggressively). Don't poll faster — that defeats the realtime path.
+**Polling fallback** at 10s catches dropped sockets / backgrounded tabs (browsers pause sockets aggressively). The cadence is set in two places — `components/master/hooks/useLobbyPoll.ts` and `components/play/PlayContent.tsx`. Don't poll faster than that without a paired tessera-tl pass — anything tighter defeats the realtime path; anything looser starts losing updates after a tab unfreeze.
 
 ### Refetch-on-realtime snapshot routes batch child lookups — *canonical*
 
@@ -215,7 +215,7 @@ These are choices the playtests and tech-lead reviews keep nudging toward; we've
 - **No accounts.** Cookie-only sessions per game. Persistent identity is out of scope.
 - **No GraphQL / tRPC.** REST routes per `/api/games/[code]/<feature>` are easier to reason about and audit; we have ~25 routes, not 250.
 - **No global state library (Redux / Zustand).** Each `*View` owns its slice; cross-view sync goes through the server. Prop-drilling tops out at depth 3.
-- **No automated test suite (yet).** Tracked as tech debt by `tessera-tl`. Playtest agents currently fill the gap.
+- **No app/components route + view tests (yet).** Vitest is wired up and there are 16 test files / 100+ assertions under `lib/**`, but `app/` and `components/` carry zero `*.test.ts(x)` coverage. The 2026-05-04 tessera-tl review flagged this as the gap that lets allocation/replay/upload invariants drift unnoticed; tracked on the open tech-debt register.
 
 ---
 

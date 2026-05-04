@@ -499,7 +499,19 @@ class MemoryGameRepository implements GameRepository {
     status: "lobby" | "running" | "ended" | "purged",
   ): Promise<void> {
     for (const g of this._gameTable.values()) {
-      if (g.id === game_id) g.status = status;
+      if (g.id === game_id) {
+        g.status = status;
+        // Persist the lifecycle pivot. The schema has had `ended_at`
+        // since v1, but earlier versions of this method only flipped
+        // status — flagged by the 2026-05-04 tessera-tl review. Future
+        // retention / reporting reads `ended_at` directly, so it has
+        // to be the source of truth here.
+        if (status === "ended") {
+          g.ended_at = new Date().toISOString();
+        } else if (status === "lobby" || status === "running") {
+          g.ended_at = null;
+        }
+      }
     }
   }
 
