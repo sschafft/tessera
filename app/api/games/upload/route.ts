@@ -185,108 +185,141 @@ export async function POST(req: NextRequest) {
   const gmParticipantId = crypto.randomUUID();
 
   const repo = getRepository();
-  const game = await repo.games.create({
-    code,
-    host_token_hash: hostTokenHash,
-    gm_participant_id: gmParticipantId,
-    workshop_name: workshopName.slice(0, 80),
-    video_call_url:
-      meetingMode === "in_person" ? null : settings.video_call_url || null,
-    whiteboard_url: null,
-    team_mode: "gm_picks",
-    default_complexity: complexity,
-    builder_brief_on: settings.builder_brief_on ?? true,
-    guider_brief_on: settings.guider_brief_on ?? true,
-    builder_brief_source: "library",
-    guider_brief_source: "library",
-    builder_brief_custom: null,
-    guider_brief_custom: null,
-    round_count: roundCount,
-    round_duration_seconds: roundDuration,
-    // Pad cap so the GM can later add walk-ins. CSV rows + 4 buffer,
-    // capped at 50.
-    participant_cap: Math.min(50, Math.max(rows.length + 4, rows.length)),
-    sound_on: true,
-    meeting_mode: meetingMode,
-    breakout_provider: provider,
-  });
 
-  // GM participants row (so super-power audit FK is satisfied).
-  await repo.participants.create({
-    id: gmParticipantId,
-    game_id: game.id,
-    display_name: "Facilitator",
-    role: "gm",
-    color: "red",
-  });
-
-  // Create one participant per CSV row, capturing per-row recovery token.
-  const baseUrl = pickBaseUrl(req);
-  const enriched: Array<ParsedRow & { join_url: string }> = [];
-  // Map row → participant id, used in pair creation below.
-  const participantIdByName = new Map<string, string>();
-
-  for (const r of rows) {
-    const recoveryToken = generateRecoveryToken();
-    const recoveryTokenHash = await hashRecoveryToken(recoveryToken);
-    // The CSV `role` is the desired final role. We seat the player at
-    // that role directly (skipping the lobby state) so they land on
-    // /play already paired/observing on first visit.
-    const participant = await repo.participants.create({
-      game_id: game.id,
-      display_name: r.name,
-      role: "lobby", // overwritten by pair creation below for builder/guider; observers updated separately
-      color: colorFor(r.name, game.id),
-      recovery_token_hash: recoveryTokenHash,
-      email: r.email,
+  // The upload route fans out into 1 game + 1 GM + N participants + M
+  // pairs + observer assignments. Postgres won't roll those back as a
+  // unit on a mid-flight failure, so we wrap the write phase in a
+  // compensating rollback: any throw after the game row exists fires
+  // `repo.games.delete(game.id)`, which cascades through every child
+  // row via the `on delete cascade` FKs (see migration 20260426 for
+  // the schema clauses). Without this, the 2026-05-04 tessera-tl
+  // review's tl2#3 failure mode left orphan games + partial rosters
+  // any time a participant insert hit a transient DB blip.
+  let game: Awaited<ReturnType<typeof repo.games.create>> | null = null;
+  try {
+    game = await repo.games.create({
+      code,
+      host_token_hash: hostTokenHash,
+      gm_participant_id: gmParticipantId,
+      workshop_name: workshopName.slice(0, 80),
+      video_call_url:
+        meetingMode === "in_person" ? null : settings.video_call_url || null,
+      whiteboard_url: null,
+      team_mode: "gm_picks",
+      default_complexity: complexity,
+      builder_brief_on: settings.builder_brief_on ?? true,
+      guider_brief_on: settings.guider_brief_on ?? true,
+      builder_brief_source: "library",
+      guider_brief_source: "library",
+      builder_brief_custom: null,
+      guider_brief_custom: null,
+      round_count: roundCount,
+      round_duration_seconds: roundDuration,
+      // Pad cap so the GM can later add walk-ins. CSV rows + 4 buffer,
+      // capped at 50.
+      participant_cap: Math.min(50, Math.max(rows.length + 4, rows.length)),
+      sound_on: true,
+      meeting_mode: meetingMode,
+      breakout_provider: provider,
     });
-    participantIdByName.set(r.name, participant.id);
-    const join_url = `${baseUrl}/recover/${code}?p=${participant.id}#${recoveryToken}`;
-    enriched.push({ ...r, join_url });
-  }
 
-  // Create pairs from team groups.
-  for (const team of teams) {
-    if (!team.builder || !team.guider) continue;
-    const builderId = participantIdByName.get(team.builder.name);
-    const guiderId = participantIdByName.get(team.guider.name);
-    if (!builderId || !guiderId) continue;
-    const pair = await repo.pairs.create(game.id, builderId, guiderId);
-    if (team.team_name) {
-      await repo.pairs.setDisplayName(pair.id, team.team_name);
+    // GM participants row (so super-power audit FK is satisfied).
+    await repo.participants.create({
+      id: gmParticipantId,
+      game_id: game.id,
+      display_name: "Facilitator",
+      role: "gm",
+      color: "red",
+    });
+
+    // Create one participant per CSV row, capturing per-row recovery token.
+    const baseUrl = pickBaseUrl(req);
+    const enriched: Array<ParsedRow & { join_url: string }> = [];
+    // Map row → participant id, used in pair creation below.
+    const participantIdByName = new Map<string, string>();
+
+    for (const r of rows) {
+      const recoveryToken = generateRecoveryToken();
+      const recoveryTokenHash = await hashRecoveryToken(recoveryToken);
+      // The CSV `role` is the desired final role. We seat the player at
+      // that role directly (skipping the lobby state) so they land on
+      // /play already paired/observing on first visit.
+      const participant = await repo.participants.create({
+        game_id: game.id,
+        display_name: r.name,
+        role: "lobby", // overwritten by pair creation below for builder/guider; observers updated separately
+        color: colorFor(r.name, game.id),
+        recovery_token_hash: recoveryTokenHash,
+        email: r.email,
+      });
+      participantIdByName.set(r.name, participant.id);
+      const join_url = `${baseUrl}/recover/${code}?p=${participant.id}#${recoveryToken}`;
+      enriched.push({ ...r, join_url });
     }
-    for (const obs of team.observers) {
-      const obsId = participantIdByName.get(obs.name);
-      if (obsId) {
-        await repo.pairs.assignObserver(obsId, pair.id);
+
+    // Create pairs from team groups.
+    for (const team of teams) {
+      if (!team.builder || !team.guider) continue;
+      const builderId = participantIdByName.get(team.builder.name);
+      const guiderId = participantIdByName.get(team.guider.name);
+      if (!builderId || !guiderId) continue;
+      const pair = await repo.pairs.create(game.id, builderId, guiderId);
+      if (team.team_name) {
+        await repo.pairs.setDisplayName(pair.id, team.team_name);
+      }
+      for (const obs of team.observers) {
+        const obsId = participantIdByName.get(obs.name);
+        if (obsId) {
+          await repo.pairs.assignObserver(obsId, pair.id);
+        }
       }
     }
+
+    const token = await mintSession({
+      sub: gmParticipantId,
+      game_id: game.id,
+      role: "gm",
+      code: game.code,
+    });
+
+    const csv = pairsCsvWithJoinUrls(enriched);
+    const res = NextResponse.json({
+      code: game.code,
+      host_token: hostToken,
+      participant_count: rows.length,
+      pair_count: teams.filter((t) => t.builder && t.guider).length,
+      csv,
+      participants: enriched.map((r) => ({
+        name: r.name,
+        email: r.email,
+        team_name: r.team_name,
+        role: r.role,
+        join_url: r.join_url,
+      })),
+    });
+    setSessionCookie(res.cookies, game.code, token);
+    return res;
+  } catch (err) {
+    if (game) {
+      // Best-effort cleanup. If this throws too, log and surface the
+      // original failure — the alternative is a 5xx with the orphan
+      // already in the DB.
+      try {
+        await repo.games.delete(game.id);
+      } catch (cleanupErr) {
+        console.error(
+          `[upload] rollback failed for game ${game.id}:`,
+          cleanupErr,
+        );
+      }
+    }
+    const message = err instanceof Error ? err.message : "unknown error";
+    console.error(`[upload] write phase failed:`, err);
+    return NextResponse.json(
+      { error: "upload_failed", message },
+      { status: 500 },
+    );
   }
-
-  const token = await mintSession({
-    sub: gmParticipantId,
-    game_id: game.id,
-    role: "gm",
-    code: game.code,
-  });
-
-  const csv = pairsCsvWithJoinUrls(enriched);
-  const res = NextResponse.json({
-    code: game.code,
-    host_token: hostToken,
-    participant_count: rows.length,
-    pair_count: teams.filter((t) => t.builder && t.guider).length,
-    csv,
-    participants: enriched.map((r) => ({
-      name: r.name,
-      email: r.email,
-      team_name: r.team_name,
-      role: r.role,
-      join_url: r.join_url,
-    })),
-  });
-  setSessionCookie(res.cookies, game.code, token);
-  return res;
 }
 
 /** Best-effort base URL from the request. Keeps the recovery link
