@@ -191,7 +191,7 @@
 │  └──────────┘  └────────────┘  └───────────┘  └──────────────┘  │
 │       │              │                │             │           │
 │       ▼              ▼                ▼             ▼           │
-│  Zustand stores · React Query · Supabase JS Realtime client     │
+│  Per-view useState · useGameEvents (Supabase Realtime broadcast) │
 └──────────────┬──────────────────────────────────┬───────────────┘
                │ HTTPS (REST + RPC)               │ wss (Realtime)
                ▼                                  ▼
@@ -222,15 +222,15 @@
 | Framework | Next.js 16 (App Router) + TypeScript (strict) | What `create-next-app` shipped; App Router is mature. |
 | Package manager | **pnpm 10+** | pnpm 7 has a Node 21 incompatibility (`ERR_INVALID_THIS`); upgrade with `npm i -g pnpm@latest`. |
 | Styling | Tailwind CSS v4 + a `tessera.css` layer porting the design tokens | v4's CSS-first `@theme` directive maps cleanly to our token system. |
-| State | Zustand for game-room state; `@tanstack/react-query` for server fetch | |
-| DnD | `@dnd-kit/core` + `@dnd-kit/utilities` | Pointer + keyboard; we'll wire snap-to-grid via `modifiers`. |
+| State | Per-`*View` `useState` + the play/lobby snapshot routes; **no Zustand or React Query**. The 2026-04 design pass dropped both because every view materialises a different slice of server state and there was no shared atom worth a store. Cross-view sync goes through `useGameEvents` → refetch. | |
+| Interactions | Tap-to-place builder canvas (single-target model); **no dnd-kit**. Drag-to-place was tried in early prototypes and felt slow on a workshop call where both hands are on a keyboard. | |
 | Canvas | Inline SVG (no Canvas, no Konva) | Pieces are tens of polygons; SVG is plenty. |
 | DB / Realtime | Supabase (hosted free-tier project) | Postgres 15, Realtime. **No local Supabase stack** — dev points at a hosted project. Drops the Docker requirement and matches what runs in production exactly. |
 | Auth | Anonymous JWT minted by our route handler; **Supabase Auth not used** | We carry only `{ game_id, participant_id, role, exp }` in the JWT. |
 | AI brief router | `lib/briefs/router.ts` — calls **OpenAI `gpt-4o-mini`** (`openai` SDK) first, falls back to **Google `gemini-2.5-flash-lite`** (`@google/generative-ai` SDK), then drops through to the static library. All providers are server-side only. | OpenAI primary buys paid-tier RPM/RPD reliability for workshop traffic; Gemini fallback keeps the AI path live for free-tier deployments. Earlier passes used `gemini-2.0-flash` directly but its free-tier RPM/RPD bucket exhausted under workshop traffic; 2.5-flash-lite has a separate, looser bucket on free. The persisted `briefs.source` is always `"gemini"` regardless of provider — see §15.3. |
 | Lint / format | ESLint (Next preset) + Prettier | |
-| Testing | Vitest (unit) + Playwright (e2e, smoke only in v1) | |
-| CI | GitHub Actions: typecheck, lint, vitest on PR | Playwright run on `main` only. |
+| Testing | Vitest for `lib/**` (16 files / ~120 assertions as of 2026-05-04). **No Playwright** — multi-role browser playtests run through Jetty's `tessera-playtest-scenario` task instead, see `docs/playtest/runbook.md`. App/components route + view tests are open tech debt. | |
+| CI | GitHub Actions: `tessera-tl review` (adversarial code review, manual + on PR open). PR-level `tsc + lint + vitest` gate is open tech debt — flagged by the 2026-05-04 review. | |
 | Hosting | Vercel | Edge runtime where reasonable; Node runtime for the AI brief router. |
 
 ---
@@ -756,12 +756,12 @@ Three things change because we run on hosted Supabase instead of a local stack:
 
 | Layer | Tool | Scope |
 | --- | --- | --- |
-| Unit | Vitest | Grid math, correctness check, brief library sampling, accelerant policy. |
-| Component | Vitest + Testing Library | Envelope open/close, accelerant button states, lobby selection logic. |
-| Integration | Vitest + supabase-js against local stack | RLS denies cross-game access, JWT mint/verify, brief insert flow. |
-| E2E (smoke) | Playwright | "Host → join → place a piece → see it on observer" happy path on `main`. |
+| Unit | Vitest | Scoring, grid math, brief router fallback, repository helpers, timer phase, AI cap, recovery tokens, jitsi URL minting, breakout policy. 16 files / ~120 assertions as of 2026-05-04, all under `lib/**`. |
+| Component | — | Wired via Vitest but no `*.test.tsx` exist yet for `components/**`. Open tech debt. |
+| Route + integration | — | `app/api/**` carries no executable coverage today; lifecycle endpoints (allocate, replay, upload) are the highest-leverage gap and were called out by the 2026-05-04 tessera-tl pass. |
+| E2E (multi-role) | **Jetty** (`tessera-playtest-scenario` / `tessera-playtest-orchestrator`) | Multi-role browser playtests run through Jetty's Playwright runtime instead of an in-repo Playwright suite. See `docs/playtest/runbook.md`. **No Playwright is installed locally** — the snapshot uses the Daytona-hosted browser. |
 
-Coverage target for v1: 70% unit, smoke-only e2e.
+Coverage target for v1: keep `lib/**` near 100% on deterministic-pure-function modules; close the `app/api/**` lifecycle-endpoint gap before v2.
 
 ---
 
@@ -843,7 +843,7 @@ Edge middleware for the two unauthenticated endpoints uses an in-memory sliding 
 | 6 | **Time pressure:** fixed −3:00 per press, capped to leave ≥ 30s on clock. |
 | 7 | **Sound:** Tone.js synth, no binary assets. |
 | 8 | **Migrations:** Supabase CLI, checked into `supabase/migrations`. |
-| 9 | **CI:** GH Actions: typecheck + lint + vitest on PR; Playwright smoke on `main` only. |
+| 9 | **CI:** GH Actions runs `tessera-tl` (adversarial code review) on PR open + on `workflow_dispatch`. A standard `tsc + lint + vitest` PR gate is open tech debt — flagged 2026-05-04. Multi-role playtest runs are out-of-band via Jetty (`docs/playtest/runbook.md`); no in-repo Playwright. |
 | 10 | **Telemetry:** Vercel request logs only (geo + path + status code). No additional analytics SDK; no personally identifiable data stored beyond what Vercel captures by default. |
 | 11 | **Branding:** text `Tessera` wordmark in Fraunces; mono SVG favicon matching the design system. |
 | 12 | **AI default source:** library. AI generation is explicit opt-in at game create; see §13.1 for the OpenAI+Gemini router and budget guardrails. |
@@ -1135,10 +1135,6 @@ Cross-provider:
   CTA = breakout (purple badge, "Join your pair's call · breakout");
   workshop-level `video_call_url` demotes to a small `↗ Main room`
   secondary link. `PlayTopBar`'s LinksBar mirrors the same hierarchy.
-- **Diagnostic** — `GET /api/diag/env` returns env-var presence (not
-  values) so a maintainer can verify Vercel scope settings without
-  exposing secrets.
-
 Free-tier impact: zero. Google Meet path: Calendar API has 1M
 queries/day; Tessera generates ≤2 per pair (create + delete) so
 workshop scale (~25 pairs/game) sits at 0.005% of quota. Jitsi path:

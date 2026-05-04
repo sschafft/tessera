@@ -634,9 +634,22 @@ export class SupabaseGameRepository implements GameRepository {
     status: "lobby" | "running" | "ended" | "purged",
   ): Promise<void> {
     const supabase = getServiceClient();
+    // Pivot ended_at on the same write so the status column and the
+    // timestamp never drift. lobby/running clears the previous end
+    // marker (relevant for the legacy unended-state path); purged
+    // leaves ended_at as-is so retention can still see when the game
+    // wrapped before purging.
+    const patch: { status: typeof status; ended_at?: string | null } = {
+      status,
+    };
+    if (status === "ended") {
+      patch.ended_at = new Date().toISOString();
+    } else if (status === "lobby" || status === "running") {
+      patch.ended_at = null;
+    }
     const { error } = await supabase
       .from("games")
-      .update({ status })
+      .update(patch)
       .eq("id", game_id);
     if (error) throw new Error(`setGameStatus: ${error.message}`);
   }

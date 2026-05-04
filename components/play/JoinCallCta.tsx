@@ -39,12 +39,13 @@ export function JoinCallCta({
   const big = size === "lg";
   const breakout = usableCallUrl(breakoutCallUrl);
   const main = usableCallUrl(videoCallUrl);
+  const whiteboard = usableCallUrl(whiteboardUrl);
 
   if (!breakout && !main) {
-    if (whiteboardUrl) {
+    if (whiteboard) {
       return (
         <a
-          href={whiteboardUrl}
+          href={whiteboard}
           target="_blank"
           rel="noopener noreferrer"
           className="t-mono text-[12px] underline"
@@ -113,9 +114,9 @@ export function JoinCallCta({
               ↗ Main room
             </a>
           )}
-          {whiteboardUrl && (
+          {whiteboard && (
             <a
-              href={whiteboardUrl}
+              href={whiteboard}
               target="_blank"
               rel="noopener noreferrer"
               className="t-mono text-[12px] underline"
@@ -159,9 +160,9 @@ export function JoinCallCta({
         </span>
         Join the video call
       </a>
-      {whiteboardUrl && (
+      {whiteboard && (
         <a
-          href={whiteboardUrl}
+          href={whiteboard}
           target="_blank"
           rel="noopener noreferrer"
           className="t-mono text-[12px] underline"
