@@ -83,6 +83,24 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "game_not_found" }, { status: 404 });
   }
 
+  // Allocation is a pre-round operation. The 2026-05-04 tessera-tl
+  // review caught that a stale GM tab (or a direct POST) could mutate
+  // pair membership while a round was live — that broke the
+  // `pair_rounds` contract since a pair could disappear or get reseated
+  // mid-round. Sibling routes (`/lobby/reset`, `/pairs/:id/swap-roles`)
+  // already gate on `round_running`; doing the same here makes the
+  // invariant uniform across allocation surfaces.
+  const latestRound = await repo.rounds.findLatest(game.id);
+  if (latestRound?.status === "running") {
+    return NextResponse.json(
+      {
+        error: "round_running",
+        message: "Allocation is pre-round only — end the round first.",
+      },
+      { status: 409 },
+    );
+  }
+
   const participants = await repo.participants.listActive(game.id);
   const byId = new Map(participants.map((p) => [p.id, p]));
 
@@ -134,6 +152,25 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         { status: 400 },
       );
     }
+    // Both participants must still be unallocated. Without this check
+    // the route used to silently overwrite participants.role/pair_id,
+    // duplicating one person across multiple pairs and orphaning the
+    // pair_rounds row that referenced them. To re-pair someone, the
+    // GM disbands the existing pair (or releases a stuck seat — see
+    // PR #90) and then re-allocates from the lobby.
+    const stuck = [a, b].find(
+      (p) => p.role !== "lobby" || p.pair_id !== null,
+    );
+    if (stuck) {
+      return NextResponse.json(
+        {
+          error: "participant_not_in_lobby",
+          participant_id: stuck.id,
+          message: `${stuck.display_name} is already paired or assigned. Reset their seat or disband their pair first.`,
+        },
+        { status: 400 },
+      );
+    }
     const builderId = body.builder_id;
     const guiderId = builderId === aId ? bId : aId;
     await repo.pairs.create(game.id, builderId, guiderId);
@@ -147,9 +184,33 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   if (!pair) {
     return NextResponse.json({ error: "pair_not_found" }, { status: 400 });
   }
+  // Every targeted participant must currently be unallocated lobby.
+  // Promoting a paired builder/guider into an observer would silently
+  // tear down the pair on the participant row without updating the
+  // pairs.builder_id / guider_id — same drift as the `pair` branch.
   for (const pid of body.participant_ids) {
     const p = byId.get(pid);
-    if (!p) continue;
+    if (!p) {
+      return NextResponse.json(
+        {
+          error: "participant_not_in_game",
+          participant_id: pid,
+        },
+        { status: 400 },
+      );
+    }
+    if (p.role !== "lobby" || p.pair_id !== null) {
+      return NextResponse.json(
+        {
+          error: "participant_not_in_lobby",
+          participant_id: pid,
+          message: `${p.display_name} is already paired or observing. Reset or disband first.`,
+        },
+        { status: 400 },
+      );
+    }
+  }
+  for (const pid of body.participant_ids) {
     await repo.pairs.assignObserver(pid, pair.id);
   }
   await publishGameEvent(game.id, "allocation_changed");
