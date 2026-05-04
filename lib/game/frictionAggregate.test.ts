@@ -51,7 +51,12 @@ describe("aggregateFrictionByRound — suppression floor", () => {
         row("p3", 0, 50, 50),
       ]),
     ]);
-    expect(out).toEqual([]);
+    expect(out.rounds).toEqual([]);
+    // Surfaces under-floor rounds so the GameEndedView can show a
+    // suppression hint instead of vanishing the card silently.
+    expect(out.suppressed).toEqual([
+      { round_id: "r1", round_index: 1, response_count: 3 },
+    ]);
   });
 
   it("emits the round once the floor is cleared", () => {
@@ -63,8 +68,8 @@ describe("aggregateFrictionByRound — suppression floor", () => {
         row("p4", 33, 33, 34),
       ]),
     ]);
-    expect(out.length).toBe(1);
-    expect(out[0]!.response_count).toBe(4);
+    expect(out.rounds.length).toBe(1);
+    expect(out.rounds[0]!.response_count).toBe(4);
   });
 
   it("ignores legacy v1 rows where attr_* sum is 0 (treated as absent)", () => {
@@ -76,7 +81,15 @@ describe("aggregateFrictionByRound — suppression floor", () => {
       row("p4", 33, 33, 34),
     ];
     const out = aggregateFrictionByRound([input([v1, ...v2])]);
-    expect(out[0]!.response_count).toBe(4);
+    expect(out.rounds[0]!.response_count).toBe(4);
+  });
+
+  it("rounds with zero v2 responses don't appear in suppressed", () => {
+    // Survey wasn't filled; nothing to anonymise but also nothing
+    // for the "below floor" hint to surface.
+    const out = aggregateFrictionByRound([input([])]);
+    expect(out.rounds).toEqual([]);
+    expect(out.suppressed).toEqual([]);
   });
 });
 
@@ -90,7 +103,7 @@ describe("aggregateFrictionByRound — means", () => {
         row("p4", 50, 30, 20),
       ]),
     ]);
-    expect(out[0]!.mean).toEqual({ self: 50, partner: 30, system: 20 });
+    expect(out.rounds[0]!.mean).toEqual({ self: 50, partner: 30, system: 20 });
   });
 
   it("splits means by role when both sides answered", () => {
@@ -111,12 +124,12 @@ describe("aggregateFrictionByRound — means", () => {
         roleMap,
       ),
     ]);
-    expect(out[0]!.by_role.builder).toEqual({
+    expect(out.rounds[0]!.by_role.builder).toEqual({
       self: 60,
       partner: 20,
       system: 20,
     });
-    expect(out[0]!.by_role.guider).toEqual({
+    expect(out.rounds[0]!.by_role.guider).toEqual({
       self: 20,
       partner: 60,
       system: 20,
@@ -141,8 +154,8 @@ describe("aggregateFrictionByRound — means", () => {
         roleMap,
       ),
     ]);
-    expect(out[0]!.by_role.builder).not.toBeNull();
-    expect(out[0]!.by_role.guider).toBeNull();
+    expect(out.rounds[0]!.by_role.builder).not.toBeNull();
+    expect(out.rounds[0]!.by_role.guider).toBeNull();
   });
 });
 
@@ -168,9 +181,9 @@ describe("aggregateFrictionByRound — asymmetry detection", () => {
         roleMap,
       ),
     ]);
-    expect(out[0]!.asymmetry.length).toBeGreaterThan(0);
-    expect(out[0]!.asymmetry[0]!.axis).toBe("self");
-    expect(out[0]!.asymmetry[0]!.delta).toBeGreaterThanOrEqual(
+    expect(out.rounds[0]!.asymmetry.length).toBeGreaterThan(0);
+    expect(out.rounds[0]!.asymmetry[0]!.axis).toBe("self");
+    expect(out.rounds[0]!.asymmetry[0]!.delta).toBeGreaterThanOrEqual(
       ASYMMETRY_THRESHOLD,
     );
   });
@@ -193,7 +206,7 @@ describe("aggregateFrictionByRound — asymmetry detection", () => {
         roleMap,
       ),
     ]);
-    expect(out[0]!.asymmetry).toEqual([]);
+    expect(out.rounds[0]!.asymmetry).toEqual([]);
   });
 
   it("sorts asymmetry by descending delta", () => {
@@ -215,10 +228,10 @@ describe("aggregateFrictionByRound — asymmetry detection", () => {
         roleMap,
       ),
     ]);
-    expect(out[0]!.asymmetry[0]!.axis).toBe("system");
+    expect(out.rounds[0]!.asymmetry[0]!.axis).toBe("system");
     // The system delta is the largest; the other axes follow.
-    expect(out[0]!.asymmetry[0]!.delta).toBeGreaterThanOrEqual(
-      out[0]!.asymmetry[1]?.delta ?? 0,
+    expect(out.rounds[0]!.asymmetry[0]!.delta).toBeGreaterThanOrEqual(
+      out.rounds[0]!.asymmetry[1]?.delta ?? 0,
     );
   });
 });
