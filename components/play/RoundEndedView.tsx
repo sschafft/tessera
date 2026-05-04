@@ -172,12 +172,16 @@ export function RoundEndedView({ state }: RoundEndedViewProps) {
         </div>
       )}
 
-      {/* The two-question reflection survey only shows for builders +
-          guiders — observers don't have a partner-balance to weigh in
+      {/* The reflection survey is GM-opt-in per round (post 2026-05-04
+          attribution-survey design pass). Players see it only when
+          the GM picked "End + ask reflection" in the EndRoundModal,
+          which flips `rounds.reflection_survey_requested`. Observers
+          are excluded — they don't have a partner-balance to weigh in
           on. The component fetches the participant's existing
           response on mount and collapses to a recap if one already
           exists. */}
       {state.round?.id &&
+        state.round.reflection_survey_requested === true &&
         (state.role === "builder" || state.role === "guider") && (
           <RoundSurvey
             code={state.code}

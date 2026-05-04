@@ -31,7 +31,6 @@ import type {
   RoundSurveyRecord,
   RoundSurveyStore,
   SuperPowerStore,
-  SurveyHarderReason,
 } from "./repository";
 
 type DbGame = Database["public"]["Tables"]["games"]["Row"];
@@ -155,6 +154,8 @@ export class SupabaseGameRepository implements GameRepository {
     create: (input) => this.createRound(input),
     start: (round_id) => this.startRound(round_id),
     end: (round_id) => this.endRound(round_id),
+    setReflectionSurveyRequested: (round_id, requested) =>
+      this.setReflectionSurveyRequested(round_id, requested),
     delete: (round_id) => this.deleteRound(round_id),
     findLatest: (game_id) => this.findLatestRound(game_id),
     list: (game_id) => this.listRounds(game_id),
@@ -549,6 +550,20 @@ export class SupabaseGameRepository implements GameRepository {
       .eq("id", round_id)
       .neq("status", "ended");
     if (error) throw new Error(`endRound: ${error.message}`);
+  }
+
+  async setReflectionSurveyRequested(
+    round_id: string,
+    requested: boolean,
+  ): Promise<void> {
+    const supabase = getServiceClient();
+    const { error } = await supabase
+      .from("rounds")
+      .update({ reflection_survey_requested: requested })
+      .eq("id", round_id);
+    if (error) {
+      throw new Error(`setReflectionSurveyRequested: ${error.message}`);
+    }
   }
 
   async deleteRound(round_id: string): Promise<void> {
@@ -1225,7 +1240,9 @@ export class SupabaseGameRepository implements GameRepository {
     round_id: string;
     participant_id: string;
     comm_balance: number;
-    what_made_harder: SurveyHarderReason;
+    attr_self: number;
+    attr_partner: number;
+    attr_system: number;
   }): Promise<RoundSurveyRecord> {
     const supabase = getServiceClient();
     const { data, error } = await supabase
@@ -1235,7 +1252,9 @@ export class SupabaseGameRepository implements GameRepository {
           round_id: input.round_id,
           participant_id: input.participant_id,
           comm_balance: input.comm_balance,
-          what_made_harder: input.what_made_harder,
+          attr_self: input.attr_self,
+          attr_partner: input.attr_partner,
+          attr_system: input.attr_system,
           submitted_at: new Date().toISOString(),
         },
         { onConflict: "round_id,participant_id" },
@@ -1282,15 +1301,23 @@ function toRoundSurveyRecord(row: {
   round_id: string;
   participant_id: string;
   comm_balance: number;
-  what_made_harder: string;
+  attr_self: number | null;
+  attr_partner: number | null;
+  attr_system: number | null;
   submitted_at: string;
 }): RoundSurveyRecord {
+  // Pre-2026-05-04 rows have null attr_* columns; surface them as
+  // zero so the record shape stays uniform for consumers. The
+  // aggregator filters by sum to ignore those legacy rows when
+  // computing means.
   return {
     id: row.id,
     round_id: row.round_id,
     participant_id: row.participant_id,
     comm_balance: row.comm_balance,
-    what_made_harder: row.what_made_harder as SurveyHarderReason,
+    attr_self: row.attr_self ?? 0,
+    attr_partner: row.attr_partner ?? 0,
+    attr_system: row.attr_system ?? 0,
     submitted_at: row.submitted_at,
   };
 }
@@ -1346,7 +1373,9 @@ function toPairRecord(row: DbPair): PairRecord {
   };
 }
 
-function toRoundRecord(row: DbRound): RoundRecord {
+function toRoundRecord(
+  row: DbRound & { reflection_survey_requested?: boolean | null },
+): RoundRecord {
   return {
     id: row.id,
     game_id: row.game_id,
@@ -1356,6 +1385,7 @@ function toRoundRecord(row: DbRound): RoundRecord {
     status: row.status,
     started_at: row.started_at,
     ended_at: row.ended_at,
+    reflection_survey_requested: row.reflection_survey_requested ?? false,
   };
 }
 

@@ -25,7 +25,19 @@ export interface TopBarControlsProps {
   pairsCount: number;
   /** Start the next round with the chosen complexity (1..8) and duration in seconds. */
   onStart: (complexity?: number, durationSeconds?: number) => void;
+  /**
+   * Fired when the GM clicks "End round" manually. The Master view
+   * intercepts this with a modal asking whether to ask players the
+   * reflection survey, then commits via the round-end endpoint.
+   */
   onEnd: () => void;
+  /**
+   * Fired automatically when the timer hits zero. No modal — the
+   * round just ends without a reflection prompt, since an absent or
+   * idle GM can't make the call. Distinct from `onEnd` so the
+   * Master view can route the two paths differently.
+   */
+  onEndAutoExpiry: () => void;
   onEndGame: () => void;
   /** Add seconds to the running round timer. */
   onExtend: (deltaSeconds: number) => void;
@@ -61,6 +73,7 @@ export function TopBarControls({
   pairsCount,
   onStart,
   onEnd,
+  onEndAutoExpiry,
   onEndGame,
   onExtend,
   onPullBackToMain,
@@ -112,7 +125,10 @@ export function TopBarControls({
   }
 
   // Auto-fire end-round when timer hits 0 while running. The endpoint
-  // is idempotent so multiple clients firing is harmless.
+  // is idempotent so multiple clients firing is harmless. Routed
+  // through `onEndAutoExpiry` (not `onEnd`) so the Master view skips
+  // the reflection-survey modal — the GM can't answer it if they're
+  // away from the keyboard, and we don't want to ghost-prompt.
   const autoFiredRef = useRef<string | null>(null);
   useEffect(() => {
     if (
@@ -122,9 +138,9 @@ export function TopBarControls({
       autoFiredRef.current !== round.id
     ) {
       autoFiredRef.current = round.id;
-      onEnd();
+      onEndAutoExpiry();
     }
-  }, [isRunning, remaining, round, onEnd]);
+  }, [isRunning, remaining, round, onEndAutoExpiry]);
 
   const startDisabledHint =
     !gameEnded && !isRunning && !canStart

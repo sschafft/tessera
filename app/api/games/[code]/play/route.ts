@@ -467,7 +467,16 @@ function meSummary(p: NonNullable<Awaited<ReturnType<ReturnType<typeof getReposi
 
 function roundSummary(
   r:
-    | { id: string; index: number; complexity: number; duration_seconds: number; status: string; started_at: string | null; ended_at: string | null }
+    | {
+        id: string;
+        index: number;
+        complexity: number;
+        duration_seconds: number;
+        status: string;
+        started_at: string | null;
+        ended_at: string | null;
+        reflection_survey_requested?: boolean;
+      }
     | null,
 ) {
   if (!r) return null;
@@ -479,6 +488,7 @@ function roundSummary(
     status: r.status,
     started_at: r.started_at,
     ended_at: r.ended_at,
+    reflection_survey_requested: r.reflection_survey_requested ?? false,
   };
 }
 

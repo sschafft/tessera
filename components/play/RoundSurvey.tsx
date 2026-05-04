@@ -2,8 +2,6 @@
 
 import { useEffect, useState } from "react";
 
-export type SurveyHarderReason = "me" | "partner" | "briefs" | "puzzle";
-
 export interface RoundSurveyProps {
   code: string;
   roundId: string;
@@ -15,32 +13,32 @@ export interface RoundSurveyProps {
 
 interface SubmittedSurvey {
   comm_balance: number;
-  what_made_harder: SurveyHarderReason;
+  attr_self: number;
+  attr_partner: number;
+  attr_system: number;
   submitted_at: string;
 }
 
-const HARDER_OPTIONS: Array<{
-  key: SurveyHarderReason;
-  label: string;
-  hint: string;
-}> = [
-  { key: "me", label: "Me", hint: "I struggled to translate / describe" },
-  { key: "partner", label: "My partner", hint: "Their direction / question was hard to read" },
-  { key: "briefs", label: "The briefs", hint: "The hidden constraint warped the conversation" },
-  { key: "puzzle", label: "The puzzle", hint: "The pattern itself was tough" },
-];
+type FrictionAxis = "self" | "partner" | "system";
+
+interface FrictionState {
+  self: number;
+  partner: number;
+  system: number;
+}
 
 /**
- * Two-question end-of-round reflection. Slider for "who carried the
- * communication" + a 4-way pick for "what made it harder."
+ * Two-question end-of-round reflection. The original 4-way pick was
+ * replaced 2026-05-04 with a forced-choice friction-attribution
+ * slider that splits 100 points across self / partner / system —
+ * magnitude carries the debrief signal, not just a coarse pick.
  *
  *   - Posts to POST /api/games/[code]/rounds/[round_id]/survey.
- *   - Fetches existing response on mount so the prompt is replaced
- *     with a "thanks · here's what you said" recap if the player
- *     already answered (browser refresh, or they came back after
- *     leaving).
- *   - Card collapses to the recap after submit; no nag, no force.
- *     The whole thing is optional — players can ignore it.
+ *   - Mounts only when the GM opted in at end-round time
+ *     (rounds.reflection_survey_requested === true). Caller checks
+ *     that flag and just doesn't render this component otherwise.
+ *   - Pre-fetches an existing response so a refresh / cross-device
+ *     return collapses to the recap instead of re-asking.
  */
 export function RoundSurvey({
   code,
@@ -49,7 +47,15 @@ export function RoundSurvey({
   partnerName,
 }: RoundSurveyProps) {
   const [balance, setBalance] = useState(50);
-  const [harder, setHarder] = useState<SurveyHarderReason | null>(null);
+  // Default 33/33/34 so the three-slider rebalance has non-zero
+  // mass to redistribute on the first interaction. 0/0/0 would lock
+  // the sliders in place because the rebalance has nothing to take
+  // from. The user is still expected to tweak before submit.
+  const [friction, setFriction] = useState<FrictionState>({
+    self: 33,
+    partner: 33,
+    system: 34,
+  });
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState<SubmittedSurvey | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -76,9 +82,71 @@ export function RoundSurvey({
     };
   }, [code, roundId]);
 
+  /**
+   * When one slider moves, redistribute the delta proportionally
+   * across the other two so the three always sum to 100. If the
+   * other two are both zero, the active slider can't grow past its
+   * current value (no mass to cede); the input is clamped via
+   * `oldValue`.
+   */
+  function setAxis(axis: FrictionAxis, raw: number) {
+    const next = Math.max(0, Math.min(100, Math.round(raw)));
+    setFriction((prev) => {
+      const oldValue = prev[axis];
+      const others: FrictionAxis[] =
+        axis === "self"
+          ? ["partner", "system"]
+          : axis === "partner"
+            ? ["self", "system"]
+            : ["self", "partner"];
+      const [a, b] = others;
+      const otherSum = prev[a] + prev[b];
+      // Both other axes already at zero — can't grow this one
+      // further. Clamp the new value to keep the sum invariant.
+      if (otherSum === 0 && next > oldValue) {
+        return prev;
+      }
+      const delta = next - oldValue;
+      // Proportional split. Edge-case: when otherSum is 0 the user
+      // can only DECREASE this axis (delta <= 0), and the other two
+      // are 0 so they're not adjusted — the freed mass redistributes
+      // to whichever has positive value (here neither, so fall back
+      // to even split).
+      let aNew: number;
+      let bNew: number;
+      if (otherSum === 0) {
+        aNew = Math.round(-delta / 2);
+        bNew = -delta - aNew;
+      } else {
+        aNew = Math.round(prev[a] - delta * (prev[a] / otherSum));
+        bNew = Math.round(prev[b] - delta * (prev[b] / otherSum));
+      }
+      // Clamp + reconcile rounding so the three integers sum to 100.
+      const clamped = {
+        [axis]: next,
+        [a]: Math.max(0, Math.min(100, aNew)),
+        [b]: Math.max(0, Math.min(100, bNew)),
+      } as unknown as FrictionState;
+      const sum = clamped.self + clamped.partner + clamped.system;
+      const drift = 100 - sum;
+      // Push leftover into the larger of the two others so we never
+      // distort the user's intent on `axis`.
+      if (drift !== 0) {
+        const pickAxis: FrictionAxis = clamped[a] >= clamped[b] ? a : b;
+        clamped[pickAxis] = Math.max(
+          0,
+          Math.min(100, clamped[pickAxis] + drift),
+        );
+      }
+      return clamped;
+    });
+  }
+
+  const sum = friction.self + friction.partner + friction.system;
+
   const submit = async () => {
-    if (harder === null) {
-      setError("Pick what made the round harder.");
+    if (sum !== 100) {
+      setError("The three sliders must total 100.");
       return;
     }
     setSubmitting(true);
@@ -91,7 +159,9 @@ export function RoundSurvey({
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             comm_balance: balance,
-            what_made_harder: harder,
+            attr_self: friction.self,
+            attr_partner: friction.partner,
+            attr_system: friction.system,
           }),
         },
       );
@@ -124,9 +194,15 @@ export function RoundSurvey({
           ✓ Reflection saved
         </span>
         <div className="text-[13px] text-[var(--color-ink-2)]">
-          You answered <b>{labelForBalance(submitted.comm_balance, meName, partnerName)}</b>{" "}
-          on the talk-balance, and that <b>{labelForHarder(submitted.what_made_harder)}</b>{" "}
-          made the round harder.
+          You answered{" "}
+          <b>{labelForBalance(submitted.comm_balance, meName, partnerName)}</b>{" "}
+          on the talk-balance, and split friction{" "}
+          <b>
+            {submitted.attr_self}% on you · {submitted.attr_partner}% on{" "}
+            {partnerName ?? "your partner"} · {submitted.attr_system}% on the
+            game
+          </b>
+          .
         </div>
       </div>
     );
@@ -179,41 +255,47 @@ export function RoundSurvey({
         </div>
       </div>
 
-      <fieldset className="flex flex-col gap-2">
+      <fieldset className="flex flex-col gap-3">
         <legend className="text-[13px] font-bold text-[var(--color-ink)]">
-          What made the round harder?
+          Where did the friction land?
         </legend>
-        <div className="grid grid-cols-2 gap-2">
-          {HARDER_OPTIONS.map((opt) => {
-            const active = harder === opt.key;
-            return (
-              <button
-                key={opt.key}
-                type="button"
-                onClick={() => setHarder(opt.key)}
-                disabled={submitting}
-                className="flex flex-col items-start gap-0.5 rounded-[10px] px-3 py-2 text-left text-[12px] disabled:opacity-50"
-                style={{
-                  background: active ? "var(--color-ink)" : "white",
-                  color: active ? "var(--color-paper)" : "var(--color-ink)",
-                  border: active
-                    ? "1.5px solid var(--color-ink)"
-                    : "1.5px solid var(--color-line)",
-                }}
-                aria-pressed={active}
-              >
-                <span className="font-bold">{opt.label}</span>
-                <span
-                  className="text-[11px]"
-                  style={{
-                    color: active ? "rgba(245,235,215,.85)" : "var(--color-ink-3)",
-                  }}
-                >
-                  {opt.hint}
-                </span>
-              </button>
-            );
-          })}
+        <p className="text-[12px] text-[var(--color-ink-3)]">
+          Split 100 points across the three sources. Sliders rebalance
+          as you adjust so the total always lands at 100.
+        </p>
+        <FrictionRow
+          axis="self"
+          label={`On ${meAnchor}`}
+          hint="I missed translating, mis-heard, or got confused."
+          value={friction.self}
+          onChange={(v) => setAxis("self", v)}
+          disabled={submitting}
+        />
+        <FrictionRow
+          axis="partner"
+          label={`On ${partnerAnchor}`}
+          hint="Their direction / question was hard to read."
+          value={friction.partner}
+          onChange={(v) => setAxis("partner", v)}
+          disabled={submitting}
+        />
+        <FrictionRow
+          axis="system"
+          label="On the game"
+          hint="The brief, the puzzle, or the rules made this hard."
+          value={friction.system}
+          onChange={(v) => setAxis("system", v)}
+          disabled={submitting}
+        />
+        <div
+          className="t-mono self-end text-[11px]"
+          style={{
+            color:
+              sum === 100 ? "var(--color-t-green)" : "var(--color-t-red)",
+          }}
+          aria-live="polite"
+        >
+          {sum} / 100
         </div>
       </fieldset>
 
@@ -227,12 +309,66 @@ export function RoundSurvey({
         <button
           type="button"
           onClick={submit}
-          disabled={submitting || harder === null}
+          disabled={submitting || sum !== 100}
           className="t-btn t-btn--primary t-btn--sm disabled:opacity-50"
         >
           {submitting ? "Saving…" : "Save reflection →"}
         </button>
       </div>
+    </div>
+  );
+}
+
+interface FrictionRowProps {
+  axis: FrictionAxis;
+  label: string;
+  hint: string;
+  value: number;
+  onChange: (v: number) => void;
+  disabled?: boolean;
+}
+
+function FrictionRow({
+  axis,
+  label,
+  hint,
+  value,
+  onChange,
+  disabled,
+}: FrictionRowProps) {
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-baseline justify-between">
+        <span className="text-[13px] font-semibold text-[var(--color-ink)]">
+          {label}
+        </span>
+        <span className="t-mono text-[12px] font-bold text-[var(--color-ink)]">
+          {value}%
+        </span>
+      </div>
+      <span className="text-[11px] text-[var(--color-ink-3)]">{hint}</span>
+      <input
+        type="range"
+        min={0}
+        max={100}
+        step={5}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        disabled={disabled}
+        className="w-full"
+        style={{
+          accentColor:
+            axis === "self"
+              ? "var(--color-t-orange)"
+              : axis === "partner"
+                ? "var(--color-t-blue)"
+                : "var(--color-t-purple)",
+        }}
+        aria-label={`Attribution to ${axis}`}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={value}
+      />
     </div>
   );
 }
@@ -249,17 +385,4 @@ function labelForBalance(
   if (v < 60) return "Pretty even";
   if (v < 80) return `${partner} more than ${me}`;
   return `Mostly ${partner}`;
-}
-
-function labelForHarder(reason: SurveyHarderReason): string {
-  switch (reason) {
-    case "me":
-      return "you";
-    case "partner":
-      return "your partner";
-    case "briefs":
-      return "the briefs";
-    case "puzzle":
-      return "the puzzle";
-  }
 }

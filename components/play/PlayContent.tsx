@@ -91,6 +91,13 @@ export interface PlayState {
     status: "pending" | "running" | "ended";
     started_at: string | null;
     ended_at: string | null;
+    /**
+     * GM opt-in flag set at end-round time. Drives whether the
+     * player-side RoundSurvey card mounts on /play after the round
+     * ends. Default false — the survey only fires when the GM
+     * explicitly picks "End + ask reflection" in the EndRoundModal.
+     */
+    reflection_survey_requested: boolean;
   } | null;
   pair_round: {
     id: string;

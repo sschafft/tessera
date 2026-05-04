@@ -470,28 +470,34 @@ export type Database = {
       }
       round_surveys: {
         Row: {
+          attr_partner: number | null
+          attr_self: number | null
+          attr_system: number | null
           comm_balance: number
           id: string
           participant_id: string
           round_id: string
           submitted_at: string
-          what_made_harder: string
         }
         Insert: {
+          attr_partner?: number | null
+          attr_self?: number | null
+          attr_system?: number | null
           comm_balance: number
           id?: string
           participant_id: string
           round_id: string
           submitted_at?: string
-          what_made_harder: string
         }
         Update: {
+          attr_partner?: number | null
+          attr_self?: number | null
+          attr_system?: number | null
           comm_balance?: number
           id?: string
           participant_id?: string
           round_id?: string
           submitted_at?: string
-          what_made_harder?: string
         }
         Relationships: [
           {
@@ -518,6 +524,7 @@ export type Database = {
           game_id: string
           id: string
           index: number
+          reflection_survey_requested: boolean
           started_at: string | null
           status: Database["public"]["Enums"]["round_status_t"]
         }
@@ -528,6 +535,7 @@ export type Database = {
           game_id: string
           id?: string
           index: number
+          reflection_survey_requested?: boolean
           started_at?: string | null
           status?: Database["public"]["Enums"]["round_status_t"]
         }
@@ -538,6 +546,7 @@ export type Database = {
           game_id?: string
           id?: string
           index?: number
+          reflection_survey_requested?: boolean
           started_at?: string | null
           status?: Database["public"]["Enums"]["round_status_t"]
         }

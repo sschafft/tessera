@@ -10,6 +10,17 @@ interface RouteParams {
   params: Promise<{ code: string }>;
 }
 
+interface EndRoundPayload {
+  /**
+   * Optional GM opt-in for the player-side reflection survey. When
+   * true, the route flips `rounds.reflection_survey_requested`
+   * before sealing the round so the player tabs know to mount the
+   * card. Auto-expiry from the timer hitting zero passes false (or
+   * omits the field) — an absent GM can't choose to ask.
+   */
+  request_survey?: boolean;
+}
+
 /**
  * End the active round. Idempotent. Either the GM clicks End round, or
  * the dashboard auto-fires this when the timer hits zero.
@@ -27,6 +38,17 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
+  let body: EndRoundPayload = {};
+  try {
+    const json = await req.json();
+    if (json && typeof json === "object") {
+      body = json as EndRoundPayload;
+    }
+  } catch {
+    // Empty body is fine — auto-end / legacy callers omit it.
+  }
+  const requestSurvey = body.request_survey === true;
+
   const repo = getRepository();
   const game = await repo.games.findByCode(code);
   if (!game || game.id !== claims.game_id) {
@@ -39,7 +61,20 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   if (round.status === "ended") {
     return NextResponse.json({ ok: true, already_ended: true });
   }
+  // Set the survey-requested flag BEFORE end() so the player tab's
+  // round-status flip from running → ended sees the boolean already
+  // true on the same snapshot. Order matters for the realtime
+  // refetch on the player side: a refetch racing past end() but
+  // before the flag flip would render the round-ended view without
+  // the survey card.
+  if (requestSurvey) {
+    await repo.rounds.setReflectionSurveyRequested(round.id, true);
+  }
   await repo.rounds.end(round.id);
   await publishGameEvent(game.id, "round_ended");
-  return NextResponse.json({ ok: true, round_id: round.id });
+  return NextResponse.json({
+    ok: true,
+    round_id: round.id,
+    reflection_survey_requested: requestSurvey,
+  });
 }

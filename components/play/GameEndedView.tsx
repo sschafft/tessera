@@ -30,13 +30,32 @@ interface PairSummary {
   }>;
 }
 
+interface FrictionMeans {
+  self: number;
+  partner: number;
+  system: number;
+}
+
+interface FrictionAsymmetry {
+  axis: "self" | "partner" | "system";
+  builder: number;
+  guider: number;
+  delta: number;
+}
+
 interface SurveyAggregate {
   round_id: string;
   round_index: number;
   response_count: number;
   /** 0..100 — 0 = "I did most of it" leaning, 100 = "partner did most". */
   avg_comm_balance: number;
-  harder_reasons: { me: number; partner: number; briefs: number; puzzle: number };
+  /** Forced-choice attribution mean across all respondents, sums to 100. */
+  mean: FrictionMeans;
+  by_role: {
+    builder: FrictionMeans | null;
+    guider: FrictionMeans | null;
+  };
+  asymmetry: FrictionAsymmetry[];
 }
 
 export function GameEndedView({ code, workshopName }: GameEndedViewProps) {
@@ -226,17 +245,23 @@ export function GameEndedView({ code, workshopName }: GameEndedViewProps) {
   );
 }
 
-const HARDER_LABELS: Record<keyof SurveyAggregate["harder_reasons"], string> =
-  {
-    me: "myself",
-    partner: "my partner",
-    briefs: "the briefs",
-    puzzle: "the puzzle",
-  };
+const AXIS_LABELS: Record<FrictionAsymmetry["axis"], string> = {
+  self: "themselves",
+  partner: "their partner",
+  system: "the game",
+};
 
-/** Aggregated reflection card. Surfaces what the room self-reported
- *  about who carried the conversation + what made each round hard.
- *  Anonymised — only counts + averages, no individual responses. */
+const AXIS_TINT: Record<FrictionAsymmetry["axis"], string> = {
+  self: "var(--color-t-orange)",
+  partner: "var(--color-t-blue)",
+  system: "var(--color-t-purple)",
+};
+
+/** Aggregated friction-attribution card (post 2026-05-04 reflection
+ *  redesign). Each round that cleared the floor renders a stacked
+ *  bar across self / partner / system, plus a callout when the
+ *  builder-vs-guider delta on any axis exceeds the threshold —
+ *  that's where the facilitator can start a conversation. */
 function SurveyAggregateCard({ surveys }: { surveys: SurveyAggregate[] }) {
   return (
     <div className="t-card flex w-full flex-col gap-3 p-5 text-left">
@@ -244,77 +269,101 @@ function SurveyAggregateCard({ surveys }: { surveys: SurveyAggregate[] }) {
         className="t-mono text-[11px] uppercase tracking-widest text-[var(--color-ink-3)]"
         style={{ letterSpacing: ".15em" }}
       >
-        Reflection roundup · per round
+        Where did the friction land?
       </span>
       <p className="text-[12px] text-[var(--color-ink-3)]">
-        Anonymised — counts + averages from the post-round prompts. Use
-        the breakdown as a starting place for the call.
+        Anonymised — averages from the post-round attribution sliders.
+        Each round splits 100 points across the three sources.
       </p>
       <ul className="flex flex-col gap-3">
-        {surveys.map((s) => {
-          const total = s.response_count;
-          const reasons = (
-            ["me", "partner", "briefs", "puzzle"] as const
-          ).map((k) => ({
-            key: k,
-            label: HARDER_LABELS[k],
-            count: s.harder_reasons[k] ?? 0,
-            pct: total > 0 ? Math.round((s.harder_reasons[k] / total) * 100) : 0,
-          }));
-          const top = reasons
-            .filter((r) => r.count > 0)
-            .sort((a, b) => b.count - a.count)[0];
-          return (
-            <li
-              key={s.round_id}
-              className="rounded-[12px] px-3 py-2.5"
-              style={{
-                background: "var(--color-paper-2)",
-                border: "1.5px solid var(--color-line)",
-              }}
-            >
-              <div className="mb-1.5 flex items-baseline justify-between">
-                <span className="t-mono text-[11px] font-bold uppercase tracking-wide text-[var(--color-ink-2)]">
-                  Round {s.round_index}
+        {surveys.map((s) => (
+          <li
+            key={s.round_id}
+            className="rounded-[12px] px-3 py-2.5"
+            style={{
+              background: "var(--color-paper-2)",
+              border: "1.5px solid var(--color-line)",
+            }}
+          >
+            <div className="mb-2 flex items-baseline justify-between">
+              <span className="t-mono text-[11px] font-bold uppercase tracking-wide text-[var(--color-ink-2)]">
+                Round {s.round_index}
+              </span>
+              <span className="t-mono text-[10px] text-[var(--color-ink-3)]">
+                {s.response_count} response
+                {s.response_count === 1 ? "" : "s"} · talk balance{" "}
+                <b>{labelForBalanceAvg(s.avg_comm_balance)}</b>
+              </span>
+            </div>
+            <FrictionBar mean={s.mean} />
+            {s.asymmetry.length > 0 && (
+              <p className="mt-2 text-[12px] text-[var(--color-ink-2)]">
+                <span
+                  className="t-mono mr-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                  style={{
+                    background: "var(--color-tint-orange)",
+                    color: "var(--color-t-orange)",
+                  }}
+                >
+                  asymmetry
                 </span>
-                <span className="t-mono text-[10px] text-[var(--color-ink-3)]">
-                  {total} response{total === 1 ? "" : "s"}
-                </span>
-              </div>
-              <div className="text-[12px] text-[var(--color-ink-2)]">
-                Talk balance averaged{" "}
-                <b>{labelForBalanceAvg(s.avg_comm_balance)}</b>.
-                {top && (
-                  <>
-                    {" "}
-                    Most cited <b>{top.label}</b> as what made it
-                    harder ({top.count}/{total}).
-                  </>
-                )}
-              </div>
-              <div className="mt-2 flex flex-wrap gap-1.5 text-[10px]">
-                {reasons.map((r) => (
-                  <span
-                    key={r.key}
-                    className="t-mono rounded-full px-2 py-0.5"
-                    style={{
-                      background:
-                        r.count > 0 ? "white" : "transparent",
-                      color:
-                        r.count > 0
-                          ? "var(--color-ink-2)"
-                          : "var(--color-ink-3)",
-                      border: "1px solid var(--color-line)",
-                    }}
-                  >
-                    {r.label}: {r.count}
-                  </span>
-                ))}
-              </div>
-            </li>
-          );
-        })}
+                Builders rated <b>{AXIS_LABELS[s.asymmetry[0]!.axis]}</b>{" "}
+                <b>{s.asymmetry[0]!.builder}%</b>; guiders rated it{" "}
+                <b>{s.asymmetry[0]!.guider}%</b>{" "}
+                ({s.asymmetry[0]!.delta}-point gap). Worth a check.
+              </p>
+            )}
+          </li>
+        ))}
       </ul>
+    </div>
+  );
+}
+
+function FrictionBar({ mean }: { mean: FrictionMeans }) {
+  const total = mean.self + mean.partner + mean.system || 1;
+  const segments: Array<{
+    key: FrictionAsymmetry["axis"];
+    label: string;
+    pct: number;
+  }> = [
+    { key: "self", label: "self", pct: (mean.self / total) * 100 },
+    { key: "partner", label: "partner", pct: (mean.partner / total) * 100 },
+    { key: "system", label: "system", pct: (mean.system / total) * 100 },
+  ];
+  return (
+    <div className="flex flex-col gap-1">
+      <div
+        className="flex h-2.5 overflow-hidden rounded-full"
+        style={{ background: "var(--color-line)" }}
+      >
+        {segments.map((seg) => (
+          <span
+            key={seg.key}
+            style={{
+              width: `${seg.pct}%`,
+              background: AXIS_TINT[seg.key],
+            }}
+            aria-label={`${seg.label} ${Math.round(seg.pct)}%`}
+          />
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px]">
+        {segments.map((seg) => (
+          <span
+            key={seg.key}
+            className="t-mono"
+            style={{ color: AXIS_TINT[seg.key] }}
+          >
+            <span
+              aria-hidden="true"
+              className="mr-1 inline-block h-2 w-2 rounded-full"
+              style={{ background: AXIS_TINT[seg.key] }}
+            />
+            {seg.label} {Math.round(seg.pct)}%
+          </span>
+        ))}
+      </div>
     </div>
   );
 }
