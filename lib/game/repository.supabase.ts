@@ -119,6 +119,7 @@ export class SupabaseGameRepository implements GameRepository {
   games: GameStore = {
     create: (input) => this.createGame(input),
     findByCode: (code) => this.findGameByCode(code),
+    delete: (id) => this.deleteGame(id),
     setStatus: (id, status) => this.setGameStatus(id, status),
     updateScoring: (id, patch) => this.updateScoring(id, patch),
     setBriefOn: (id, role, on) => this.setBriefOn(id, role, on),
@@ -259,6 +260,21 @@ export class SupabaseGameRepository implements GameRepository {
       .maybeSingle();
     if (error) throw new Error(`findGameByCode: ${error.message}`);
     return data ? toGameRecord(data) : null;
+  }
+
+  async deleteGame(game_id: string): Promise<void> {
+    // FK on delete cascade clauses live on every row that references
+    // games(id) (see supabase/migrations/20260426000000_tessera_v1_schema.sql),
+    // so a single DELETE FROM games WHERE id = ? takes participants,
+    // pairs, rounds, pair_rounds, briefs, placements, super_power_events,
+    // round_surveys, and breakouts with it. Used as the compensating
+    // action for partial CSV upload failures.
+    const supabase = getServiceClient();
+    const { error } = await supabase
+      .from("games")
+      .delete()
+      .eq("id", game_id);
+    if (error) throw new Error(`deleteGame: ${error.message}`);
   }
 
   async createParticipant(

@@ -227,6 +227,23 @@ export interface GameStore {
 
   findByCode(code: string): Promise<GameRecord | null>;
 
+  /**
+   * Hard-delete a game by id. Cascades through participants, pairs,
+   * rounds, pair_rounds, briefs, placements, super_power_events, and
+   * round_surveys via the FK `on delete cascade` clauses (see
+   * supabase/migrations/20260426000000_tessera_v1_schema.sql).
+   *
+   * Used as the compensating action when the CSV upload route fails
+   * partway through fan-out — without it, the route's TDD-claimed
+   * "transaction-equivalent flow" left orphan games + partial
+   * rosters in the DB on any post-create failure.
+   *
+   * No-op when the id doesn't match a game; returns nothing either way
+   * so callers can use it in catch handlers without branching on the
+   * "row already gone" case.
+   */
+  delete(game_id: string): Promise<void>;
+
   /** Update the game status (lobby → running → ended → purged). */
   setStatus(
     game_id: string,

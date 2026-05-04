@@ -87,6 +87,7 @@ class MemoryGameRepository implements GameRepository {
   games: GameStore = {
     create: (input) => this.createGame(input),
     findByCode: (code) => this.findGameByCode(code),
+    delete: (id) => this.deleteGame(id),
     setStatus: (id, status) => this.setGameStatus(id, status),
     updateScoring: (id, patch) => this.updateScoring(id, patch),
     setBriefOn: (id, role, on) => this.setBriefOn(id, role, on),
@@ -202,6 +203,55 @@ class MemoryGameRepository implements GameRepository {
     };
     this._gameTable.set(record.code, record);
     return record;
+  }
+
+  async deleteGame(game_id: string): Promise<void> {
+    // Mirror the Postgres FK cascade: dropping a game must also remove
+    // every row keyed by it. The in-memory backend has no FK enforcement
+    // so we emulate the cascade explicitly. Used by the upload route's
+    // compensating-rollback path; missing-key calls are a no-op.
+    let gameCode: string | null = null;
+    for (const [code, g] of this._gameTable.entries()) {
+      if (g.id === game_id) {
+        gameCode = code;
+        break;
+      }
+    }
+    if (gameCode === null) return;
+    this._gameTable.delete(gameCode);
+
+    for (const [id, p] of this._pairTable.entries()) {
+      if (p.game_id === game_id) this._pairTable.delete(id);
+    }
+    for (const [id, p] of this._participantTable.entries()) {
+      if (p.game_id === game_id) this._participantTable.delete(id);
+    }
+    const roundIds = new Set<string>();
+    for (const [id, r] of this._roundTable.entries()) {
+      if (r.game_id === game_id) {
+        roundIds.add(id);
+        this._roundTable.delete(id);
+      }
+    }
+    const pairRoundIds = new Set<string>();
+    for (const [id, pr] of this._pairRoundTable.entries()) {
+      if (roundIds.has(pr.round_id)) {
+        pairRoundIds.add(id);
+        this._pairRoundTable.delete(id);
+      }
+    }
+    for (const [id, b] of this._briefTable.entries()) {
+      if (pairRoundIds.has(b.pair_round_id)) this._briefTable.delete(id);
+    }
+    for (const [id, pl] of this._placementTable.entries()) {
+      if (pairRoundIds.has(pl.pair_round_id)) this._placementTable.delete(id);
+    }
+    for (const [id, ev] of this._superPowerTable.entries()) {
+      if (roundIds.has(ev.round_id)) this._superPowerTable.delete(id);
+    }
+    for (const [id, s] of this._roundSurveyTable.entries()) {
+      if (roundIds.has(s.round_id)) this._roundSurveyTable.delete(id);
+    }
   }
 
   async findGameByCode(code: string): Promise<GameRecord | null> {
