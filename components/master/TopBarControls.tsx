@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { Wordmark } from "@/components/primitives/Wordmark";
 import { RoleChip } from "@/components/primitives/RoleChip";
 import { timerPhaseFor, timerPhaseStyle } from "@/lib/util/timerPhase";
@@ -171,6 +172,13 @@ export function TopBarControls({
           </span>
         </div>
         <RoleChip role="Game master" />
+        <Link
+          href={`/g/${code}/master/briefs`}
+          className="t-mono text-[11px] font-bold uppercase tracking-wider underline text-[var(--color-ink-2)] hover:text-[var(--color-ink)]"
+          title="See and re-roll the briefs for every pair."
+        >
+          briefs ↗
+        </Link>
       </div>
       <div className="flex items-center gap-3">
         <span

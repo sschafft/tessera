@@ -75,8 +75,14 @@ function makeGame(overrides: Partial<GameRecord> = {}): GameRecord {
   };
 }
 
+interface MockPair {
+  id: string;
+  builder_brief_override?: { title: string; rules: string[] } | null;
+  guider_brief_override?: { title: string; rules: string[] } | null;
+}
+
 interface MockRepoState {
-  pairs: { id: string }[];
+  pairs: MockPair[];
   latestRound:
     | { id: string; index: number; status: "pending" | "running" | "ended" }
     | null;
@@ -84,10 +90,16 @@ interface MockRepoState {
     | { id: string; index: number; complexity: number; duration_seconds: number }
     | null;
   pairRoundsCreated: Array<{ pair_id: string; pattern_seed: string }>;
-  briefsUpserted: Array<{ pair_round_id: string; role: string; title: string }>;
+  briefsUpserted: Array<{
+    pair_round_id: string;
+    role: string;
+    source: string;
+    title: string;
+  }>;
   pendingRoundsDeleted: string[];
   startedRounds: string[];
   setStatusCalls: Array<{ id: string; status: string }>;
+  clearedOverrideForPairs: string[];
 }
 
 function makeRepo(state: MockRepoState): GameRepository {
@@ -107,6 +119,10 @@ function makeRepo(state: MockRepoState): GameRepository {
     participants: {} as never,
     pairs: {
       list: () => Promise.resolve(state.pairs as never),
+      clearBriefOverrides: (pair_id: string) => {
+        state.clearedOverrideForPairs.push(pair_id);
+        return Promise.resolve();
+      },
     } as never,
     rounds: {
       findLatest: () => Promise.resolve(state.latestRound as never),
@@ -150,11 +166,13 @@ function makeRepo(state: MockRepoState): GameRepository {
       upsert: (input: {
         pair_round_id: string;
         role: string;
+        source: string;
         title: string;
       }) => {
         state.briefsUpserted.push({
           pair_round_id: input.pair_round_id,
           role: input.role,
+          source: input.source,
           title: input.title,
         });
         return Promise.resolve({} as never);
@@ -176,6 +194,7 @@ function makeState(over: Partial<MockRepoState> = {}): MockRepoState {
     pendingRoundsDeleted: [],
     startedRounds: [],
     setStatusCalls: [],
+    clearedOverrideForPairs: [],
     ...over,
   };
 }
@@ -299,5 +318,101 @@ describe("startRound — shared start/replay orchestrator", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.kind).toBe("game_purged");
     expect(state.createdRound).toBeNull();
+  });
+});
+
+describe("startRound — per-pair brief overrides", () => {
+  it("consumes builder + guider overrides on round 1 (no pickBrief calls)", async () => {
+    const state = makeState({
+      pairs: [
+        {
+          id: "pair-a",
+          builder_brief_override: { title: "Seeded B", rules: ["rule b"] },
+          guider_brief_override: { title: "Seeded G", rules: ["rule g"] },
+        },
+        // Second pair to ensure mixed override / non-override coexists.
+        { id: "pair-b" },
+      ],
+    });
+    const r = await startRound(makeRepo(state), makeGame());
+    expect(r.ok).toBe(true);
+
+    // pair-a's briefs should come from the override (source=gm).
+    const aBuilder = state.briefsUpserted.find(
+      (b) => b.role === "builder" && b.title === "Seeded B",
+    );
+    const aGuider = state.briefsUpserted.find(
+      (b) => b.role === "guider" && b.title === "Seeded G",
+    );
+    expect(aBuilder?.source).toBe("gm");
+    expect(aGuider?.source).toBe("gm");
+
+    // pair-a's pickBrief was NOT called for either side (mock returns
+    // `${role}-${complexity}` titles when called). Searching for that
+    // pattern under pair-a's pair_round_id confirms.
+    const aBuilderViaPick = state.briefsUpserted.find(
+      (b) => b.role === "builder" && b.title === "builder-3",
+    );
+    const aGuiderViaPick = state.briefsUpserted.find(
+      (b) => b.role === "guider" && b.title === "guider-3",
+    );
+    // pair-b ran through pickBrief, so those titles should exist —
+    // but they're for pair-b, not pair-a.
+    expect(aBuilderViaPick).toBeDefined();
+    expect(aGuiderViaPick).toBeDefined();
+
+    // Override columns get cleared for pair-a only.
+    expect(state.clearedOverrideForPairs).toEqual(["pair-a"]);
+  });
+
+  it("ignores overrides on round 2+ — falls through to pickBrief", async () => {
+    const state = makeState({
+      latestRound: { id: "r-prev", index: 1, status: "ended" },
+      pairs: [
+        {
+          id: "pair-a",
+          builder_brief_override: {
+            title: "Stale Seed",
+            rules: ["should not appear"],
+          },
+        },
+      ],
+    });
+    const r = await startRound(makeRepo(state), makeGame());
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.index).toBe(2);
+    // Override title must NOT be in the upserted briefs — round 2
+    // takes the library/AI path even when a stale override remains.
+    expect(
+      state.briefsUpserted.find((b) => b.title === "Stale Seed"),
+    ).toBeUndefined();
+    // No clear call either — there was nothing consumed this round.
+    expect(state.clearedOverrideForPairs).toEqual([]);
+  });
+
+  it("partial overrides — only the seeded side wins, other side runs pickBrief", async () => {
+    const state = makeState({
+      pairs: [
+        {
+          id: "pair-a",
+          builder_brief_override: {
+            title: "Builder Only",
+            rules: ["just the builder"],
+          },
+          guider_brief_override: null,
+        },
+      ],
+    });
+    const r = await startRound(makeRepo(state), makeGame());
+    expect(r.ok).toBe(true);
+    const builderBrief = state.briefsUpserted.find(
+      (b) => b.role === "builder",
+    );
+    const guiderBrief = state.briefsUpserted.find((b) => b.role === "guider");
+    expect(builderBrief?.title).toBe("Builder Only");
+    expect(builderBrief?.source).toBe("gm");
+    expect(guiderBrief?.title).toBe("guider-3"); // pickBrief mock title
+    // Clear still fires because at least one side was consumed.
+    expect(state.clearedOverrideForPairs).toEqual(["pair-a"]);
   });
 });

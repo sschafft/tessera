@@ -15,6 +15,7 @@ import {
   type ParsedRow,
 } from "@/lib/csv/pairs";
 import { isHttpUrl } from "@/lib/util/url";
+import { sanitiseCustomBrief } from "@/lib/briefs/customValidator";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -100,6 +101,49 @@ export async function POST(req: NextRequest) {
   if (teamErrors.length > 0) {
     return NextResponse.json(
       { error: "team_allocation_failed", team_errors: teamErrors },
+      { status: 400 },
+    );
+  }
+
+  // Per-pair brief override validation. Each row that carries
+  // brief_title + brief_rules must pass the same length/count
+  // limits that GM custom briefs honour. Reject before we touch
+  // the database so a bad brief never strands a half-created
+  // game (the compensating rollback would still catch it, but
+  // surfacing 400 here is the right shape).
+  const briefErrors: Array<{
+    line: number;
+    role: string;
+    name: string;
+    error: string;
+  }> = [];
+  for (const r of rows) {
+    if (!r.brief_title && r.brief_rules.length === 0) continue;
+    const checked = sanitiseCustomBrief({
+      title: r.brief_title ?? "",
+      rules: r.brief_rules,
+    });
+    if (checked && "error" in checked) {
+      briefErrors.push({
+        line: r.line,
+        role: r.role,
+        name: r.name,
+        error: checked.error,
+      });
+    } else if (checked === null && r.brief_title) {
+      // Title set but rules missing → treat as a validation error
+      // rather than silently accepting a title-only override.
+      briefErrors.push({
+        line: r.line,
+        role: r.role,
+        name: r.name,
+        error: "rules_required",
+      });
+    }
+  }
+  if (briefErrors.length > 0) {
+    return NextResponse.json(
+      { error: "brief_validation_failed", brief_errors: briefErrors },
       { status: 400 },
     );
   }
@@ -267,6 +311,21 @@ export async function POST(req: NextRequest) {
       if (team.team_name) {
         await repo.pairs.setDisplayName(pair.id, team.team_name);
       }
+      // Per-pair brief overrides come from the same row as the
+      // role they're for: the builder row's brief_title/rules
+      // become the builder brief, the guider row's become the
+      // guider brief. Validate against the same length / count
+      // limits as the GM custom briefs in /api/games — failures
+      // throw and trip the outer compensating-rollback so a bad
+      // brief never persists half a game.
+      const builderOverride = briefFromRow(team.builder, pair.id, "builder");
+      const guiderOverride = briefFromRow(team.guider, pair.id, "guider");
+      if (builderOverride || guiderOverride) {
+        await repo.pairs.setBriefOverrides(pair.id, {
+          builder: builderOverride,
+          guider: guiderOverride,
+        });
+      }
       for (const obs of team.observers) {
         const obsId = participantIdByName.get(obs.name);
         if (obsId) {
@@ -329,4 +388,27 @@ function pickBaseUrl(req: NextRequest): string {
   if (env) return env.replace(/\/+$/, "");
   const url = new URL(req.url);
   return `${url.protocol}//${url.host}`;
+}
+
+/**
+ * Read the brief override from a parsed CSV row. Validation already
+ * ran above the write phase, so we just trust the fields here and
+ * shape them for the repository call. Returns null when the row
+ * carried no override columns at all.
+ *
+ * Belt-and-braces: the role argument exists so a future caller
+ * doesn't accidentally cross-feed a builder row into a guider slot.
+ * Today every call passes the row's own role; future re-shape might
+ * pull builder briefs from the guider row, etc., and the assertion
+ * makes that decision explicit.
+ */
+function briefFromRow(
+  row: ParsedRow,
+  _pair_id: string,
+  role: "builder" | "guider",
+): { title: string; rules: string[] } | null {
+  void _pair_id;
+  if (row.role !== role) return null;
+  if (!row.brief_title || row.brief_rules.length === 0) return null;
+  return { title: row.brief_title, rules: row.brief_rules };
 }

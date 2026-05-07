@@ -12,6 +12,7 @@ import {
   usesAIBriefs,
 } from "@/lib/briefs/limits";
 import { isHttpUrl } from "@/lib/util/url";
+import { sanitiseCustomBrief } from "@/lib/briefs/customValidator";
 import type {
   BriefSource,
   CreateGameInput,
@@ -47,28 +48,7 @@ interface CreateGamePayload {
   breakout_provider?: "none" | "google_meet" | "jitsi";
 }
 
-const CUSTOM_TITLE_MAX = 80;
-const CUSTOM_RULE_MAX = 280;
-const CUSTOM_RULES_MAX = 5;
-
-function sanitiseCustom(b: CustomBriefPayload | null | undefined) {
-  if (!b) return null;
-  const title = typeof b.title === "string" ? b.title.trim() : "";
-  if (!title) return null;
-  if (title.length > CUSTOM_TITLE_MAX) return { error: "title_too_long" } as const;
-  const rules = Array.isArray(b.rules)
-    ? b.rules
-        .filter((r): r is string => typeof r === "string")
-        .map((r) => r.trim())
-        .filter(Boolean)
-    : [];
-  if (rules.length === 0) return { error: "rules_required" } as const;
-  if (rules.length > CUSTOM_RULES_MAX) return { error: "too_many_rules" } as const;
-  if (rules.some((r) => r.length > CUSTOM_RULE_MAX)) {
-    return { error: "rule_too_long" } as const;
-  }
-  return { title, rules };
-}
+const sanitiseCustom = sanitiseCustomBrief;
 
 function validate(payload: CreateGamePayload): CreateGameInput | { error: string } {
   if (!payload.workshop_name || typeof payload.workshop_name !== "string") {

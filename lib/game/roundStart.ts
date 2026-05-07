@@ -132,17 +132,39 @@ export async function startRound(
   // ─── Preflight: build every (goal, builder, guider) tuple in
   // ─── memory. If any AI brief fails and fallback isn't allowed,
   // ─── return a typed result without persisting anything.
+  //
+  // Per-pair brief overrides (set at game-create via the CSV upload
+  // flow) preempt pickBrief on round 1 only. The override columns
+  // are cleared after commit so round 2+ run the normal flow. We
+  // track which pairs consumed an override so the post-commit
+  // cleanup loop knows which rows to nuke.
   const usedBuilderTitles: string[] = [];
   const usedGuiderTitles: string[] = [];
   const prepared: PreparedPair[] = [];
+  const pairsWithConsumedOverride: string[] = [];
+  const isFirstRound = nextIndex === 1;
   try {
     for (const pair of pairs) {
       const seed = `${game.id}:${nextIndex}:${pair.id}:${Date.now()}`;
       const goal = generatePattern({ complexity, seed });
       const entry: PreparedPair = { pair_id: pair.id, seed, goal };
-      const [builderBrief, guiderBrief] = await Promise.all([
-        game.builder_brief_on
-          ? pickBrief({
+
+      // Override-aware brief selection. When the GM seeded a brief
+      // for this side AND it's round 1, the seed wins; otherwise
+      // fall through to pickBrief. Either or both sides can be
+      // overridden independently.
+      const builderOverride = isFirstRound ? pair.builder_brief_override : null;
+      const guiderOverride = isFirstRound ? pair.guider_brief_override : null;
+
+      const builderBriefP = !game.builder_brief_on
+        ? Promise.resolve(undefined)
+        : builderOverride
+          ? Promise.resolve({
+              source: "gm" as const,
+              title: builderOverride.title,
+              rules: builderOverride.rules,
+            })
+          : pickBrief({
               role: "builder",
               complexity,
               source: builderSource,
@@ -150,10 +172,17 @@ export async function startRound(
               custom: game.builder_brief_custom,
               exclude_titles: usedBuilderTitles,
               allow_library_fallback: allowFallback,
+            });
+
+      const guiderBriefP = !game.guider_brief_on
+        ? Promise.resolve(undefined)
+        : guiderOverride
+          ? Promise.resolve({
+              source: "gm" as const,
+              title: guiderOverride.title,
+              rules: guiderOverride.rules,
             })
-          : Promise.resolve(undefined),
-        game.guider_brief_on
-          ? pickBrief({
+          : pickBrief({
               role: "guider",
               complexity,
               source: guiderSource,
@@ -161,8 +190,11 @@ export async function startRound(
               custom: game.guider_brief_custom,
               exclude_titles: usedGuiderTitles,
               allow_library_fallback: allowFallback,
-            })
-          : Promise.resolve(undefined),
+            });
+
+      const [builderBrief, guiderBrief] = await Promise.all([
+        builderBriefP,
+        guiderBriefP,
       ]);
       if (builderBrief) {
         entry.builder = builderBrief;
@@ -171,6 +203,9 @@ export async function startRound(
       if (guiderBrief) {
         entry.guider = guiderBrief;
         usedGuiderTitles.push(guiderBrief.title);
+      }
+      if (builderOverride || guiderOverride) {
+        pairsWithConsumedOverride.push(pair.id);
       }
       prepared.push(entry);
     }
@@ -226,6 +261,23 @@ export async function startRound(
   // running — important for the replay path where the game was
   // already ended before this call.
   await repo.games.setStatus(game.id, "running");
+
+  // Clear consumed brief overrides so round 2+ falls back to the
+  // game-level brief source. Best-effort: a transient failure here
+  // means the override leaks into round 2, which is annoying but
+  // not destructive — the GM can re-roll. The round itself is
+  // already committed, so we don't surface this as a route error.
+  for (const pair_id of pairsWithConsumedOverride) {
+    try {
+      await repo.pairs.clearBriefOverrides(pair_id);
+    } catch (err) {
+      console.warn(
+        `[roundStart] failed to clear brief override for pair ${pair_id}:`,
+        err,
+      );
+    }
+  }
+
   await publishGameEvent(game.id, "round_started");
 
   return {

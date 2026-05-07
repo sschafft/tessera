@@ -144,6 +144,15 @@ export interface PairRecord {
    * issue a DELETE on game-end. Always paired with breakout_call_url.
    */
   breakout_event_id: string | null;
+  /**
+   * Pre-game brief overrides — populated when the GM seeds specific
+   * briefs (typically via the CSV upload flow). The roundStart
+   * orchestrator consumes these on round 1 and clears them so round
+   * 2+ revert to the game-level brief source. Null when no override
+   * was set or once it's been consumed.
+   */
+  builder_brief_override: { title: string; rules: string[] } | null;
+  guider_brief_override: { title: string; rules: string[] } | null;
 }
 
 export type RoundStatus = "pending" | "running" | "ended";
@@ -389,6 +398,29 @@ export interface PairStore {
    * the same pair return to the lobby with the rest.
    */
   disband(pair_id: string): Promise<void>;
+
+  /**
+   * Persist per-pair brief overrides set at game-create time
+   * (typically via the CSV upload flow). Either side may be null
+   * to leave that role to the round-start library/AI flow. The
+   * roundStart orchestrator reads these on round 1 and calls
+   * `clearBriefOverrides` after committing so round 2+ run the
+   * normal pickBrief path — the override is a one-shot seed, not
+   * a permanent pin.
+   */
+  setBriefOverrides(
+    pair_id: string,
+    overrides: {
+      builder: { title: string; rules: string[] } | null;
+      guider: { title: string; rules: string[] } | null;
+    },
+  ): Promise<void>;
+
+  /**
+   * Null both override columns. Called by `roundStart` after a
+   * round-1 commit consumed the values. Idempotent.
+   */
+  clearBriefOverrides(pair_id: string): Promise<void>;
 
   /**
    * Persist the per-pair breakout link + originating calendar event.

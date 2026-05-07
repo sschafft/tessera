@@ -145,6 +145,9 @@ export class SupabaseGameRepository implements GameRepository {
     setDisplayName: (pair_id, name) => this.setPairDisplayName(pair_id, name),
     clearAllocations: (game_id) => this.clearAllocations(game_id),
     disband: (pair_id) => this.disbandPair(pair_id),
+    setBriefOverrides: (pair_id, overrides) =>
+      this.setBriefOverrides(pair_id, overrides),
+    clearBriefOverrides: (pair_id) => this.clearBriefOverrides(pair_id),
     setBreakout: (pair_id, breakout) => this.setPairBreakout(pair_id, breakout),
     clearBreakout: (pair_id) => this.clearPairBreakout(pair_id),
     listWithBreakouts: (game_id) => this.listPairsWithBreakouts(game_id),
@@ -733,6 +736,36 @@ export class SupabaseGameRepository implements GameRepository {
       })
       .eq("id", pair_id);
     if (error) throw new Error(`setPairBreakout: ${error.message}`);
+  }
+
+  async setBriefOverrides(
+    pair_id: string,
+    overrides: {
+      builder: { title: string; rules: string[] } | null;
+      guider: { title: string; rules: string[] } | null;
+    },
+  ): Promise<void> {
+    const supabase = getServiceClient();
+    const { error } = await supabase
+      .from("pairs")
+      .update({
+        builder_brief_override: overrides.builder,
+        guider_brief_override: overrides.guider,
+      })
+      .eq("id", pair_id);
+    if (error) throw new Error(`setBriefOverrides: ${error.message}`);
+  }
+
+  async clearBriefOverrides(pair_id: string): Promise<void> {
+    const supabase = getServiceClient();
+    const { error } = await supabase
+      .from("pairs")
+      .update({
+        builder_brief_override: null,
+        guider_brief_override: null,
+      })
+      .eq("id", pair_id);
+    if (error) throw new Error(`clearBriefOverrides: ${error.message}`);
   }
 
   async clearPairBreakout(pair_id: string): Promise<void> {
@@ -1360,7 +1393,12 @@ function toPlacementRecord(row: DbPlacement): PlacementRecord {
   };
 }
 
-function toPairRecord(row: DbPair): PairRecord {
+function toPairRecord(
+  row: DbPair & {
+    builder_brief_override?: unknown;
+    guider_brief_override?: unknown;
+  },
+): PairRecord {
   return {
     id: row.id,
     game_id: row.game_id,
@@ -1370,7 +1408,21 @@ function toPairRecord(row: DbPair): PairRecord {
     created_at: row.created_at,
     breakout_call_url: row.breakout_call_url ?? null,
     breakout_event_id: row.breakout_event_id ?? null,
+    builder_brief_override: toBriefOverride(row.builder_brief_override),
+    guider_brief_override: toBriefOverride(row.guider_brief_override),
   };
+}
+
+function toBriefOverride(
+  raw: unknown,
+): { title: string; rules: string[] } | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as { title?: unknown; rules?: unknown };
+  if (typeof obj.title !== "string") return null;
+  if (!Array.isArray(obj.rules)) return null;
+  const rules = obj.rules.filter((r): r is string => typeof r === "string");
+  if (rules.length === 0) return null;
+  return { title: obj.title, rules };
 }
 
 function toRoundRecord(

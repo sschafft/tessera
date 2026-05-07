@@ -7,6 +7,11 @@
 
 export type CsvRole = "builder" | "guider" | "observer";
 
+export interface BriefOverrideInput {
+  title: string;
+  rules: string[];
+}
+
 export interface ParsedRow {
   /** 1-based row number including the header. Used for error messages. */
   line: number;
@@ -14,6 +19,15 @@ export interface ParsedRow {
   email: string | null;
   team_name: string;
   role: CsvRole;
+  /**
+   * Optional per-pair brief override. Lives on every row of a team
+   * — the upload route only reads it from the row whose role
+   * matches (builder rows carry builder briefs, guider rows carry
+   * guider briefs). When empty / missing the row contributes
+   * nothing to the override.
+   */
+  brief_title: string | null;
+  brief_rules: string[];
 }
 
 export interface ParseError {
@@ -28,6 +42,14 @@ export interface ParseResult {
 
 /** Header columns the parser expects, in this order. */
 export const CSV_HEADERS = ["name", "email", "team_name", "role"] as const;
+
+/** Optional columns. When the GM wants to pre-write per-pair briefs,
+ *  they fill in `brief_title` + `brief_rules` on the same row as the
+ *  role the brief is for: builder row's columns become the builder
+ *  brief, guider row's become the guider brief. Multi-rule cells are
+ *  `|`-separated to avoid the multi-line CSV cell trap.
+ */
+export const OPTIONAL_HEADERS = ["brief_title", "brief_rules"] as const;
 
 const ROLE_VALUES: ReadonlySet<string> = new Set([
   "builder",
@@ -146,16 +168,30 @@ export function parsePairsCsv(text: string): ParseResult {
     });
     return { rows, errors };
   }
-  // Map column header → index. Tolerate extra columns; require the four.
-  const indexOf: Record<(typeof CSV_HEADERS)[number], number> = {
+  // Map column header → index. Tolerate extra columns; require the
+  // four canonical ones, recognise the optional brief columns when
+  // present.
+  const indexOf: Record<
+    (typeof CSV_HEADERS)[number] | (typeof OPTIONAL_HEADERS)[number],
+    number
+  > = {
     name: -1,
     email: -1,
     team_name: -1,
     role: -1,
+    brief_title: -1,
+    brief_rules: -1,
   };
   for (let i = 0; i < headerCells.length; i++) {
     const h = headerCells[i]!;
-    if (h === "name" || h === "team_name" || h === "role" || h === "email") {
+    if (
+      h === "name" ||
+      h === "team_name" ||
+      h === "role" ||
+      h === "email" ||
+      h === "brief_title" ||
+      h === "brief_rules"
+    ) {
       indexOf[h] = i;
     }
   }
@@ -233,12 +269,28 @@ export function parsePairsCsv(text: string): ParseResult {
       email = emailRaw.toLowerCase();
     }
 
+    // Optional brief override columns. The CSV layer just surfaces
+    // raw values; the upload route validates length / count and
+    // turns them into a per-pair override. `brief_rules` is split
+    // on `|` (NOT newlines — Excel quotes those unevenly).
+    const briefTitleRaw =
+      indexOf.brief_title >= 0 ? (cells[indexOf.brief_title] ?? "") : "";
+    const briefRulesRaw =
+      indexOf.brief_rules >= 0 ? (cells[indexOf.brief_rules] ?? "") : "";
+    const brief_title = briefTitleRaw.length > 0 ? briefTitleRaw : null;
+    const brief_rules = briefRulesRaw
+      .split("|")
+      .map((r) => r.trim())
+      .filter((r) => r.length > 0);
+
     rows.push({
       line: lineNum,
       name,
       email,
       team_name,
       role: role as CsvRole,
+      brief_title,
+      brief_rules,
     });
   }
 
@@ -296,39 +348,60 @@ function quoteField(s: string): string {
   return s;
 }
 
-/** The downloadable template — header + a couple of example rows. */
+/** The downloadable template — header + a couple of example rows.
+ *  Includes the optional `brief_title` and `brief_rules` columns so
+ *  the GM sees the format for pre-writing briefs at upload time
+ *  (filled on one team to demonstrate, blank on the other).
+ *  `brief_rules` is `|`-separated. */
 export function pairsTemplateCsv(): string {
-  const header = ["name", "email", "team_name", "role"].join(",");
+  const header = [
+    "name",
+    "email",
+    "team_name",
+    "role",
+    "brief_title",
+    "brief_rules",
+  ].join(",");
   const examples = [
     [
       "Sam Architect",
       "sam@example.com",
       "The Pelicans",
       "builder",
+      "Distracted",
+      "Talk about anything other than the game.|You can only respond to guidance if explicitly asked.",
     ],
     [
       "Jules Engineer",
       "jules@example.com",
       "The Pelicans",
       "guider",
+      "Nautical only",
+      "Describe shapes only with nautical terms.|Avoid 'left' and 'right' — use port and starboard.",
     ],
     [
       "Hugo Reviewer",
       "hugo@example.com",
       "The Pelicans",
       "observer",
+      "",
+      "",
     ],
     [
       "Avery Designer",
       "avery@example.com",
       "The Otters",
       "builder",
+      "",
+      "",
     ],
     [
       "Cameron Researcher",
       "cameron@example.com",
       "The Otters",
       "guider",
+      "",
+      "",
     ],
   ].map((cells) => cells.map(quoteField).join(","));
   return [header, ...examples].join("\n") + "\n";
