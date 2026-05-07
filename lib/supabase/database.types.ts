@@ -291,30 +291,36 @@ export type Database = {
         Row: {
           breakout_call_url: string | null
           breakout_event_id: string | null
+          builder_brief_override: Json | null
           builder_id: string | null
           created_at: string
           display_name: string | null
           game_id: string
+          guider_brief_override: Json | null
           guider_id: string | null
           id: string
         }
         Insert: {
           breakout_call_url?: string | null
           breakout_event_id?: string | null
+          builder_brief_override?: Json | null
           builder_id?: string | null
           created_at?: string
           display_name?: string | null
           game_id: string
+          guider_brief_override?: Json | null
           guider_id?: string | null
           id?: string
         }
         Update: {
           breakout_call_url?: string | null
           breakout_event_id?: string | null
+          builder_brief_override?: Json | null
           builder_id?: string | null
           created_at?: string
           display_name?: string | null
           game_id?: string
+          guider_brief_override?: Json | null
           guider_id?: string | null
           id?: string
         }

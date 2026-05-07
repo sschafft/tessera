@@ -113,6 +113,9 @@ class MemoryGameRepository implements GameRepository {
     setDisplayName: (pair_id, name) => this.setPairDisplayName(pair_id, name),
     clearAllocations: (game_id) => this.clearAllocations(game_id),
     disband: (pair_id) => this.disbandPair(pair_id),
+    setBriefOverrides: (pair_id, overrides) =>
+      this.setBriefOverrides(pair_id, overrides),
+    clearBriefOverrides: (pair_id) => this.clearBriefOverrides(pair_id),
     setBreakout: (pair_id, breakout) => this.setPairBreakout(pair_id, breakout),
     clearBreakout: (pair_id) => this.clearPairBreakout(pair_id),
     listWithBreakouts: (game_id) => this.listPairsWithBreakouts(game_id),
@@ -374,6 +377,8 @@ class MemoryGameRepository implements GameRepository {
       created_at: new Date().toISOString(),
       breakout_call_url: null,
       breakout_event_id: null,
+      builder_brief_override: null,
+      guider_brief_override: null,
     };
     this._pairTable.set(pair.id, pair);
     builder.role = "builder";
@@ -432,6 +437,30 @@ class MemoryGameRepository implements GameRepository {
       }
     }
     this._pairTable.delete(pair_id);
+  }
+
+  async setBriefOverrides(
+    pair_id: string,
+    overrides: {
+      builder: { title: string; rules: string[] } | null;
+      guider: { title: string; rules: string[] } | null;
+    },
+  ): Promise<void> {
+    const pair = this._pairTable.get(pair_id);
+    if (!pair) return;
+    pair.builder_brief_override = overrides.builder
+      ? { title: overrides.builder.title, rules: [...overrides.builder.rules] }
+      : null;
+    pair.guider_brief_override = overrides.guider
+      ? { title: overrides.guider.title, rules: [...overrides.guider.rules] }
+      : null;
+  }
+
+  async clearBriefOverrides(pair_id: string): Promise<void> {
+    const pair = this._pairTable.get(pair_id);
+    if (!pair) return;
+    pair.builder_brief_override = null;
+    pair.guider_brief_override = null;
   }
 
   async createRound(input: {

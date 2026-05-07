@@ -31,6 +31,17 @@ export interface LobbyPair {
     guider: { title: string; rules: string[] } | null;
   };
   /**
+   * Per-pair brief overrides set at game-create (typically via CSV
+   * upload). Surfaced to the GM dashboard so the BriefsView can
+   * show "Round 1 will use this seeded brief" annotations alongside
+   * the current-round briefs. Cleared by `roundStart` after the
+   * round-1 commit so this is null on round 2+.
+   */
+  brief_overrides: {
+    builder: { title: string; rules: string[] } | null;
+    guider: { title: string; rules: string[] } | null;
+  };
+  /**
    * Live per-pair progress. Null when no round is running. Populated
    * by the lobby route when a round is active so the PairsPanel can
    * render a "✓ complete" overlay or "% correct" chip per row.
