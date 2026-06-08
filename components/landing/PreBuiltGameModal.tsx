@@ -2,10 +2,21 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  BreakoutProviderPicker,
+  type BreakoutProvider,
+} from "./BreakoutProviderPicker";
 
 export interface PreBuiltGameModalProps {
   open: boolean;
   onClose: () => void;
+  /**
+   * Whether Google OAuth is configured server-side. Threaded through
+   * from `LandingHero` → `LandingTabs`. When false, the picker greys
+   * out the Google Meet option so the GM can still pick Jitsi or
+   * no-breakouts.
+   */
+  googleMeetAvailable: boolean;
 }
 
 interface UploadSuccess {
@@ -46,20 +57,38 @@ interface UploadErrorTeam {
  * is for the *roster* — you can fine-tune the rest from the GM
  * dashboard once the room is open.
  */
-export function PreBuiltGameModal({ open, onClose }: PreBuiltGameModalProps) {
+export function PreBuiltGameModal({
+  open,
+  onClose,
+  googleMeetAvailable,
+}: PreBuiltGameModalProps) {
   // Conditionally mount so internal state is fresh on each open. The
   // alternative (reset-in-effect) tripped the no-set-state-in-effect
   // lint; this is also cheaper since React just unmounts on close.
   if (!open) return null;
-  return <PreBuiltGameModalContent onClose={onClose} />;
+  return (
+    <PreBuiltGameModalContent
+      onClose={onClose}
+      googleMeetAvailable={googleMeetAvailable}
+    />
+  );
 }
 
-function PreBuiltGameModalContent({ onClose }: { onClose: () => void }) {
+function PreBuiltGameModalContent({
+  onClose,
+  googleMeetAvailable,
+}: {
+  onClose: () => void;
+  googleMeetAvailable: boolean;
+}) {
   const router = useRouter();
   const [workshopName, setWorkshopName] = useState("");
   const [complexity, setComplexity] = useState(5);
   const [builderBrief, setBuilderBrief] = useState(true);
   const [guiderBrief, setGuiderBrief] = useState(true);
+  const [breakoutProvider, setBreakoutProvider] =
+    useState<BreakoutProvider>("none");
+  const [videoCallUrl, setVideoCallUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -100,8 +129,12 @@ function PreBuiltGameModalContent({ onClose }: { onClose: () => void }) {
           round_duration_seconds: 480,
           builder_brief_on: builderBrief,
           guider_brief_on: guiderBrief,
+          // CSV upload is a remote-only flow today — there's no
+          // value in pre-building a roster for an in-person session
+          // where you wouldn't need recovery URLs anyway.
           meeting_mode: "remote",
-          breakout_provider: "none",
+          breakout_provider: breakoutProvider,
+          video_call_url: videoCallUrl.trim() || undefined,
         }),
       );
       const res = await fetch("/api/games/upload", {
@@ -184,6 +217,11 @@ function PreBuiltGameModalContent({ onClose }: { onClose: () => void }) {
             setBuilderBrief={setBuilderBrief}
             guiderBrief={guiderBrief}
             setGuiderBrief={setGuiderBrief}
+            breakoutProvider={breakoutProvider}
+            setBreakoutProvider={setBreakoutProvider}
+            videoCallUrl={videoCallUrl}
+            setVideoCallUrl={setVideoCallUrl}
+            googleMeetAvailable={googleMeetAvailable}
             file={file}
             setFile={setFile}
             error={error}
@@ -208,6 +246,11 @@ function SetupView({
   setBuilderBrief,
   guiderBrief,
   setGuiderBrief,
+  breakoutProvider,
+  setBreakoutProvider,
+  videoCallUrl,
+  setVideoCallUrl,
+  googleMeetAvailable,
   file,
   setFile,
   error,
@@ -225,6 +268,11 @@ function SetupView({
   setBuilderBrief: (b: boolean) => void;
   guiderBrief: boolean;
   setGuiderBrief: (b: boolean) => void;
+  breakoutProvider: BreakoutProvider;
+  setBreakoutProvider: (p: BreakoutProvider) => void;
+  videoCallUrl: string;
+  setVideoCallUrl: (s: string) => void;
+  googleMeetAvailable: boolean;
   file: File | null;
   setFile: (f: File | null) => void;
   error: string | null;
@@ -250,10 +298,14 @@ function SetupView({
           onClick={onClose}
           aria-label="Close"
           disabled={submitting}
-          className="t-mono rounded-full bg-[var(--color-paper-2)] px-3 py-1.5 text-[12px] font-bold disabled:opacity-50"
-          style={{ border: "1.5px solid var(--color-line)" }}
+          className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-full text-[16px] font-semibold transition-colors hover:bg-[var(--color-paper-2)] disabled:opacity-50"
+          style={{
+            border: "1.5px solid var(--color-line)",
+            color: "var(--color-ink-2)",
+            background: "#fff",
+          }}
         >
-          ×
+          <span aria-hidden>×</span>
         </button>
       </div>
 
@@ -354,6 +406,51 @@ function SetupView({
       <div className="flex flex-col gap-1.5">
         <label
           className="t-mono text-[11px] uppercase tracking-wide text-[var(--color-ink-3)]"
+          htmlFor="prebuilt-video-call-url"
+        >
+          Workshop call URL <span className="text-[var(--color-ink-3)]">(optional)</span>
+        </label>
+        <input
+          id="prebuilt-video-call-url"
+          type="url"
+          inputMode="url"
+          value={videoCallUrl}
+          onChange={(e) => setVideoCallUrl(e.target.value)}
+          placeholder="https://meet.example.com/q3-kickoff"
+          disabled={submitting}
+          className="t-input"
+        />
+        <p className="text-[11px] text-[var(--color-ink-3)]">
+          The main-room link surfaced in player top bars. Per-pair
+          breakouts (below) mint separately.
+        </p>
+      </div>
+
+      <BreakoutProviderPicker
+        provider={breakoutProvider}
+        onChange={setBreakoutProvider}
+        googleMeetAvailable={googleMeetAvailable}
+        disabled={submitting}
+      />
+      {breakoutProvider === "google_meet" && (
+        <p
+          className="rounded-[10px] px-3 py-2 text-[12px]"
+          style={{
+            background: "var(--color-tint-yellow)",
+            color: "#7a5b00",
+            border: "1.5px solid #d4a800",
+          }}
+        >
+          Google Meet breakouts require every CSV row to carry an{" "}
+          <code>email</code> address — Tessera invites each person to
+          their pair&apos;s Calendar event. Rows missing email will
+          reject upload.
+        </p>
+      )}
+
+      <div className="flex flex-col gap-1.5">
+        <label
+          className="t-mono text-[11px] uppercase tracking-wide text-[var(--color-ink-3)]"
           htmlFor="prebuilt-csv"
         >
           Roster CSV
@@ -429,14 +526,14 @@ function SetupView({
         </div>
       )}
 
-      <div className="flex items-center justify-end gap-2 pt-1">
+      <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
         <button
           type="button"
           onClick={onClose}
           disabled={submitting}
-          className="t-mono text-[12px] text-[var(--color-ink-3)] underline disabled:opacity-50"
+          className="t-btn t-btn--ghost t-btn--sm disabled:opacity-50"
         >
-          cancel
+          Cancel
         </button>
         <button
           type="button"

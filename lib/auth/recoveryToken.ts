@@ -22,6 +22,29 @@ export function generateRecoveryToken(): string {
   return bufferToBase64Url(bytes);
 }
 
+/**
+ * Short URL-safe identifier for the CSV-issued recovery link. 8 chars
+ * of base62 (~47 bits) gives 218 trillion combinations — collision
+ * probability across a 50-participant workshop is ~1e-11, so we don't
+ * bother retrying on insert. The recover API treats this as an opaque
+ * lookup key; it's not a secret (the recovery token in the URL
+ * fragment is). The point is just to keep the link short enough that
+ * a GM can paste it into a calendar invite without it wrapping.
+ */
+const SHORT_KEY_ALPHABET =
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+const SHORT_KEY_LEN = 8;
+
+export function generateJoinShortKey(): string {
+  const bytes = new Uint8Array(SHORT_KEY_LEN);
+  crypto.getRandomValues(bytes);
+  let out = "";
+  for (let i = 0; i < SHORT_KEY_LEN; i++) {
+    out += SHORT_KEY_ALPHABET[bytes[i]! % SHORT_KEY_ALPHABET.length];
+  }
+  return out;
+}
+
 export async function hashRecoveryToken(token: string): Promise<string> {
   return bcrypt.hash(token, BCRYPT_ROUNDS);
 }

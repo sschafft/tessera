@@ -105,6 +105,7 @@ function toParticipantRecord(row: DbParticipant): ParticipantRecord {
     released_at: row.released_at,
     recovery_token_hash: row.recovery_token_hash,
     email: row.email ?? null,
+    join_short_key: row.join_short_key ?? null,
   };
 }
 
@@ -130,6 +131,7 @@ export class SupabaseGameRepository implements GameRepository {
     listActive: (game_id) => this.listActiveParticipants(game_id),
     findByName: (game_id, name) => this.findParticipantByName(game_id, name),
     findById: (id) => this.findParticipantById(id),
+    findByJoinShortKey: (key) => this.findParticipantByJoinShortKey(key),
     touch: (id) => this.touchParticipant(id),
     release: (id) => this.releaseParticipant(id),
   };
@@ -295,6 +297,7 @@ export class SupabaseGameRepository implements GameRepository {
         color: input.color,
         recovery_token_hash: input.recovery_token_hash ?? null,
         email: input.email ?? null,
+        join_short_key: input.join_short_key ?? null,
       })
       .select()
       .single();
@@ -347,6 +350,21 @@ export class SupabaseGameRepository implements GameRepository {
       .eq("id", id)
       .maybeSingle();
     if (error) throw new Error(`findParticipantById: ${error.message}`);
+    return data ? toParticipantRecord(data) : null;
+  }
+
+  async findParticipantByJoinShortKey(
+    key: string,
+  ): Promise<ParticipantRecord | null> {
+    const supabase = getServiceClient();
+    const { data, error } = await supabase
+      .from("participants")
+      .select("*")
+      .eq("join_short_key", key)
+      .maybeSingle();
+    if (error) {
+      throw new Error(`findParticipantByJoinShortKey: ${error.message}`);
+    }
     return data ? toParticipantRecord(data) : null;
   }
 

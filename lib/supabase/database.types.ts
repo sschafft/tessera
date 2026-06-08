@@ -355,6 +355,7 @@ export type Database = {
           email: string | null
           game_id: string
           id: string
+          join_short_key: string | null
           joined_at: string
           last_seen_at: string
           pair_id: string | null
@@ -368,6 +369,7 @@ export type Database = {
           email?: string | null
           game_id: string
           id?: string
+          join_short_key?: string | null
           joined_at?: string
           last_seen_at?: string
           pair_id?: string | null
@@ -381,6 +383,7 @@ export type Database = {
           email?: string | null
           game_id?: string
           id?: string
+          join_short_key?: string | null
           joined_at?: string
           last_seen_at?: string
           pair_id?: string | null
