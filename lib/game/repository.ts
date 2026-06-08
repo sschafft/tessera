@@ -113,6 +113,14 @@ export interface ParticipantRecord {
    * in-person games or jitsi-mode games.
    */
   email: string | null;
+  /**
+   * Optional short URL-safe key used in CSV-issued recovery links so
+   * the GM-facing roster URL is ~28 chars shorter than the UUID
+   * equivalent. Null for participants who joined via the regular
+   * /join flow (they never see a recovery URL — their session lives
+   * in a cookie). Set only by the CSV upload route.
+   */
+  join_short_key: string | null;
 }
 
 export interface CreateParticipantInput {
@@ -124,6 +132,12 @@ export interface CreateParticipantInput {
   recovery_token_hash?: string | null;
   /** Required when the game's breakout_provider is 'google_meet'. */
   email?: string | null;
+  /**
+   * Optional short URL-safe key minted by the CSV upload route so the
+   * roster join URL uses the short key in `?p=…` instead of the
+   * 36-char UUID. The regular /join flow leaves this null.
+   */
+  join_short_key?: string | null;
 }
 
 export interface PairRecord {
@@ -326,6 +340,14 @@ export interface ParticipantStore {
 
   /** Find a participant by id (for cookie-based reconnect). */
   findById(id: string): Promise<ParticipantRecord | null>;
+
+  /**
+   * Find a participant by the short URL-safe key minted at CSV-upload
+   * time. The recover API uses this when the `?p=…` query param isn't
+   * UUID-shaped — i.e. when the GM hands out a CSV-issued recovery
+   * link. Returns null if no row has the key.
+   */
+  findByJoinShortKey(key: string): Promise<ParticipantRecord | null>;
 
   /** Touch last_seen_at on a participant. */
   touch(id: string): Promise<void>;

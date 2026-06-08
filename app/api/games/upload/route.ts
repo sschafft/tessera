@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { mintSession } from "@/lib/auth/jwt";
 import { setSessionCookie } from "@/lib/auth/cookie";
 import {
+  generateJoinShortKey,
   generateRecoveryToken,
   hashRecoveryToken,
 } from "@/lib/auth/recoveryToken";
@@ -285,6 +286,7 @@ export async function POST(req: NextRequest) {
     for (const r of rows) {
       const recoveryToken = generateRecoveryToken();
       const recoveryTokenHash = await hashRecoveryToken(recoveryToken);
+      const joinShortKey = generateJoinShortKey();
       // The CSV `role` is the desired final role. We seat the player at
       // that role directly (skipping the lobby state) so they land on
       // /play already paired/observing on first visit.
@@ -295,9 +297,13 @@ export async function POST(req: NextRequest) {
         color: colorFor(r.name, game.id),
         recovery_token_hash: recoveryTokenHash,
         email: r.email,
+        join_short_key: joinShortKey,
       });
       participantIdByName.set(r.name, participant.id);
-      const join_url = `${baseUrl}/recover/${code}?p=${participant.id}#${recoveryToken}`;
+      // Use the short key (not the UUID) in the join URL so the link
+      // is ~28 chars shorter — matters when the GM pastes one per row
+      // into a calendar invite or email.
+      const join_url = `${baseUrl}/recover/${code}?p=${joinShortKey}#${recoveryToken}`;
       enriched.push({ ...r, join_url });
     }
 

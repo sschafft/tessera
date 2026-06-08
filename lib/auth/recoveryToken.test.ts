@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  generateJoinShortKey,
   generateRecoveryToken,
   hashRecoveryToken,
   verifyRecoveryToken,
@@ -54,5 +55,25 @@ describe("hashRecoveryToken + verifyRecoveryToken", () => {
     // Both still verify against the same plaintext.
     expect(await verifyRecoveryToken(token, a)).toBe(true);
     expect(await verifyRecoveryToken(token, b)).toBe(true);
+  });
+});
+
+describe("generateJoinShortKey", () => {
+  it("returns an 8-character base62 string", () => {
+    const k = generateJoinShortKey();
+    expect(k).toHaveLength(8);
+    expect(k).toMatch(/^[A-Za-z0-9]+$/);
+  });
+
+  it("never includes a dash so UUID dispatch can rely on shape", () => {
+    for (let i = 0; i < 200; i++) {
+      expect(generateJoinShortKey()).not.toMatch(/-/);
+    }
+  });
+
+  it("returns distinct values across calls", () => {
+    const seen = new Set<string>();
+    for (let i = 0; i < 200; i++) seen.add(generateJoinShortKey());
+    expect(seen.size).toBe(200);
   });
 });

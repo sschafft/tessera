@@ -12,6 +12,10 @@ import { CodeInput } from "@/components/primitives/CodeInput";
 import { isValidGameCode } from "@/lib/game/code";
 import type { TeamMode } from "@/lib/game/repository";
 import { PreBuiltGameModal } from "./PreBuiltGameModal";
+import {
+  BreakoutProviderPicker,
+  type BreakoutProvider,
+} from "./BreakoutProviderPicker";
 
 type Tab = "host" | "join";
 type TeamLabel = "Game master picks" | "Players pick";
@@ -95,7 +99,6 @@ function errorStyle(hasError: boolean): React.CSSProperties | undefined {
 type BriefSource = "library" | "gm" | "gemini";
 
 type MeetingMode = "remote" | "in_person";
-type BreakoutProvider = "none" | "google_meet" | "jitsi";
 
 function HostForm({ googleMeetAvailable }: { googleMeetAvailable: boolean }) {
   const router = useRouter();
@@ -436,6 +439,7 @@ function HostForm({ googleMeetAvailable }: { googleMeetAvailable: boolean }) {
       <PreBuiltGameModal
         open={preBuiltOpen}
         onClose={() => setPreBuiltOpen(false)}
+        googleMeetAvailable={googleMeetAvailable}
       />
     </form>
   );
@@ -569,95 +573,6 @@ function BriefSourceSection({
         </>
       )}
     </div>
-  );
-}
-
-const BREAKOUT_PROVIDER_OPTIONS = [
-  {
-    value: "none" as const,
-    label: "No breakouts",
-    sub: "Pairs stay in the main room",
-  },
-  {
-    value: "google_meet" as const,
-    label: "Google Meet",
-    sub: "Requires participant emails · GM signs in",
-  },
-  {
-    value: "jitsi" as const,
-    label: "Jitsi",
-    sub: "Free · no sign-in for anyone",
-  },
-] satisfies Array<{ value: BreakoutProvider; label: string; sub: string }>;
-
-function BreakoutProviderPicker({
-  provider,
-  onChange,
-  googleMeetAvailable,
-}: {
-  provider: BreakoutProvider;
-  onChange: (p: BreakoutProvider) => void;
-  googleMeetAvailable: boolean;
-}) {
-  return (
-    <Field
-      label="Breakout rooms"
-      hint="Each builder/guider pair gets a private call link"
-    >
-      <div className="flex flex-col gap-1.5">
-        {BREAKOUT_PROVIDER_OPTIONS.map((opt) => {
-          const active = provider === opt.value;
-          const disabled =
-            opt.value === "google_meet" && !googleMeetAvailable;
-          return (
-            <button
-              key={opt.value}
-              type="button"
-              onClick={() => {
-                if (disabled) return;
-                onChange(opt.value);
-              }}
-              disabled={disabled}
-              className="flex items-start gap-3 rounded-[12px] px-3 py-2.5 text-left transition-colors"
-              style={{
-                background: active ? "var(--color-tint-blue)" : "var(--color-paper-2)",
-                border: active
-                  ? "1.5px solid var(--color-t-blue)"
-                  : "1.5px solid var(--color-line)",
-                opacity: disabled ? 0.5 : 1,
-                cursor: disabled ? "not-allowed" : "pointer",
-              }}
-              aria-pressed={active}
-              aria-disabled={disabled}
-            >
-              <span
-                className="mt-0.5 inline-block h-3.5 w-3.5 flex-shrink-0 rounded-full"
-                style={{
-                  border: active
-                    ? "4px solid var(--color-t-blue)"
-                    : "1.5px solid var(--color-line)",
-                  background: "#fff",
-                }}
-                aria-hidden
-              />
-              <span className="flex flex-col gap-0.5">
-                <span
-                  className="text-[13px] font-semibold"
-                  style={{ color: active ? "var(--color-t-blue)" : "var(--color-ink)" }}
-                >
-                  {opt.label}
-                </span>
-                <span className="text-[11px] text-[var(--color-ink-3)]">
-                  {disabled
-                    ? "Not configured on this deployment"
-                    : opt.sub}
-                </span>
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </Field>
   );
 }
 

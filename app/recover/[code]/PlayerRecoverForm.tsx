@@ -105,7 +105,7 @@ export function PlayerRecoverForm({ code }: PlayerRecoverFormProps) {
           required
         />
       </Field>
-      <Field label="Participant ID" hint="UUID from the recovery link">
+      <Field label="Participant ID" hint="from the recovery link (?p=…)">
         <input
           className="t-input t-mono"
           value={participantId}

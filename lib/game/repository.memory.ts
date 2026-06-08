@@ -98,6 +98,7 @@ class MemoryGameRepository implements GameRepository {
     listActive: (game_id) => this.listActiveParticipants(game_id),
     findByName: (game_id, name) => this.findParticipantByName(game_id, name),
     findById: (id) => this.findParticipantById(id),
+    findByJoinShortKey: (key) => this.findParticipantByJoinShortKey(key),
     touch: (id) => this.touchParticipant(id),
     release: (id) => this.releaseParticipant(id),
   };
@@ -284,9 +285,19 @@ class MemoryGameRepository implements GameRepository {
       released_at: null,
       recovery_token_hash: input.recovery_token_hash ?? null,
       email: input.email ?? null,
+      join_short_key: input.join_short_key ?? null,
     };
     this._participantTable.set(record.id, record);
     return record;
+  }
+
+  async findParticipantByJoinShortKey(
+    key: string,
+  ): Promise<ParticipantRecord | null> {
+    for (const p of this._participantTable.values()) {
+      if (p.join_short_key === key) return p;
+    }
+    return null;
   }
 
   async listActiveParticipants(game_id: string): Promise<ParticipantRecord[]> {

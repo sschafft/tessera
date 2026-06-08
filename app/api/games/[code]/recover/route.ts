@@ -16,6 +16,9 @@ interface RecoverPayload {
   token?: string;
 }
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * Player session recovery — exchanges the one-shot token returned at
  * join time for a fresh session cookie. Mirrors /host-recover but on
@@ -53,7 +56,14 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "game_closed" }, { status: 410 });
   }
 
-  const participant = await repo.participants.findById(body.participant_id);
+  // The `?p=…` param carries either the participant's UUID (regular
+  // /join flow) or the 8-char short key minted by the CSV upload
+  // route. UUIDs always include dashes, so we dispatch on that shape:
+  // dash-free → short key, otherwise → UUID lookup. This keeps the
+  // CSV-issued URLs ~28 chars shorter without breaking existing links.
+  const participant = UUID_RE.test(body.participant_id)
+    ? await repo.participants.findById(body.participant_id)
+    : await repo.participants.findByJoinShortKey(body.participant_id);
   if (!participant || participant.game_id !== game.id) {
     return NextResponse.json(
       { error: "participant_not_found" },
