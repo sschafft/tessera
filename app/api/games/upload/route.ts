@@ -17,6 +17,7 @@ import {
 } from "@/lib/csv/pairs";
 import { isHttpUrl } from "@/lib/util/url";
 import { sanitiseCustomBrief } from "@/lib/briefs/customValidator";
+import { isGoogleConfigured } from "@/lib/google/oauth";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -207,6 +208,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { error: "video_call_url must be a valid http(s) URL when provided" },
       { status: 400 },
+    );
+  }
+  // Defense in depth — the modal greys out Google Meet when OAuth
+  // isn't configured server-side, but reject here too so a stale client
+  // never persists a google_meet game on a deployment without the env
+  // vars (the GM would otherwise land on a dashboard with an
+  // impossible "Sign in with Google" loop).
+  if (provider === "google_meet" && !isGoogleConfigured()) {
+    return NextResponse.json(
+      { error: "oauth_unconfigured" },
+      { status: 503 },
     );
   }
   // Email required for google_meet — every participant must carry one.

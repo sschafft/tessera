@@ -394,8 +394,23 @@ export function MasterContent({
         method: "POST",
       });
       if (res.status === 412) {
+        // The generate route cleared the stale token row on its way
+        // out. Refetch so `breakouts.google_connected` flips false and
+        // the BreakoutsPanel rerenders the SignInState — without this,
+        // the panel keeps showing "Generate" and the GM gets stuck
+        // re-clicking into the same error.
         setActionError(
-          "Google session expired — sign in again from the breakouts panel.",
+          "Google session expired — sign in with Google to continue.",
+        );
+        await fetchSnapshot();
+        return;
+      }
+      if (res.status === 503) {
+        const j = await res.json().catch(() => ({}));
+        setActionError(
+          j.error === "oauth_unconfigured"
+            ? "Google OAuth isn't configured on this deployment — switch the game to Jitsi breakouts from the host form."
+            : `status ${res.status}`,
         );
         return;
       }
