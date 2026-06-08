@@ -58,6 +58,16 @@ export interface StartRoundOptions {
    * overrides keep working through transient AI outages.
    */
   briefSourceOverride?: BriefSource;
+  /**
+   * Per-round brief on/off overrides. When provided, win over the
+   * game-level `builder_brief_on` / `guider_brief_on` flags for this
+   * round only — the GM uses these to drop a brief mid-game ("this
+   * round, no builder brief, see if it changes the dynamic") without
+   * mutating game-level state. Round 2+ revert to the game defaults
+   * unless the GM toggles again.
+   */
+  builder_brief_on?: boolean;
+  guider_brief_on?: boolean;
 }
 
 export interface StartRoundSuccess {
@@ -128,6 +138,12 @@ export async function startRound(
   const guiderSource: BriefSource =
     options.briefSourceOverride ?? game.guider_brief_source;
   const allowFallback = options.briefSourceOverride !== undefined;
+  // Per-round on/off flags fall back to the game-level setting when
+  // omitted, matching the rest of the option-merge pattern.
+  const builderBriefOn =
+    options.builder_brief_on ?? game.builder_brief_on;
+  const guiderBriefOn =
+    options.guider_brief_on ?? game.guider_brief_on;
 
   // ─── Preflight: build every (goal, builder, guider) tuple in
   // ─── memory. If any AI brief fails and fallback isn't allowed,
@@ -156,7 +172,7 @@ export async function startRound(
       const builderOverride = isFirstRound ? pair.builder_brief_override : null;
       const guiderOverride = isFirstRound ? pair.guider_brief_override : null;
 
-      const builderBriefP = !game.builder_brief_on
+      const builderBriefP = !builderBriefOn
         ? Promise.resolve(undefined)
         : builderOverride
           ? Promise.resolve({
@@ -174,7 +190,7 @@ export async function startRound(
               allow_library_fallback: allowFallback,
             });
 
-      const guiderBriefP = !game.guider_brief_on
+      const guiderBriefP = !guiderBriefOn
         ? Promise.resolve(undefined)
         : guiderOverride
           ? Promise.resolve({

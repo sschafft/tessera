@@ -25,6 +25,14 @@ interface StartPayload {
    * absent.
    */
   brief_source_override?: BriefSource;
+  /**
+   * Per-round override for whether each side gets a brief. Omitting
+   * either field falls back to the game-level builder_brief_on /
+   * guider_brief_on. Lets the GM drop a brief for one round without
+   * changing the game's default.
+   */
+  builder_brief_on?: boolean;
+  guider_brief_on?: boolean;
 }
 
 export async function POST(req: NextRequest, { params }: RouteParams) {
@@ -63,6 +71,14 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     complexity: body.complexity,
     duration_seconds: body.duration_seconds,
     briefSourceOverride,
+    builder_brief_on:
+      typeof body.builder_brief_on === "boolean"
+        ? body.builder_brief_on
+        : undefined,
+    guider_brief_on:
+      typeof body.guider_brief_on === "boolean"
+        ? body.guider_brief_on
+        : undefined,
   });
 
   if (!result.ok) {
