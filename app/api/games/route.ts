@@ -13,6 +13,7 @@ import {
 } from "@/lib/briefs/limits";
 import { isHttpUrl } from "@/lib/util/url";
 import { sanitiseCustomBrief } from "@/lib/briefs/customValidator";
+import { isGoogleConfigured } from "@/lib/google/oauth";
 import type {
   BriefSource,
   CreateGameInput,
@@ -142,6 +143,14 @@ function validate(payload: CreateGamePayload): CreateGameInput | { error: string
         : "none";
   if (meetingMode === "in_person" && provider !== "none") {
     return { error: "in_person mode cannot have breakouts" };
+  }
+  // Defense in depth — the landing-page picker greys out the Google
+  // Meet option when `isGoogleConfigured()` is false, but a malicious
+  // or stale client could still POST google_meet. Without OAuth env
+  // vars, /api/auth/google/start would 503 and the breakouts panel
+  // would loop the GM through an impossible sign-in — reject up front.
+  if (provider === "google_meet" && !isGoogleConfigured()) {
+    return { error: "google_meet selected but Google OAuth is not configured on this deployment" };
   }
 
   return {

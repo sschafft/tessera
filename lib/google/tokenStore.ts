@@ -115,6 +115,31 @@ export async function getValidAccessToken(game_id: string): Promise<string> {
 }
 
 /**
+ * Drop the stored token row without trying to revoke at Google. Used
+ * when we discover the session is unusable mid-flight (refresh failed,
+ * scope was revoked, Google returned 401/403). Leaving the row in
+ * place would make the lobby snapshot keep reporting
+ * `google_connected: true` and the dashboard would keep offering
+ * "Generate" — re-sign-in is the only path forward, so we clear the
+ * row so the panel correctly re-renders the SignInState.
+ *
+ * Best-effort: any error is swallowed because the caller is already
+ * handling a fault — we don't want a delete failure to mask the
+ * original problem.
+ */
+export async function deleteSession(game_id: string): Promise<void> {
+  try {
+    const supabase = getServiceClient();
+    await supabase.from("gm_google_tokens").delete().eq("game_id", game_id);
+  } catch (err) {
+    console.warn(
+      `[tokenStore] deleteSession(${game_id}) failed:`,
+      err instanceof Error ? err.message : err,
+    );
+  }
+}
+
+/**
  * Revoke + delete on game-end. Best-effort: if the revoke roundtrip
  * fails, we still drop the row (game is ending; no point keeping
  * orphaned encrypted material around).

@@ -8,8 +8,10 @@ import {
 } from "@/lib/google/calendar";
 import {
   GoogleSessionLost,
+  deleteSession,
   getValidAccessToken,
 } from "@/lib/google/tokenStore";
+import { isGoogleConfigured } from "@/lib/google/oauth";
 import { jitsiUrlForPair } from "@/lib/breakouts/jitsi";
 import { publishGameEvent } from "@/lib/realtime/publish";
 
@@ -89,12 +91,25 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
     });
   }
 
-  // Google Meet path — needs a valid OAuth session for the GM.
+  // Google Meet path — needs a valid OAuth session for the GM AND the
+  // deployment must have client id/secret on its env. Without the env
+  // vars the start route would 503 too; surfacing here as oauth_
+  // unconfigured saves the GM a confusing round-trip to /start.
+  if (!isGoogleConfigured()) {
+    return NextResponse.json(
+      { error: "oauth_unconfigured" },
+      { status: 503 },
+    );
+  }
   let accessToken: string;
   try {
     accessToken = await getValidAccessToken(game.id);
   } catch (err) {
     if (err instanceof GoogleSessionLost) {
+      // The stored token is unusable — drop the row so the next lobby
+      // snapshot returns google_connected:false and the dashboard
+      // re-renders the SignInState rather than offering Generate.
+      await deleteSession(game.id);
       return NextResponse.json(
         { error: "google_session_lost", reason: err.reason },
         { status: 412 },
@@ -132,6 +147,7 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
 
   let created = 0;
   let firstError: { pair_id: string; reason: string } | null = null;
+  let authLostMidLoop = false;
   // Sequential — Calendar API rate limits sit around 50 QPS but
   // conferenceData.createRequest is heavier; one-at-a-time keeps the
   // workshop-scale (1-25 pairs) well inside any quota and gives us
@@ -164,12 +180,36 @@ export async function POST(_req: NextRequest, { params }: RouteParams) {
       );
       if (!firstError) firstError = { pair_id: pair.id, reason };
       // If we lost auth mid-loop, no point continuing — the rest will
-      // all fail the same way.
-      if (err instanceof CalendarApiError && err.isAuthError) break;
+      // all fail the same way. Drop the token row too so the dashboard
+      // re-renders the SignInState on the next snapshot.
+      if (err instanceof CalendarApiError && err.isAuthError) {
+        authLostMidLoop = true;
+        break;
+      }
     }
   }
 
+  if (authLostMidLoop) {
+    await deleteSession(game.id);
+  }
   await publishGameEvent(game.id, "breakouts_changed", { created });
+
+  // Mid-loop auth loss is the only error that needs the GM to take
+  // action (re-sign-in). Surface it as 412 so the dashboard can drop
+  // back to the SignInState — same shape as the pre-loop session-lost
+  // exit above. Any created pairs are still persisted.
+  if (authLostMidLoop) {
+    return NextResponse.json(
+      {
+        error: "google_session_lost",
+        reason: firstError?.reason ?? "calendar_auth_lost",
+        created,
+        skipped: pairs.length - todo.length,
+        failed: todo.length - created,
+      },
+      { status: 412 },
+    );
+  }
 
   return NextResponse.json({
     ok: created > 0,
