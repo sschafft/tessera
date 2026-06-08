@@ -416,3 +416,52 @@ describe("startRound — per-pair brief overrides", () => {
     expect(state.clearedOverrideForPairs).toEqual(["pair-a"]);
   });
 });
+
+describe("startRound — per-round brief on/off override", () => {
+  it("skips the builder brief when builder_brief_on=false", async () => {
+    const state = makeState({ pairs: [{ id: "pair-a" }] });
+    const r = await startRound(makeRepo(state), makeGame(), {
+      builder_brief_on: false,
+    });
+    expect(r.ok).toBe(true);
+    const builderBriefs = state.briefsUpserted.filter(
+      (b) => b.role === "builder",
+    );
+    const guiderBriefs = state.briefsUpserted.filter(
+      (b) => b.role === "guider",
+    );
+    expect(builderBriefs).toEqual([]);
+    expect(guiderBriefs.length).toBe(1);
+  });
+
+  it("re-enables a side that the game has turned off (game off, override on)", async () => {
+    const state = makeState({ pairs: [{ id: "pair-a" }] });
+    const r = await startRound(
+      makeRepo(state),
+      makeGame({ builder_brief_on: false }),
+      { builder_brief_on: true },
+    );
+    expect(r.ok).toBe(true);
+    const builderBriefs = state.briefsUpserted.filter(
+      (b) => b.role === "builder",
+    );
+    expect(builderBriefs.length).toBe(1);
+  });
+
+  it("falls back to game defaults when override is omitted", async () => {
+    const state = makeState({ pairs: [{ id: "pair-a" }] });
+    const r = await startRound(
+      makeRepo(state),
+      makeGame({ builder_brief_on: false, guider_brief_on: true }),
+    );
+    expect(r.ok).toBe(true);
+    const builderBriefs = state.briefsUpserted.filter(
+      (b) => b.role === "builder",
+    );
+    const guiderBriefs = state.briefsUpserted.filter(
+      (b) => b.role === "guider",
+    );
+    expect(builderBriefs).toEqual([]);
+    expect(guiderBriefs.length).toBe(1);
+  });
+});

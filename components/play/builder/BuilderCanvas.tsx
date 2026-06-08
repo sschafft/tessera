@@ -13,7 +13,6 @@ import {
 } from "@/lib/grid/coords";
 import type { PlacedPiece } from "@/components/play/PlayContent";
 import { CoordRulers } from "./CoordRulers";
-import { EmptyHint } from "./EmptyHint";
 import { WrongTooltip } from "./WrongTooltip";
 
 /**
@@ -214,9 +213,6 @@ function BuilderCanvasImpl({
           );
         })}
 
-        {/* R1 — empty-board first-step hint at A1. */}
-        {pieces.length === 0 && target === null && <EmptyHint />}
-
         {/* Cell hit-targets. Cheap to re-render — each cell is a single
             absolutely-positioned button with no children. */}
         {Array.from({ length: grid.h }).map((_, r) =>
@@ -322,6 +318,23 @@ function BuilderCanvasImpl({
           return (
             <div
               key={p.id}
+              role="button"
+              aria-label={`Edit piece at cell ${p.q},${p.r}`}
+              tabIndex={0}
+              onClick={(e) => {
+                // The piece div sits on top of the cell-hit-target
+                // button below it, so without an explicit handler
+                // clicks on placed pieces are swallowed and the
+                // delete/edit affordances in the dock never light up.
+                e.stopPropagation();
+                onPieceClick(p);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onPieceClick(p);
+                }
+              }}
               style={{
                 position: "absolute",
                 left: PADDING + p.q * CELL,

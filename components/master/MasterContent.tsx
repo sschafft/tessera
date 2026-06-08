@@ -200,6 +200,7 @@ export function MasterContent({
       override?: BriefSource,
       complexity?: number,
       durationSeconds?: number,
+      briefs?: { builder_brief_on: boolean; guider_brief_on: boolean },
     ) => {
       setBusy(true);
       setActionError(null);
@@ -209,6 +210,10 @@ export function MasterContent({
         if (typeof complexity === "number") body.complexity = complexity;
         if (typeof durationSeconds === "number")
           body.duration_seconds = durationSeconds;
+        if (briefs) {
+          body.builder_brief_on = briefs.builder_brief_on;
+          body.guider_brief_on = briefs.guider_brief_on;
+        }
         const res = await fetch(`/api/games/${code}/rounds/start`, {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -241,8 +246,12 @@ export function MasterContent({
   );
 
   const startRoundDefault = useCallback(
-    (complexity?: number, durationSeconds?: number) => {
-      void startRound(undefined, complexity, durationSeconds);
+    (
+      complexity?: number,
+      durationSeconds?: number,
+      briefs?: { builder_brief_on: boolean; guider_brief_on: boolean },
+    ) => {
+      void startRound(undefined, complexity, durationSeconds, briefs);
     },
     [startRound],
   );
@@ -609,6 +618,9 @@ export function MasterContent({
         busy={busy}
         actionError={actionError}
         pairsCount={pairs.length}
+        briefsEnabled={
+          data?.briefs_enabled ?? { builder: true, guider: true }
+        }
         onStart={startRoundDefault}
         onEnd={requestEndRound}
         onEndAutoExpiry={endRoundAuto}

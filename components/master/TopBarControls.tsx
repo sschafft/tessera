@@ -24,8 +24,23 @@ export interface TopBarControlsProps {
   actionError: string | null;
   /** Whether at least one pair exists — used to explain a disabled Start. */
   pairsCount: number;
-  /** Start the next round with the chosen complexity (1..8) and duration in seconds. */
-  onStart: (complexity?: number, durationSeconds?: number) => void;
+  /**
+   * Game-level brief on/off flags. Drive the initial state of the
+   * per-round brief toggle pills next to the Start button — the GM
+   * sees their game defaults, then can flip either side off (or on)
+   * for the next round only.
+   */
+  briefsEnabled: { builder: boolean; guider: boolean };
+  /**
+   * Start the next round. The brief on/off args carry the per-round
+   * pill state; the route layer falls back to game defaults when
+   * either is undefined.
+   */
+  onStart: (
+    complexity?: number,
+    durationSeconds?: number,
+    briefs?: { builder_brief_on: boolean; guider_brief_on: boolean },
+  ) => void;
   /**
    * Fired when the GM clicks "End round" manually. The Master view
    * intercepts this with a modal asking whether to ask players the
@@ -72,6 +87,7 @@ export function TopBarControls({
   busy,
   actionError,
   pairsCount,
+  briefsEnabled,
   onStart,
   onEnd,
   onEndAutoExpiry,
@@ -95,6 +111,18 @@ export function TopBarControls({
   }, [startComplexityDefault]);
   const bumpComplexity = (delta: number) =>
     setStartComplexity((c) => Math.max(1, Math.min(8, c + delta)));
+
+  // Per-round brief overrides. Seed from the game defaults each time
+  // the round-index advances so a flip is scoped to a single round —
+  // playtest 2026-04-28 spotted a "wait, why is round 3 still missing
+  // a brief?" trap when the toggle persisted silently.
+  const [builderBriefOn, setBuilderBriefOn] = useState(briefsEnabled.builder);
+  const [guiderBriefOn, setGuiderBriefOn] = useState(briefsEnabled.guider);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- resets the per-round brief pills to the game defaults whenever the next round index changes.
+    setBuilderBriefOn(briefsEnabled.builder);
+    setGuiderBriefOn(briefsEnabled.guider);
+  }, [briefsEnabled.builder, briefsEnabled.guider, nextIdx]);
 
   // Free-text round duration. The text input accepts plain minutes
   // ("5", "2.5") or m:ss ("5:30"); we parse to seconds at submit time
@@ -345,6 +373,20 @@ export function TopBarControls({
               />
               <span style={{ color: "var(--color-ink-3)" }}>min</span>
             </label>
+            <BriefPill
+              role="builder"
+              on={builderBriefOn}
+              gameDefault={briefsEnabled.builder}
+              disabled={busy}
+              onToggle={() => setBuilderBriefOn((b) => !b)}
+            />
+            <BriefPill
+              role="guider"
+              on={guiderBriefOn}
+              gameDefault={briefsEnabled.guider}
+              disabled={busy}
+              onToggle={() => setGuiderBriefOn((b) => !b)}
+            />
             <button
               type="button"
               className="t-btn t-btn--primary t-btn--sm disabled:opacity-50"
@@ -353,6 +395,10 @@ export function TopBarControls({
                 onStart(
                   startComplexity,
                   parsed !== null ? parsed : undefined,
+                  {
+                    builder_brief_on: builderBriefOn,
+                    guider_brief_on: guiderBriefOn,
+                  },
                 );
               }}
               disabled={!canStart || busy}
@@ -418,4 +464,54 @@ function formatDuration(s: number): string {
   const m = Math.floor(s / 60);
   const r = s % 60;
   return `${m}:${r.toString().padStart(2, "0")}`;
+}
+
+/**
+ * Per-round brief on/off pill in the start row. Mirrors the
+ * complexity/duration affordances visually so the GM reads them as a
+ * single "next round settings" cluster. The asterisk marker fires
+ * when the pill's current state diverges from the game default — a
+ * cue that the override is one-shot and will revert next round.
+ */
+function BriefPill({
+  role,
+  on,
+  gameDefault,
+  disabled,
+  onToggle,
+}: {
+  role: "builder" | "guider";
+  on: boolean;
+  gameDefault: boolean;
+  disabled: boolean;
+  onToggle: () => void;
+}) {
+  const overridden = on !== gameDefault;
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={disabled}
+      title={
+        overridden
+          ? `Reverts to game default (${gameDefault ? "on" : "off"}) on round 2+`
+          : `Toggle ${role} brief for this round only`
+      }
+      className="t-mono flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-bold disabled:opacity-50"
+      style={{
+        background: on ? "var(--color-tint-blue)" : "var(--color-paper-2)",
+        color: on ? "var(--color-t-blue)" : "var(--color-ink-3)",
+        border: on
+          ? "1.5px solid var(--color-t-blue)"
+          : "1.5px solid var(--color-line)",
+      }}
+      aria-pressed={on}
+    >
+      <span style={{ color: on ? "var(--color-t-blue)" : "var(--color-ink-3)" }}>
+        {role} brief
+      </span>
+      <span>{on ? "on" : "off"}</span>
+      {overridden && <span aria-hidden>*</span>}
+    </button>
+  );
 }
