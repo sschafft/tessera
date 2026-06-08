@@ -449,25 +449,34 @@ function SetupView({
       )}
 
       <div className="flex flex-col gap-1.5">
-        <label
-          className="t-mono text-[11px] uppercase tracking-wide text-[var(--color-ink-3)]"
-          htmlFor="prebuilt-csv"
-        >
+        <span className="t-mono text-[11px] uppercase tracking-wide text-[var(--color-ink-3)]">
           Roster CSV
-        </label>
-        <input
-          id="prebuilt-csv"
-          type="file"
-          accept=".csv,text/csv"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          disabled={submitting}
-          className="text-[12px]"
-        />
-        {file && (
-          <p className="t-mono text-[11px] text-[var(--color-ink-3)]">
-            ✓ {file.name} ({Math.ceil(file.size / 1024)} KB)
-          </p>
-        )}
+        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <label
+            htmlFor="prebuilt-csv"
+            className={`t-btn t-btn--ghost t-btn--sm ${submitting ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
+          >
+            {file ? "Choose a different file…" : "Choose CSV file…"}
+          </label>
+          <input
+            id="prebuilt-csv"
+            type="file"
+            accept=".csv,text/csv"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            disabled={submitting}
+            className="sr-only"
+          />
+          {file ? (
+            <span className="t-mono text-[11px] text-[var(--color-ink-3)]">
+              ✓ {file.name} ({Math.ceil(file.size / 1024)} KB)
+            </span>
+          ) : (
+            <span className="text-[12px] text-[var(--color-ink-3)]">
+              No file selected
+            </span>
+          )}
+        </div>
       </div>
 
       {error && !rowErrors.length && !teamErrors.length && (
