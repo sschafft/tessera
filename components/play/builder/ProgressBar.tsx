@@ -12,16 +12,16 @@ export interface ProgressBarProps {
 }
 
 /**
- * Builder UX foundation (R8): tri-colour progress bar that sits above
- * the canvas. Green for correct placements, red for wrong, gray for
- * placed-but-still-being-evaluated. Reads straight from
- * `state.live_score` so it costs nothing extra — same data the score
- * chip uses.
+ * Builder UX foundation (R8): bi-colour progress bar that sits below
+ * the canvas. Green for correct placements, red for wrong. Pieces
+ * placed but not yet evaluated surface as a small "checking …" pill
+ * on the right instead of as a gray bar segment — the prior
+ * tri-colour design made the bar visibly shift twice per placement
+ * (gray on optimistic add, then gray→green/red on server eval),
+ * which players read as flicker / stuttering.
  *
- * Replaces the bottom status footer ("X / Y placed", separate score
- * chip, separate clear button) by giving the player a single
- * always-glanceable bar that captures progress + correctness in one
- * read.
+ * Reads straight from `state.live_score` so it costs nothing extra —
+ * same data the score chip uses.
  */
 function ProgressBarImpl({
   correct,
@@ -32,7 +32,6 @@ function ProgressBarImpl({
   const safeTotal = Math.max(1, total);
   const cPct = (correct / safeTotal) * 100;
   const wPct = (wrong / safeTotal) * 100;
-  const nPct = (placedNeutral / safeTotal) * 100;
   const placed = correct + wrong + placedNeutral;
 
   return (
@@ -73,14 +72,6 @@ function ProgressBarImpl({
             transition: "width .25s ease",
           }}
         />
-        <div
-          style={{
-            width: `${nPct}%`,
-            background: "var(--color-ink-3)",
-            opacity: 0.4,
-            transition: "width .25s ease",
-          }}
-        />
       </div>
       <span
         className="t-mono text-[10px] font-bold"
@@ -100,6 +91,26 @@ function ProgressBarImpl({
           }}
         >
           {wrong} ✗
+        </span>
+      )}
+      {placedNeutral > 0 && (
+        <span
+          className="t-mono inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase"
+          style={{
+            letterSpacing: ".08em",
+            color: "var(--color-ink-3)",
+            background: "var(--color-paper-2)",
+            border: "1px solid var(--color-line)",
+          }}
+          role="status"
+          aria-label={`Checking ${placedNeutral} placement${placedNeutral > 1 ? "s" : ""}`}
+        >
+          <span
+            aria-hidden="true"
+            className="inline-block h-1.5 w-1.5 animate-pulse rounded-full"
+            style={{ background: "var(--color-ink-3)" }}
+          />
+          checking {placedNeutral}
         </span>
       )}
     </div>
