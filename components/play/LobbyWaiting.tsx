@@ -9,6 +9,15 @@ export interface LobbyWaitingProps {
   breakoutCallUrl?: string | null;
   /** Whether a round is currently in flight without this player. */
   roundInFlight?: boolean;
+  /**
+   * Rounds left AFTER the currently running one wraps. Drives the
+   * roundInFlight copy: > 0 ⇒ "you'll be seated in the next one";
+   * 0 ⇒ "this is the last round, you'll join the debrief instead",
+   * so single-round late-joiners aren't promised a next round that
+   * doesn't exist. Falls back to ≥1 when unknown to preserve
+   * pre-fix wording.
+   */
+  roundsRemainingAfterCurrent?: number;
 }
 
 export function LobbyWaiting({
@@ -17,18 +26,40 @@ export function LobbyWaiting({
   whiteboardUrl,
   breakoutCallUrl,
   roundInFlight = false,
+  roundsRemainingAfterCurrent = 1,
 }: LobbyWaitingProps) {
   const hasCall = Boolean(
     usableCallUrl(breakoutCallUrl) || usableCallUrl(videoCallUrl),
   );
+  const noNextRound = roundInFlight && roundsRemainingAfterCurrent <= 0;
+  let label: string;
+  if (noNextRound) {
+    label = "WAITING FOR DEBRIEF";
+  } else if (roundInFlight) {
+    label = "ROUND IN FLIGHT";
+  } else {
+    label = "YOU'RE IN · WAITING";
+  }
   return (
     <section className="m-auto flex max-w-[480px] flex-col items-center gap-5 px-6 text-center">
-      <LiveStatusBadge
-        label={roundInFlight ? "ROUND IN FLIGHT" : "YOU'RE IN · WAITING"}
-      />
+      <LiveStatusBadge label={label} />
       <h1 className="t-display text-3xl">{workshopName}</h1>
       <p className="text-[15px] text-[var(--color-ink-2)]">
-        {roundInFlight ? (
+        {noNextRound ? (
+          hasCall ? (
+            <>
+              This workshop&apos;s last round is already running. Hop on
+              the call now — you&apos;ll join the group when the round
+              wraps and the debrief begins.
+            </>
+          ) : (
+            <>
+              This workshop&apos;s last round is already running.
+              You&apos;ll join the group when the round wraps and the
+              debrief begins.
+            </>
+          )
+        ) : roundInFlight ? (
           hasCall ? (
             <>
               A round&apos;s already running. Hop on the call now —

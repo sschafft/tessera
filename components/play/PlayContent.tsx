@@ -99,6 +99,13 @@ export interface PlayState {
      */
     reflection_survey_requested: boolean;
   } | null;
+  /**
+   * Total rounds planned for this game. Drives lobby copy when a
+   * late-joiner lands while a round is in flight — without it the
+   * waiting copy would promise a "next round" that doesn't exist on
+   * single-round workshops.
+   */
+  round_count: number;
   pair_round: {
     id: string;
     test_enabled: boolean;
@@ -393,6 +400,18 @@ function renderBody(state: PlayState) {
         whiteboardUrl={state.whiteboard_url}
         breakoutCallUrl={state.pair?.breakout_call_url ?? null}
         roundInFlight={state.round?.status === "running"}
+        // A "next round" can only be promised when one actually
+        // exists. On single-round games (round_count === 1) the
+        // current running round IS the last one, and the playtest
+        // caught observers + late builders stranded on the
+        // "facilitator will seat you in the next one" copy with no
+        // next round coming. Compute rounds-remaining-after-current
+        // so the lobby copy can branch.
+        roundsRemainingAfterCurrent={
+          state.round
+            ? Math.max(0, state.round_count - state.round.index)
+            : state.round_count
+        }
       />
     );
   }

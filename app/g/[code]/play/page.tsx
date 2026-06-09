@@ -123,6 +123,7 @@ export default async function PlayPage({ params }: PageProps) {
           reflection_survey_requested: round.reflection_survey_requested,
         }
       : null,
+    round_count: game.round_count,
     pair_round: pairRound
       ? {
           id: pairRound.id,
