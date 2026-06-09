@@ -283,7 +283,7 @@ function DockImpl({
               textAlign: "center",
             }}
           >
-            tap a cell to start placing
+            tap a cell to place
           </div>
         )}
       </div>

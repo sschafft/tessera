@@ -143,6 +143,7 @@ export class SupabaseGameRepository implements GameRepository {
     findById: (pair_id) => this.findPairById(pair_id),
     swapRoles: (pair_id) => this.swapPairRoles(pair_id),
     swapAllRoles: (game_id) => this.swapAllPairRoles(game_id),
+    reshufflePartners: (game_id) => this.reshufflePartners(game_id),
     assignObserver: (pid, pair_id) => this.assignObserver(pid, pair_id),
     setDisplayName: (pair_id, name) => this.setPairDisplayName(pair_id, name),
     clearAllocations: (game_id) => this.clearAllocations(game_id),
@@ -442,6 +443,64 @@ export class SupabaseGameRepository implements GameRepository {
       count += 1;
     }
     return count;
+  }
+
+  async reshufflePartners(game_id: string): Promise<number> {
+    const supabase = getServiceClient();
+    const { data: pairs, error } = await supabase
+      .from("pairs")
+      .select("id, builder_id, guider_id, display_name")
+      .eq("game_id", game_id);
+    if (error) throw new Error(`reshufflePartners: list ${error.message}`);
+    const fully = (pairs ?? []).filter(
+      (p) => p.builder_id !== null && p.guider_id !== null,
+    );
+    if (fully.length < 2) return 0;
+
+    const builders = fully.map((p) => p.builder_id as string);
+    const guiders = fully.map((p) => p.guider_id as string);
+    shuffleInPlace(builders);
+    shuffleInPlace(guiders);
+
+    let changed = 0;
+    for (let i = 0; i < fully.length; i++) {
+      const pair = fully[i]!;
+      const newBuilder = builders[i]!;
+      const newGuider = guiders[i]!;
+      if (
+        pair.builder_id === newBuilder &&
+        pair.guider_id === newGuider &&
+        pair.display_name === null
+      ) {
+        continue;
+      }
+      const { error: pairErr } = await supabase
+        .from("pairs")
+        .update({
+          builder_id: newBuilder,
+          guider_id: newGuider,
+          // Clear the GM-set name — a custom rename like
+          // "The Pelicans" was tied to the prior partnership and
+          // shouldn't follow a different pair of participants.
+          display_name: null,
+        })
+        .eq("id", pair.id);
+      if (pairErr) {
+        throw new Error(`reshufflePartners: pair update ${pairErr.message}`);
+      }
+      const { error: bErr } = await supabase
+        .from("participants")
+        .update({ pair_id: pair.id, role: "builder" })
+        .eq("id", newBuilder);
+      if (bErr) throw new Error(`reshufflePartners: builder ${bErr.message}`);
+      const { error: gErr } = await supabase
+        .from("participants")
+        .update({ pair_id: pair.id, role: "guider" })
+        .eq("id", newGuider);
+      if (gErr) throw new Error(`reshufflePartners: guider ${gErr.message}`);
+      changed += 1;
+    }
+    return changed;
   }
 
   async createPair(
@@ -1472,4 +1531,18 @@ function toPairRoundRecord(row: DbPairRound): PairRoundRecord {
     prototype_until: row.prototype_until,
     builder_snapshot: row.builder_snapshot,
   };
+}
+
+/**
+ * Fisher-Yates in-place shuffle. Used by reshufflePartners. Math.random
+ * is fine here — this is a GM-driven dashboard action, not a security
+ * boundary.
+ */
+function shuffleInPlace<T>(arr: T[]): void {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = arr[i]!;
+    arr[i] = arr[j]!;
+    arr[j] = tmp;
+  }
 }

@@ -2,9 +2,16 @@
 
 import { useState } from "react";
 import { Avatar } from "@/components/primitives/Avatar";
+import { pairSlug } from "@/lib/util/slug";
 import type { LobbyPair, LobbyParticipant } from "./MasterContent";
 
 export interface PairsPanelProps {
+  /**
+   * 6-char game code; threaded through to each PairRow so the
+   * vanity breakout alias URL (`/g/<code>/<team-slug>`) can be
+   * surfaced as a copy affordance.
+   */
+  code: string;
   pairs: LobbyPair[];
   participants: LobbyParticipant[];
   focusedPairId: string | null;
@@ -24,6 +31,14 @@ export interface PairsPanelProps {
    * pair. Wired through to /api/games/[code]/pairs/swap-all.
    */
   onSwapAllRoles?: () => void;
+  /**
+   * Pre-round only — re-randomises WHO is partnered with WHOM
+   * across every fully-paired pair (different from `onSwapAllRoles`,
+   * which just flips builder ↔ guider in place). Wired through to
+   * /api/games/[code]/pairs/reshuffle. Observers stay pinned to
+   * their existing pair slot; any GM-set display_name is cleared.
+   */
+  onReshufflePartners?: () => void;
   /**
    * Pre-round only — wipes every pair allocation, returning all
    * participants to the lobby. Wired through to
@@ -48,6 +63,7 @@ export interface PairsPanelProps {
 }
 
 export function PairsPanel({
+  code,
   pairs,
   participants,
   focusedPairId,
@@ -55,6 +71,7 @@ export function PairsPanel({
   roundRunning = false,
   onSwapRoles,
   onSwapAllRoles,
+  onReshufflePartners,
   onResetPairs,
   onExpand,
   breakouts,
@@ -76,6 +93,8 @@ export function PairsPanel({
   ).length;
   const canSwapAll =
     !roundRunning && fullyPairedCount > 1 && Boolean(onSwapAllRoles);
+  const canReshuffle =
+    !roundRunning && fullyPairedCount > 1 && Boolean(onReshufflePartners);
   const canResetPairs =
     !roundRunning && pairs.length > 0 && Boolean(onResetPairs);
 
@@ -91,6 +110,18 @@ export function PairsPanel({
               +{observerCount} observer{observerCount === 1 ? "" : "s"}
             </span>
           )}
+          {canReshuffle && (
+            <button
+              type="button"
+              onClick={onReshufflePartners}
+              className="t-mono rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide hover:bg-[var(--color-paper-2)]"
+              style={{ border: "1.5px solid var(--color-line)" }}
+              title={`Re-deal participants into different partnerships across all ${fullyPairedCount} teams. Pre-round only.`}
+              aria-label="Shuffle all pair partners"
+            >
+              🔀 shuffle pairs
+            </button>
+          )}
           {canSwapAll && (
             <button
               type="button"
@@ -100,7 +131,7 @@ export function PairsPanel({
               title={`Swap builder ↔ guider for all ${fullyPairedCount} fully-paired teams. Pre-round only.`}
               aria-label="Swap all pair roles"
             >
-              ⇄ swap all
+              ⇄ swap roles
             </button>
           )}
           {canResetPairs && (
@@ -143,6 +174,7 @@ export function PairsPanel({
           pairs.map((pair) => (
             <PairRow
               key={pair.id}
+              code={code}
               pair={pair}
               builder={pair.builder_id ? byId.get(pair.builder_id) : undefined}
               guider={pair.guider_id ? byId.get(pair.guider_id) : undefined}
@@ -277,6 +309,7 @@ function ProgressBar({
 }
 
 function PairRow({
+  code,
   pair,
   builder,
   guider,
@@ -286,6 +319,7 @@ function PairRow({
   canSwapRoles,
   onSwapRoles,
 }: {
+  code: string;
   pair: LobbyPair;
   builder?: LobbyParticipant;
   guider?: LobbyParticipant;
@@ -420,6 +454,72 @@ function PairRow({
       {pair.breakout_call_url && (
         <BreakoutRoomLine url={pair.breakout_call_url} />
       )}
+      {/* Vanity alias resolves at /g/<code>/<team-slug> and 302s to
+          the breakout URL. Surfaced even when no breakout has been
+          generated yet so the GM can hand the URL out ahead of time
+          (the alias landing page handles the "not yet" case
+          gracefully). Suppressed entirely when the pair has no
+          builder + guider yet — slug derivation needs both to make
+          a stable label. */}
+      {builder && guider && (
+        <AliasLine
+          code={code}
+          slug={pairSlug(
+            pair.display_name ??
+              `${builder.display_name} ↔ ${guider.display_name}`,
+          )}
+        />
+      )}
+    </div>
+  );
+}
+
+function AliasLine({ code, slug }: { code: string; slug: string }) {
+  const [copied, setCopied] = useState(false);
+  if (!slug) return null;
+  const aliasPath = `/g/${code}/${slug}`;
+  const fullUrl =
+    typeof window === "undefined"
+      ? aliasPath
+      : `${window.location.origin}${aliasPath}`;
+  return (
+    <div
+      className="flex items-center gap-1.5 border-t border-[var(--color-line)] pt-2"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <span className="t-mono text-[10px] uppercase text-[var(--color-ink-3)]">
+        alias
+      </span>
+      <code
+        className="t-mono flex-1 truncate text-[11px]"
+        style={{ color: "var(--color-ink-2)" }}
+        title={fullUrl}
+      >
+        {aliasPath}
+      </code>
+      <button
+        type="button"
+        onClick={async (e) => {
+          e.stopPropagation();
+          try {
+            await navigator.clipboard.writeText(fullUrl);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          } catch {
+            setCopied(false);
+          }
+        }}
+        className="t-mono rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+        style={{
+          background: copied
+            ? "var(--color-t-green)"
+            : "var(--color-paper-2)",
+          color: copied ? "#fff" : "var(--color-ink-2)",
+          border: "1px solid var(--color-line)",
+        }}
+      >
+        {copied ? "✓ Copied" : "Copy"}
+      </button>
     </div>
   );
 }

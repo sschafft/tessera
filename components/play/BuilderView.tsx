@@ -396,34 +396,20 @@ function BuilderInteractive({ state }: { state: PlayState }) {
         );
         return;
       }
+      // Idle (or armed phantom from before this UX simplification) —
+      // commit a placement immediately with the dock's current
+      // shape/colour/rotation. Skipping the phantom arm-then-Place
+      // step matches user feedback that any cell click should be
+      // read as "place here"; the dock is now the only place to
+      // pre-pick attrs before clicking.
       if (target?.kind === "phantom") {
-        // Commit the in-flight phantom + arm a new one at the clicked
-        // cell with the same defaults. This is the "place a row of
-        // identical pieces" rhythm — every empty-cell tap commits and
-        // re-arms.
+        // Defensive — if a phantom is somehow lingering (e.g. legacy
+        // keyboard arming path), commit it first so we don't drop
+        // the user's queued placement.
         place(target.q, target.r, target.shape, target.color, target.rot);
-        setNextShape(target.shape);
-        setNextColor(target.color);
-        setNextRotation(target.rot);
-        setTarget({
-          kind: "phantom",
-          q,
-          r,
-          shape: target.shape,
-          color: target.color,
-          rot: target.rot,
-        });
-        return;
       }
-      // Idle → arm a phantom at the clicked cell with the saved defaults.
-      setTarget({
-        kind: "phantom",
-        q,
-        r,
-        shape: nextShape,
-        color: nextColor,
-        rot: nextRotation,
-      });
+      place(q, r, nextShape, nextColor, nextRotation);
+      setTarget(null);
     },
     [target, place, applyOptimisticPatch, nextShape, nextColor, nextRotation],
   );
@@ -871,9 +857,7 @@ function BuilderInteractive({ state }: { state: PlayState }) {
         >
           {target?.kind === "piece"
             ? "editing — change attrs at left, click an empty cell to move, ⌫ to remove"
-            : target?.kind === "phantom"
-              ? "armed — sculpt at left, click another cell to commit + chain, Enter to place + stop"
-              : "click any cell to start placing"}
+            : "set shape · colour · rotation at left, then click a cell to place"}
         </p>
 
         {/* Width-matched progress bar anchors the score under the

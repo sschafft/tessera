@@ -394,6 +394,18 @@ export interface PairStore {
   swapAllRoles(game_id: string): Promise<number>;
 
   /**
+   * Re-randomise WHO is partnered with WHOM across all fully-paired
+   * pairs in the game. Observers stay pinned to their existing
+   * pair_id (they still watch the same pair slot, just with new
+   * occupants). Any per-pair display_name is cleared so a stale
+   * "The Pelicans" rename can't survive Alice being re-dealt onto a
+   * different partner. Pre-round only — the route handler enforces
+   * the round-not-running invariant. Returns the number of pairs
+   * whose builder or guider id actually changed.
+   */
+  reshufflePartners(game_id: string): Promise<number>;
+
+  /**
    * Add a participant to an existing pair as an observer. Updates the
    * participant's role + pair_id; does not modify the pair row.
    */

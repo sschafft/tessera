@@ -110,6 +110,7 @@ class MemoryGameRepository implements GameRepository {
     findById: (pair_id) => this.findPairById(pair_id),
     swapRoles: (pair_id) => this.swapPairRoles(pair_id),
     swapAllRoles: (game_id) => this.swapAllPairRoles(game_id),
+    reshufflePartners: (game_id) => this.reshufflePartners(game_id),
     assignObserver: (pid, pair_id) => this.assignObserver(pid, pair_id),
     setDisplayName: (pair_id, name) => this.setPairDisplayName(pair_id, name),
     clearAllocations: (game_id) => this.clearAllocations(game_id),
@@ -364,6 +365,59 @@ class MemoryGameRepository implements GameRepository {
       count += 1;
     }
     return count;
+  }
+
+  async reshufflePartners(game_id: string): Promise<number> {
+    const pairs = Array.from(this._pairTable.values()).filter(
+      (p) =>
+        p.game_id === game_id &&
+        p.builder_id !== null &&
+        p.guider_id !== null,
+    );
+    if (pairs.length < 2) return 0;
+
+    const builders = pairs.map((p) => p.builder_id!);
+    const guiders = pairs.map((p) => p.guider_id!);
+    // Fisher-Yates on each list independently. Re-rolling when the
+    // shuffle reproduces every original mapping would let an
+    // adversarial RNG loop, but the probability is 1/n! and the
+    // dashboard surface lets the GM click the button again anyway —
+    // a single pass is enough.
+    shuffleInPlace(builders);
+    shuffleInPlace(guiders);
+
+    let changed = 0;
+    for (let i = 0; i < pairs.length; i++) {
+      const pair = pairs[i]!;
+      const newBuilder = builders[i]!;
+      const newGuider = guiders[i]!;
+      if (
+        pair.builder_id !== newBuilder ||
+        pair.guider_id !== newGuider ||
+        pair.display_name !== null
+      ) {
+        pair.builder_id = newBuilder;
+        pair.guider_id = newGuider;
+        // The custom name belonged to whoever WAS partnered up; clear
+        // it so a stale "The Pelicans" rename doesn't follow Alice
+        // onto her new pair.
+        pair.display_name = null;
+        // Re-anchor the participants' pair_id so listActive() reports
+        // the new assignment.
+        const b = this._participantTable.get(newBuilder);
+        const g = this._participantTable.get(newGuider);
+        if (b) {
+          b.pair_id = pair.id;
+          b.role = "builder";
+        }
+        if (g) {
+          g.pair_id = pair.id;
+          g.role = "guider";
+        }
+        changed += 1;
+      }
+    }
+    return changed;
   }
 
   async createPair(
@@ -1053,4 +1107,19 @@ let _instance: MemoryGameRepository | null = null;
 export function getMemoryRepository(): MemoryGameRepository {
   if (!_instance) _instance = new MemoryGameRepository();
   return _instance;
+}
+
+/**
+ * Fisher-Yates in-place shuffle. Used by reshufflePartners to
+ * re-randomise pair assignments. Uses Math.random — fine for
+ * dashboard-driven reshuffles; the repository isn't a security
+ * boundary.
+ */
+function shuffleInPlace<T>(arr: T[]): void {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = arr[i]!;
+    arr[i] = arr[j]!;
+    arr[j] = tmp;
+  }
 }
