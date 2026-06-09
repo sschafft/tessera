@@ -13,7 +13,6 @@ import {
 } from "@/lib/grid/coords";
 import type { PlacedPiece } from "@/components/play/PlayContent";
 import { CoordRulers } from "./CoordRulers";
-import { WrongTooltip } from "./WrongTooltip";
 
 /**
  * Single-target model. Either:
@@ -64,17 +63,16 @@ export interface BuilderCanvasProps {
  *   tile at its cell with the dock's current shape/color/rot.
  * - Piece halo (target.kind === "piece") draws a solid outline
  *   around the targeted piece.
- * - Coord rulers always visible. Empty hint shows when the board is
- *   bare. Wrong-because tooltip mounts only on hover of a wrong
- *   piece — zero render cost otherwise.
+ * - Coord rulers always visible. Wrong pieces signal via the red
+ *   wash + red badge dot; the per-attribute breakdown isn't surfaced
+ *   here (the hover tooltip was distracting and clipped on edge
+ *   cells — removed 2026-06-09).
  *
  * Latency notes:
  * - `occupiedByCell` memoised on `pieces` identity so cursor moves
  *   don't churn the .map() loops.
  * - Hit-target buttons use cell-keyed `aria-label`s; React.memo'ing
  *   each cell would cost more than the cheap re-render.
- * - The wrong-because tooltip sets state ONLY on enter/leave of a
- *   wrong piece — neutral pieces don't write to state on hover.
  */
 function BuilderCanvasImpl({
   pieces,
@@ -88,11 +86,6 @@ function BuilderCanvasImpl({
 }: BuilderCanvasProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<{ q: number; r: number } | null>(null);
-  const [hoverWrong, setHoverWrong] = useState<{
-    pieceId: string;
-    x: number;
-    y: number;
-  } | null>(null);
 
   const grid = gridSizeFor(complexity);
   const { width, height } = canvasSizeFor(complexity);
@@ -143,7 +136,6 @@ function BuilderCanvasImpl({
 
   const handleLeave = () => {
     setHover(null);
-    setHoverWrong(null);
   };
 
   // Surface a hover ghost ONLY when the dock's idle. When a phantom
@@ -314,7 +306,6 @@ function BuilderCanvasImpl({
           const size = tileSizeFor(p.shape);
           const offset = (size - CELL) / 2;
           const isEditing = editingId === p.id;
-          const isWrong = p.correct === false;
           return (
             <div
               key={p.id}
@@ -343,15 +334,6 @@ function BuilderCanvasImpl({
                 height: CELL,
                 transition: "left .15s ease, top .15s ease",
                 cursor: "pointer",
-              }}
-              onMouseEnter={() => {
-                if (!isWrong) return;
-                const cx = PADDING + p.q * CELL + CELL / 2;
-                const cy = PADDING + p.r * CELL;
-                setHoverWrong({ pieceId: p.id, x: cx, y: cy });
-              }}
-              onMouseLeave={() => {
-                if (isWrong) setHoverWrong(null);
               }}
             >
               <Tile
@@ -446,22 +428,6 @@ function BuilderCanvasImpl({
           </div>
         )}
 
-        {/* R3 — wrong-because tooltip. Mounts only on hover of a wrong
-            piece; pointer-events: none so it can't steal hover. */}
-        {hoverWrong &&
-          (() => {
-            const piece = pieces.find((pp) => pp.id === hoverWrong.pieceId);
-            if (!piece) return null;
-            return (
-              <WrongTooltip
-                q={piece.q}
-                r={piece.r}
-                x={hoverWrong.x}
-                y={hoverWrong.y}
-                reasons={piece.wrong_reasons ?? null}
-              />
-            );
-          })()}
       </div>
     </div>
   );

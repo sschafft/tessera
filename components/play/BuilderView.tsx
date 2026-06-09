@@ -12,6 +12,7 @@ import { BriefEnvelope } from "./BriefEnvelope";
 import { BriefIntroModal, briefIntroSeenKey } from "./BriefIntroModal";
 import { Confetti } from "./Confetti";
 import { BUILDER_SHAPES, paletteColorsFor } from "@/lib/pattern/palette";
+import { canvasSizeFor } from "@/lib/grid/coords";
 import { playSolved } from "@/lib/sound";
 import { PairNameBadge } from "./PairNameBadge";
 import { SolvedBanner } from "./SolvedBanner";
@@ -716,12 +717,13 @@ function BuilderInteractive({ state }: { state: PlayState }) {
     : null;
 
   // Neutral = placed but the server hasn't echoed correctness yet
-  // (optimistic temps + recently-mutated pieces). Counts surface to the
-  // tri-colour bar's gray segment.
-  const placedNeutral = Math.max(
-    0,
-    visiblePieces.length - liveCorrect - liveWrong,
-  );
+  // (optimistic temps + recently-mutated pieces). Drives the
+  // "checking N" pill on the bar — only meaningful while live
+  // scoring is on, otherwise the indicator would persist forever
+  // (live_score is null until the GM turns testing on).
+  const placedNeutral = state.live_score
+    ? Math.max(0, visiblePieces.length - liveCorrect - liveWrong)
+    : 0;
 
   return (
     <div
@@ -834,24 +836,18 @@ function BuilderInteractive({ state }: { state: PlayState }) {
         </div>
       </aside>
 
-      {/* ── CENTER: Progress bar + canvas ──
+      {/* ── CENTER: canvas + below-board progress bar + hint ──
           min-w-0 lets the column shrink correctly inside its grid
           track at the stacked breakpoint without flexbox bleeding the
-          canvas's intrinsic 640px out into the gutter. */}
+          canvas's intrinsic 640px out into the gutter. The progress
+          bar moved below the board so the % correct doesn't flicker
+          in the player's peripheral vision while they're working at
+          the canvas. */}
       <section className="relative flex min-w-0 flex-col items-center gap-4 p-6">
         <PrototypeOverlay
           prototype={state.prototype}
           complexity={complexity}
         />
-
-        <div style={{ width: "100%", maxWidth: 540 }}>
-          <ProgressBar
-            correct={liveCorrect}
-            wrong={liveWrong}
-            placedNeutral={placedNeutral}
-            total={liveTotal > 0 ? liveTotal : state.goal_count || 8}
-          />
-        </div>
 
         <div className="relative">
           {partialCelebrationKey > 0 && (
@@ -877,8 +873,21 @@ function BuilderInteractive({ state }: { state: PlayState }) {
             ? "editing — change attrs at left, click an empty cell to move, ⌫ to remove"
             : target?.kind === "phantom"
               ? "armed — sculpt at left, click another cell to commit + chain, Enter to place + stop"
-              : "click any cell to start placing — hover wrong (red) pieces for a breakdown"}
+              : "click any cell to start placing"}
         </p>
+
+        {/* Width-matched progress bar anchors the score under the
+            board it summarises. The hard width (canvasSizeFor.width)
+            keeps the bar visually flush with the canvas at every
+            complexity instead of stretching to the column edges. */}
+        <div style={{ width: canvasSizeFor(complexity).width }}>
+          <ProgressBar
+            correct={liveCorrect}
+            wrong={liveWrong}
+            placedNeutral={placedNeutral}
+            total={liveTotal > 0 ? liveTotal : state.goal_count || 8}
+          />
+        </div>
       </section>
 
       {/* ── RIGHT: Brief panel (always visible, per PR #74) ── */}
