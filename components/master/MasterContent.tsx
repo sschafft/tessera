@@ -172,6 +172,11 @@ export function MasterContent({
     [doAction],
   );
 
+  const reshufflePairs = useCallback(
+    () => doAction("reshuffle", "/pairs/reshuffle", null),
+    [doAction],
+  );
+
   const [resetPairsModalOpen, setResetPairsModalOpen] = useState(false);
   const requestResetPairs = useCallback(
     () => setResetPairsModalOpen(true),
@@ -724,6 +729,7 @@ export function MasterContent({
                   }
                 >
                   <PairsPanel
+                    code={code}
                     pairs={pairs}
                     participants={participants}
                     focusedPairId={focusedPairId}
@@ -731,6 +737,7 @@ export function MasterContent({
                     roundRunning={round?.status === "running"}
                     onSwapRoles={swapPairRoles}
                     onSwapAllRoles={swapAllPairRoles}
+                    onReshufflePartners={reshufflePairs}
                     onResetPairs={requestResetPairs}
                     onExpand={() => setPairsExpanded(true)}
                   />
@@ -823,6 +830,7 @@ export function MasterContent({
                 onRelease={releaseSeat}
               />
               <PairsPanel
+                code={code}
                 pairs={pairs}
                 participants={participants}
                 focusedPairId={focusedPairId}
@@ -830,6 +838,7 @@ export function MasterContent({
                 roundRunning={round?.status === "running"}
                 onSwapRoles={swapPairRoles}
                 onSwapAllRoles={swapAllPairRoles}
+                onReshufflePartners={reshufflePairs}
                 onResetPairs={requestResetPairs}
                 onExpand={() => setPairsExpanded(true)}
                 breakouts={
