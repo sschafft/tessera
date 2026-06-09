@@ -70,6 +70,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       partner: null,
       pair: null,
       round: roundSummary(round),
+      round_count: game.round_count,
       pair_round: null,
       goal: null,
       goal_count: 0,
@@ -315,6 +316,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
         }
       : null,
     round: roundSummary(round),
+    round_count: game.round_count,
     pair_round: pairRound
       ? {
           id: pairRound.id,

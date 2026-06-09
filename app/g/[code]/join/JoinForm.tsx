@@ -19,12 +19,23 @@ interface FormError {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+interface JoinedSeat {
+  redirect: string;
+  recoveryUrl: string | null;
+}
+
 export function JoinForm({ code, defaultName, breakoutProvider }: JoinFormProps) {
   const router = useRouter();
   const [displayName, setDisplayName] = useState(defaultName);
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<FormError | null>(null);
+  // Drives the post-join confirmation panel. Set to the freshly
+  // minted seat after a successful POST so the player can copy the
+  // recovery URL before navigating into /play — the 2026-06-09
+  // playtest caught players whose tabs closed without ever seeing
+  // the URL, leaving them with no path back into the same seat.
+  const [joined, setJoined] = useState<JoinedSeat | null>(null);
 
   const emailRequired = breakoutProvider === "google_meet";
 
@@ -108,12 +119,13 @@ export function JoinForm({ code, defaultName, breakoutProvider }: JoinFormProps)
       }
       const data: { redirect: string; recovery_url: string | null } =
         await res.json();
+      let fullUrl: string | null = null;
       if (data.recovery_url) {
         // Stash a fully-qualified URL so the player can paste it
         // anywhere (including a different browser). Cookie + the
         // home-page "Resume game" pill cover the same-browser
         // reconnect path; this is the rarer cross-device fallback.
-        const fullUrl = `${window.location.origin}${data.recovery_url}`;
+        fullUrl = `${window.location.origin}${data.recovery_url}`;
         try {
           window.localStorage.setItem(
             `tessera_recovery_${code}`,
@@ -125,12 +137,14 @@ export function JoinForm({ code, defaultName, breakoutProvider }: JoinFormProps)
           // device-recovery URL is just lost.
         }
       }
-      // Hand off to /play with a one-shot ?welcome=1 flag so the play
-      // surface can render a brief non-blocking confirmation toast.
-      // No modal interrupts join — the cookie reconnect path + the
-      // home-page Resume pill already handle the common cases.
-      const sep = data.redirect.includes("?") ? "&" : "?";
-      router.push(`${data.redirect}${sep}welcome=1`);
+      // Show the recovery URL confirmation BEFORE routing into /play.
+      // The 2026-06-09 orchestrator playtest caught 8 blockers + 7
+      // majors where players' tabs closed and the seat became
+      // unrecoverable because the URL was never shown to them — only
+      // stashed in localStorage. The interstitial mirrors the GM
+      // CreatedConfirm pattern: copy URL, then go.
+      setJoined({ redirect: data.redirect, recoveryUrl: fullUrl });
+      setSubmitting(false);
     } catch (err) {
       setError({
         field: null,
@@ -143,6 +157,19 @@ export function JoinForm({ code, defaultName, breakoutProvider }: JoinFormProps)
   const nameError = error?.field === "name" ? error.message : null;
   const emailError = error?.field === "email" ? error.message : null;
   const generalError = error?.field === null ? error.message : null;
+
+  if (joined) {
+    return (
+      <JoinedConfirm
+        code={code}
+        recoveryUrl={joined.recoveryUrl}
+        onContinue={() => {
+          const sep = joined.redirect.includes("?") ? "&" : "?";
+          router.push(`${joined.redirect}${sep}welcome=1`);
+        }}
+      />
+    );
+  }
 
   return (
     <form
@@ -270,6 +297,103 @@ export function JoinForm({ code, defaultName, breakoutProvider }: JoinFormProps)
         {submitting ? "Joining…" : "Join game →"}
       </button>
     </form>
+  );
+}
+
+function JoinedConfirm({
+  code,
+  recoveryUrl,
+  onContinue,
+}: {
+  code: string;
+  recoveryUrl: string | null;
+  onContinue: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="t-card flex flex-col gap-4 p-6">
+      <div className="flex flex-col gap-1">
+        <span className="t-mono text-[11px] uppercase tracking-widest text-[var(--color-ink-3)]">
+          SEAT SAVED · {code}
+        </span>
+        <h3 className="t-display text-[22px] font-bold tracking-tight">
+          You&apos;re in.
+        </h3>
+      </div>
+
+      {recoveryUrl ? (
+        <>
+          <div
+            className="flex flex-col gap-1 rounded-[14px] px-4 py-3"
+            style={{ background: "var(--color-tint-yellow)" }}
+          >
+            <div
+              className="text-[12px] font-bold uppercase tracking-wide"
+              style={{ color: "#7a5b00" }}
+            >
+              ⚠ Save your recovery URL
+            </div>
+            <p
+              className="text-[13px]"
+              style={{ color: "#7a5b00", lineHeight: 1.45 }}
+            >
+              If this tab closes or you switch browsers, this URL is the only
+              way back into your seat. Re-joining with the same name will
+              fail.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <span className="t-mono text-[11px] uppercase tracking-wide text-[var(--color-ink-2)]">
+              Recovery URL
+            </span>
+            <div
+              className="t-mono break-all rounded-[10px] border border-[var(--color-line)] bg-[var(--color-paper-2)] px-3 py-2.5 text-[11px]"
+              style={{ wordBreak: "break-all" }}
+            >
+              {recoveryUrl}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              className="t-btn t-btn--ghost t-btn--sm"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(recoveryUrl);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 1500);
+                } catch {
+                  setCopied(false);
+                }
+              }}
+            >
+              {copied ? "✓ Copied" : "Copy URL"}
+            </button>
+            <button
+              type="button"
+              className="t-btn t-btn--primary t-btn--sm"
+              onClick={onContinue}
+            >
+              I&apos;ve saved it · join lobby →
+            </button>
+          </div>
+        </>
+      ) : (
+        // No recovery URL (older participants, or backend fallback).
+        // Surface the lobby CTA without a misleading "save this URL"
+        // ask, but still don't auto-redirect — the explicit click
+        // anchors the post-join transition.
+        <button
+          type="button"
+          className="t-btn t-btn--primary self-start"
+          onClick={onContinue}
+        >
+          Continue to lobby →
+        </button>
+      )}
+    </div>
   );
 }
 
