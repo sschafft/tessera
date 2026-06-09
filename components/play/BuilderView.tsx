@@ -713,12 +713,23 @@ function BuilderInteractive({ state }: { state: PlayState }) {
 
   return (
     <div
-      className="relative grid w-full grid-cols-1 min-[1180px]:[grid-template-columns:320px_minmax(0,1fr)_320px]"
+      // 3-column layout kicks in at 1280px — anything narrower than
+      // that puts a 640px (c=8) canvas on a collision course with the
+      // 320px asides, which `<main>`'s overflow:hidden then clips,
+      // burying edge cells under the dock + brief panel. `minmax(640px,
+      // 1fr)` on the centre column locks in the canvas footprint and
+      // lets the asides absorb the surplus.
+      className="relative grid w-full grid-cols-1 min-[1280px]:[grid-template-columns:288px_minmax(640px,1fr)_288px]"
     >
       {/* ── LEFT: Dock + secondary actions ── */}
       <aside
-        className="flex flex-col gap-4 border-b border-[var(--color-line)] bg-[var(--color-paper-2)] p-5 min-[1180px]:border-b-0 min-[1180px]:border-r"
+        className="flex flex-col items-center border-b border-[var(--color-line)] bg-[var(--color-paper-2)] p-5 min-[1280px]:border-b-0 min-[1280px]:border-r"
       >
+        {/* The aside is a fixed-width column at the desktop breakpoint
+            but stretches edge-to-edge below it. Without this cap the
+            dock would balloon to 1100px wide in a stacked layout and
+            its colour swatches would be unusably big. */}
+        <div className="flex w-full max-w-[20rem] flex-col gap-4 min-[1280px]:max-w-none">
         {state.pair && (
           <PairNameBadge
             code={state.code}
@@ -808,10 +819,14 @@ function BuilderInteractive({ state }: { state: PlayState }) {
             {error}
           </p>
         )}
+        </div>
       </aside>
 
-      {/* ── CENTER: Progress bar + canvas ── */}
-      <section className="relative flex flex-col items-center gap-4 p-6">
+      {/* ── CENTER: Progress bar + canvas ──
+          min-w-0 lets the column shrink correctly inside its grid
+          track at the stacked breakpoint without flexbox bleeding the
+          canvas's intrinsic 640px out into the gutter. */}
+      <section className="relative flex min-w-0 flex-col items-center gap-4 p-6">
         <PrototypeOverlay
           prototype={state.prototype}
           complexity={complexity}
@@ -856,25 +871,27 @@ function BuilderInteractive({ state }: { state: PlayState }) {
 
       {/* ── RIGHT: Brief panel (always visible, per PR #74) ── */}
       <aside
-        className="relative flex flex-shrink-0 flex-col items-stretch gap-3 p-5"
+        className="relative flex flex-col items-center p-5"
         style={{ zIndex: 30 }}
       >
-        {state.brief && state.brief.role === "builder" && (
-          <BriefEnvelope
-            key={state.brief.title}
-            role="builder"
-            title={state.brief.title}
-            rules={state.brief.rules}
-          />
-        )}
-        {state.partner_brief && (
-          <BriefEnvelope
-            role={state.partner_brief.role}
-            title={state.partner_brief.title}
-            rules={state.partner_brief.rules}
-            revealedPartner
-          />
-        )}
+        <div className="flex w-full max-w-[20rem] flex-col gap-3 min-[1280px]:max-w-none">
+          {state.brief && state.brief.role === "builder" && (
+            <BriefEnvelope
+              key={state.brief.title}
+              role="builder"
+              title={state.brief.title}
+              rules={state.brief.rules}
+            />
+          )}
+          {state.partner_brief && (
+            <BriefEnvelope
+              role={state.partner_brief.role}
+              title={state.partner_brief.title}
+              rules={state.partner_brief.rules}
+              revealedPartner
+            />
+          )}
+        </div>
       </aside>
 
       {solvedShown && (
