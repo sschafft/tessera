@@ -40,7 +40,10 @@ export function BriefEnvelope({
     role === "builder" ? "var(--color-t-red)" : "var(--color-t-blue)";
 
   return (
-    <div className="t-card relative" style={{ width: 320, padding: 18 }}>
+    <div
+      className="t-card relative w-full"
+      style={{ maxWidth: 320, padding: 18 }}
+    >
       <div className="mb-2.5 flex items-center justify-between">
         <span
           className="t-mono"

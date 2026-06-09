@@ -330,7 +330,14 @@ export function PlayContent({ code, initial }: PlayContentProps) {
         breakoutCallUrl={state.pair?.breakout_call_url ?? null}
         partnerPresent={partnerPresent}
       />
-      <main className="relative flex flex-1 overflow-hidden">
+      {/* overflow-x-hidden keeps stray decorative bleed in check, but
+          overflow-y-auto is essential — at complexity 8 the 640px-tall
+          builder canvas plus the top bar plus the progress strip can
+          exceed an 800px-tall viewport, and clipping the bottom of the
+          canvas was hiding the last row of cells on common laptop
+          screens. Vertical scroll is the right escape hatch when a
+          short viewport meets a high-complexity round. */}
+      <main className="relative flex flex-1 overflow-y-auto overflow-x-hidden">
         {renderBody(state)}
       </main>
       <SuperPowerToast gameId={state.game_id} />
