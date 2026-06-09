@@ -307,6 +307,18 @@ function BuilderInteractive({ state }: { state: PlayState }) {
                 wrong_reasons: real.wrong_reasons ?? null,
               }),
           );
+          // Re-anchor the target if the user clicked into edit mode
+          // on the temp piece before the POST returned. Without this
+          // the swap orphans target.id, editingPiece resolves to null,
+          // and the cleanup effect immediately drops the target — so
+          // the dock flips back to "no target" the instant the
+          // network response lands. Jetty's c=8 playtest hit this
+          // every time the agent clicked within ~POST RTT of placing.
+          setTarget((t) =>
+            t?.kind === "piece" && t.id === tempId
+              ? { kind: "piece", id: real.id }
+              : t,
+          );
         }
         // If the response shape was unexpected, fall through — the
         // GC effect will eventually drop the temp once /play
