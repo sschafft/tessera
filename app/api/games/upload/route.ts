@@ -329,6 +329,15 @@ export async function POST(req: NextRequest) {
       if (team.team_name) {
         await repo.pairs.setDisplayName(pair.id, team.team_name);
       }
+      // Pre-supplied breakout URL from the CSV (`breakout_url`
+      // column). Lives at the team level — `groupByTeam` already
+      // collapsed identical values across the team's rows. Writing
+      // it here with a null event_id means /breakouts/generate will
+      // skip this pair and end-game cleanup won't issue a Calendar
+      // DELETE against a URL Tessera doesn't own.
+      if (team.breakout_url) {
+        await repo.pairs.setPreSuppliedBreakout(pair.id, team.breakout_url);
+      }
       // Per-pair brief overrides come from the same row as the
       // role they're for: the builder row's brief_title/rules
       // become the builder brief, the guider row's become the

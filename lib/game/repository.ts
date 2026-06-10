@@ -467,6 +467,16 @@ export interface PairStore {
     breakout: { call_url: string; event_id: string },
   ): Promise<void>;
 
+  /**
+   * Persist a pre-supplied breakout URL with no originating calendar
+   * event. Used by the CSV upload flow when the GM has fed us their
+   * own room links per team. End-game cleanup keys off `event_id`,
+   * so leaving it null is the explicit signal that Tessera doesn't
+   * own this URL's lifecycle and shouldn't issue a Calendar DELETE
+   * against it.
+   */
+  setPreSuppliedBreakout(pair_id: string, call_url: string): Promise<void>;
+
   /** Clear breakout state on a single pair (used after deletion). */
   clearBreakout(pair_id: string): Promise<void>;
 
