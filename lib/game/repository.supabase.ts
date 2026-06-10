@@ -1369,10 +1369,12 @@ export class SupabaseGameRepository implements GameRepository {
   async upsertRoundSurvey(input: {
     round_id: string;
     participant_id: string;
-    comm_balance: number;
-    attr_self: number;
-    attr_partner: number;
-    attr_system: number;
+    fric_puzzle: number;
+    fric_communication: number;
+    fric_time_pressure: number;
+    fric_game_adjustments: number;
+    fric_other: number;
+    fric_other_text: string | null;
   }): Promise<RoundSurveyRecord> {
     const supabase = getServiceClient();
     const { data, error } = await supabase
@@ -1381,10 +1383,12 @@ export class SupabaseGameRepository implements GameRepository {
         {
           round_id: input.round_id,
           participant_id: input.participant_id,
-          comm_balance: input.comm_balance,
-          attr_self: input.attr_self,
-          attr_partner: input.attr_partner,
-          attr_system: input.attr_system,
+          fric_puzzle: input.fric_puzzle,
+          fric_communication: input.fric_communication,
+          fric_time_pressure: input.fric_time_pressure,
+          fric_game_adjustments: input.fric_game_adjustments,
+          fric_other: input.fric_other,
+          fric_other_text: input.fric_other_text,
           submitted_at: new Date().toISOString(),
         },
         { onConflict: "round_id,participant_id" },
@@ -1430,24 +1434,30 @@ function toRoundSurveyRecord(row: {
   id: string;
   round_id: string;
   participant_id: string;
-  comm_balance: number;
-  attr_self: number | null;
-  attr_partner: number | null;
-  attr_system: number | null;
+  fric_puzzle: number | null;
+  fric_communication: number | null;
+  fric_time_pressure: number | null;
+  fric_game_adjustments: number | null;
+  fric_other: number | null;
+  fric_other_text: string | null;
   submitted_at: string;
 }): RoundSurveyRecord {
-  // Pre-2026-05-04 rows have null attr_* columns; surface them as
+  // Pre-2026-06-10 rows have null fric_* columns; surface them as
   // zero so the record shape stays uniform for consumers. The
-  // aggregator filters by sum to ignore those legacy rows when
-  // computing means.
+  // category sliders are independent (no sum invariant) so any
+  // legacy row just looks like "no friction reported", which is the
+  // honest representation given we don't have the old values
+  // available in this shape any more.
   return {
     id: row.id,
     round_id: row.round_id,
     participant_id: row.participant_id,
-    comm_balance: row.comm_balance,
-    attr_self: row.attr_self ?? 0,
-    attr_partner: row.attr_partner ?? 0,
-    attr_system: row.attr_system ?? 0,
+    fric_puzzle: row.fric_puzzle ?? 0,
+    fric_communication: row.fric_communication ?? 0,
+    fric_time_pressure: row.fric_time_pressure ?? 0,
+    fric_game_adjustments: row.fric_game_adjustments ?? 0,
+    fric_other: row.fric_other ?? 0,
+    fric_other_text: row.fric_other_text ?? null,
     submitted_at: row.submitted_at,
   };
 }

@@ -1068,30 +1068,36 @@ class MemoryGameRepository implements GameRepository {
   async upsertRoundSurvey(input: {
     round_id: string;
     participant_id: string;
-    comm_balance: number;
-    attr_self: number;
-    attr_partner: number;
-    attr_system: number;
+    fric_puzzle: number;
+    fric_communication: number;
+    fric_time_pressure: number;
+    fric_game_adjustments: number;
+    fric_other: number;
+    fric_other_text: string | null;
   }): Promise<RoundSurveyRecord> {
     const key = this.surveyKey(input.round_id, input.participant_id);
     const existing = this._roundSurveyTable.get(key);
     const record: RoundSurveyRecord = existing
       ? {
           ...existing,
-          comm_balance: input.comm_balance,
-          attr_self: input.attr_self,
-          attr_partner: input.attr_partner,
-          attr_system: input.attr_system,
+          fric_puzzle: input.fric_puzzle,
+          fric_communication: input.fric_communication,
+          fric_time_pressure: input.fric_time_pressure,
+          fric_game_adjustments: input.fric_game_adjustments,
+          fric_other: input.fric_other,
+          fric_other_text: input.fric_other_text,
           submitted_at: new Date().toISOString(),
         }
       : {
           id: crypto.randomUUID(),
           round_id: input.round_id,
           participant_id: input.participant_id,
-          comm_balance: input.comm_balance,
-          attr_self: input.attr_self,
-          attr_partner: input.attr_partner,
-          attr_system: input.attr_system,
+          fric_puzzle: input.fric_puzzle,
+          fric_communication: input.fric_communication,
+          fric_time_pressure: input.fric_time_pressure,
+          fric_game_adjustments: input.fric_game_adjustments,
+          fric_other: input.fric_other,
+          fric_other_text: input.fric_other_text,
           submitted_at: new Date().toISOString(),
         };
     this._roundSurveyTable.set(key, record);

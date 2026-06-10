@@ -183,12 +183,7 @@ export function RoundEndedView({ state }: RoundEndedViewProps) {
       {state.round?.id &&
         state.round.reflection_survey_requested === true &&
         (state.role === "builder" || state.role === "guider") && (
-          <RoundSurvey
-            code={state.code}
-            roundId={state.round.id}
-            meName={state.me.display_name}
-            partnerName={state.partner?.display_name ?? null}
-          />
+          <RoundSurvey code={state.code} roundId={state.round.id} />
         )}
 
       <p className="t-mono text-center text-[12px] text-[var(--color-ink-3)]">

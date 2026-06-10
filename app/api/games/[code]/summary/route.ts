@@ -5,7 +5,6 @@ import { getRepository } from "@/lib/game/getRepository";
 import { scorePlacements } from "@/lib/scoring/score";
 import type { GoalPattern } from "@/lib/pattern/types";
 import type { PairRoundRecord } from "@/lib/game/repository";
-import { aggregateFrictionByRound } from "@/lib/game/frictionAggregate";
 
 export const runtime = "nodejs";
 
@@ -189,43 +188,12 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     return rb - ra;
   });
 
-  // Per-round survey aggregate. Surfaces what pair players self-
-  // reported about who carried the conversation + how the round's
-  // friction split across self / partner / system. Anonymised — only
-  // counts + averages, no individual responses, and rounds with
-  // fewer than 4 responses suppress entirely (see
-  // MIN_RESPONSES_FOR_AGGREGATE in lib/game/frictionAggregate).
-  const surveysByRound = await Promise.all(
-    allRounds.map(async (round) => ({
-      round,
-      responses: await repo.roundSurveys.listForRound(round.id),
-    })),
-  );
-  // Role lookup feeds the by-role split inside the aggregator. The
-  // GM dashboard's `byId` map is built from listActive participants
-  // above; reuse it but narrow to builder/guider since observers
-  // don't fill the survey anyway.
-  const roleByParticipantId = new Map<string, "builder" | "guider">();
-  for (const p of allParticipants) {
-    if (p.role === "builder" || p.role === "guider") {
-      roleByParticipantId.set(p.id, p.role);
-    }
-  }
-  // The aggregator returns { rounds, suppressed } — qualifying rounds
-  // (>= MIN_RESPONSES_FOR_AGGREGATE) and rounds that got responses
-  // but didn't clear the anonymity floor. We surface both so the
-  // GameEndedView can show a "below the floor" hint when the GM's
-  // expecting an aggregate that won't render.
-  const surveyAggregate = aggregateFrictionByRound(
-    surveysByRound.map(({ round, responses }) => ({
-      round_id: round.id,
-      round_index: round.index,
-      responses,
-      roleByParticipantId,
-    })),
-  );
-  const surveys = surveyAggregate.rounds;
-  const surveysSuppressed = surveyAggregate.suppressed;
+  // The 2026-06-10 redesign dropped the per-round survey aggregate
+  // from the GameEndedView entirely — anonymised round means felt
+  // anonymous in the wrong way for in-person debriefs, and the
+  // categories (self / partner / system) rolled too much under one
+  // bucket. The reflection data still lives in `round_surveys` for
+  // post-hoc analysis; this endpoint just no longer publishes it.
 
   return NextResponse.json({
     code,
@@ -238,7 +206,5 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       wrong_pts: game.scoring_wrong_pts,
     },
     pairs: summary,
-    surveys,
-    surveys_suppressed: surveysSuppressed,
   });
 }

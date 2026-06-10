@@ -30,46 +30,14 @@ interface PairSummary {
   }>;
 }
 
-interface FrictionMeans {
-  self: number;
-  partner: number;
-  system: number;
-}
-
-interface FrictionAsymmetry {
-  axis: "self" | "partner" | "system";
-  builder: number;
-  guider: number;
-  delta: number;
-}
-
-interface SurveyAggregate {
-  round_id: string;
-  round_index: number;
-  response_count: number;
-  /** 0..100 — 0 = "I did most of it" leaning, 100 = "partner did most". */
-  avg_comm_balance: number;
-  /** Forced-choice attribution mean across all respondents, sums to 100. */
-  mean: FrictionMeans;
-  by_role: {
-    builder: FrictionMeans | null;
-    guider: FrictionMeans | null;
-  };
-  asymmetry: FrictionAsymmetry[];
-}
-
-interface SurveyAggregateSuppressed {
-  round_id: string;
-  round_index: number;
-  response_count: number;
-}
+// The aggregated friction-attribution card was removed 2026-06-10
+// with the survey redesign. The reflection data is still collected
+// per round_surveys for post-hoc analysis, but no longer surfaced on
+// the GameEndedView — anonymised round means felt anonymous in the
+// wrong way, the per-pair conversation belongs on the call.
 
 export function GameEndedView({ code, workshopName }: GameEndedViewProps) {
   const [summary, setSummary] = useState<PairSummary[] | null>(null);
-  const [surveys, setSurveys] = useState<SurveyAggregate[] | null>(null);
-  const [surveysSuppressed, setSurveysSuppressed] = useState<
-    SurveyAggregateSuppressed[]
-  >([]);
   const [callUrl, setCallUrl] = useState<string | null>(null);
   const [whiteboardUrl, setWhiteboardUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -80,10 +48,6 @@ export function GameEndedView({ code, workshopName }: GameEndedViewProps) {
       .then((d) => {
         if (Array.isArray(d.pairs)) setSummary(d.pairs);
         else setError(d.error ?? "Could not load summary.");
-        if (Array.isArray(d.surveys)) setSurveys(d.surveys);
-        if (Array.isArray(d.surveys_suppressed)) {
-          setSurveysSuppressed(d.surveys_suppressed);
-        }
         if (typeof d.video_call_url === "string") setCallUrl(d.video_call_url);
         if (typeof d.whiteboard_url === "string")
           setWhiteboardUrl(d.whiteboard_url);
@@ -193,13 +157,6 @@ export function GameEndedView({ code, workshopName }: GameEndedViewProps) {
         </p>
       )}
 
-      {((surveys && surveys.length > 0) || surveysSuppressed.length > 0) && (
-        <SurveyAggregateCard
-          surveys={surveys ?? []}
-          suppressed={surveysSuppressed}
-        />
-      )}
-
       <div className="t-card flex w-full flex-col gap-2.5 p-5 text-left">
         <span
           className="t-mono text-[11px] uppercase tracking-widest text-[var(--color-ink-3)]"
@@ -258,157 +215,4 @@ export function GameEndedView({ code, workshopName }: GameEndedViewProps) {
       </div>
     </section>
   );
-}
-
-const AXIS_LABELS: Record<FrictionAsymmetry["axis"], string> = {
-  self: "themselves",
-  partner: "their partner",
-  system: "the game",
-};
-
-const AXIS_TINT: Record<FrictionAsymmetry["axis"], string> = {
-  self: "var(--color-t-orange)",
-  partner: "var(--color-t-blue)",
-  system: "var(--color-t-purple)",
-};
-
-/** Aggregated friction-attribution card (post 2026-05-04 reflection
- *  redesign). Each round that cleared the floor renders a stacked
- *  bar across self / partner / system, plus a callout when the
- *  builder-vs-guider delta on any axis exceeds the threshold —
- *  that's where the facilitator can start a conversation. */
-function SurveyAggregateCard({
-  surveys,
-  suppressed,
-}: {
-  surveys: SurveyAggregate[];
-  suppressed: SurveyAggregateSuppressed[];
-}) {
-  return (
-    <div className="t-card flex w-full flex-col gap-3 p-5 text-left">
-      <span
-        className="t-mono text-[11px] uppercase tracking-widest text-[var(--color-ink-3)]"
-        style={{ letterSpacing: ".15em" }}
-      >
-        Where did the friction land?
-      </span>
-      <p className="text-[12px] text-[var(--color-ink-3)]">
-        Anonymised — averages from the post-round attribution sliders.
-        Each round splits 100 points across the three sources.
-      </p>
-      <ul className="flex flex-col gap-3">
-        {surveys.map((s) => (
-          <li
-            key={s.round_id}
-            className="rounded-[12px] px-3 py-2.5"
-            style={{
-              background: "var(--color-paper-2)",
-              border: "1.5px solid var(--color-line)",
-            }}
-          >
-            <div className="mb-2 flex items-baseline justify-between">
-              <span className="t-mono text-[11px] font-bold uppercase tracking-wide text-[var(--color-ink-2)]">
-                Round {s.round_index}
-              </span>
-              <span className="t-mono text-[10px] text-[var(--color-ink-3)]">
-                {s.response_count} response
-                {s.response_count === 1 ? "" : "s"} · talk balance{" "}
-                <b>{labelForBalanceAvg(s.avg_comm_balance)}</b>
-              </span>
-            </div>
-            <FrictionBar mean={s.mean} />
-            {s.asymmetry.length > 0 && (
-              <p className="mt-2 text-[12px] text-[var(--color-ink-2)]">
-                <span
-                  className="t-mono mr-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
-                  style={{
-                    background: "var(--color-tint-orange)",
-                    color: "var(--color-t-orange)",
-                  }}
-                >
-                  asymmetry
-                </span>
-                Builders rated <b>{AXIS_LABELS[s.asymmetry[0]!.axis]}</b>{" "}
-                <b>{s.asymmetry[0]!.builder}%</b>; guiders rated it{" "}
-                <b>{s.asymmetry[0]!.guider}%</b>{" "}
-                ({s.asymmetry[0]!.delta}-point gap). Worth a check.
-              </p>
-            )}
-          </li>
-        ))}
-      </ul>
-      {suppressed.length > 0 && (
-        <p className="t-mono text-[11px] text-[var(--color-ink-3)]">
-          {/* The 4-response anonymity floor in the aggregator means a
-              round with only 1–3 responses gets no aggregate. Surfacing
-              the round + count tells the GM "this round saw the survey
-              but not enough people answered" instead of letting the
-              card vanish silently. */}
-          {suppressed
-            .map(
-              (s) =>
-                `Round ${s.round_index} had ${s.response_count} response${s.response_count === 1 ? "" : "s"}`,
-            )
-            .join("; ")}
-          {" — below the 4-response anonymity floor, so no aggregate."}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function FrictionBar({ mean }: { mean: FrictionMeans }) {
-  const total = mean.self + mean.partner + mean.system || 1;
-  const segments: Array<{
-    key: FrictionAsymmetry["axis"];
-    label: string;
-    pct: number;
-  }> = [
-    { key: "self", label: "self", pct: (mean.self / total) * 100 },
-    { key: "partner", label: "partner", pct: (mean.partner / total) * 100 },
-    { key: "system", label: "system", pct: (mean.system / total) * 100 },
-  ];
-  return (
-    <div className="flex flex-col gap-1">
-      <div
-        className="flex h-2.5 overflow-hidden rounded-full"
-        style={{ background: "var(--color-line)" }}
-      >
-        {segments.map((seg) => (
-          <span
-            key={seg.key}
-            style={{
-              width: `${seg.pct}%`,
-              background: AXIS_TINT[seg.key],
-            }}
-            aria-label={`${seg.label} ${Math.round(seg.pct)}%`}
-          />
-        ))}
-      </div>
-      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px]">
-        {segments.map((seg) => (
-          <span
-            key={seg.key}
-            className="t-mono"
-            style={{ color: AXIS_TINT[seg.key] }}
-          >
-            <span
-              aria-hidden="true"
-              className="mr-1 inline-block h-2 w-2 rounded-full"
-              style={{ background: AXIS_TINT[seg.key] }}
-            />
-            {seg.label} {Math.round(seg.pct)}%
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function labelForBalanceAvg(v: number): string {
-  if (v <= 25) return "the player carried it";
-  if (v <= 45) return "the player led";
-  if (v < 55) return "even";
-  if (v < 75) return "the partner led";
-  return "the partner carried it";
 }

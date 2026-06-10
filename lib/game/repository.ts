@@ -728,21 +728,23 @@ export interface RoundSurveyRecord {
   round_id: string;
   participant_id: string;
   /**
-   * 0..100 slider — who carried the communication. 0 = "I did
-   * most", 100 = "my partner did most", 50 = even.
+   * Per-category friction sliders (2026-06-10 redesign). Each axis
+   * is independent (no sum constraint) and 0..100. Players rate how
+   * much each category added friction in the round they just played.
+   * Storing relative magnitudes lets post-hoc analysis spot which
+   * categories tend to surface together across rounds.
    */
-  comm_balance: number;
+  fric_puzzle: number;
+  fric_communication: number;
+  fric_time_pressure: number;
+  fric_game_adjustments: number;
+  fric_other: number;
   /**
-   * Forced-choice friction attribution: how the round's friction
-   * split across self / partner / system. Each axis is 0..100 and
-   * the three sum to exactly 100. The 2026-05-04 design pass
-   * replaced the v1 4-way `what_made_harder` enum with this; the
-   * magnitude lets the aggregator surface asymmetry between
-   * builders and guiders, which is the actual debrief insight.
+   * Free-form note the player attaches when fric_other > 0. Capped
+   * at 280 chars by the DB CHECK; null when the player didn't write
+   * anything (regardless of the slider value).
    */
-  attr_self: number;
-  attr_partner: number;
-  attr_system: number;
+  fric_other_text: string | null;
   submitted_at: string;
 }
 
@@ -756,10 +758,12 @@ export interface RoundSurveyStore {
   upsert(input: {
     round_id: string;
     participant_id: string;
-    comm_balance: number;
-    attr_self: number;
-    attr_partner: number;
-    attr_system: number;
+    fric_puzzle: number;
+    fric_communication: number;
+    fric_time_pressure: number;
+    fric_game_adjustments: number;
+    fric_other: number;
+    fric_other_text: string | null;
   }): Promise<RoundSurveyRecord>;
 
   /** Find this participant's existing response for a round, or null. */

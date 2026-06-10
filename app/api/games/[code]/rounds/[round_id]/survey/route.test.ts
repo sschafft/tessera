@@ -15,6 +15,17 @@ interface MeMock {
   released_at: string | null;
 }
 
+interface UpsertInput {
+  round_id: string;
+  participant_id: string;
+  fric_puzzle: number;
+  fric_communication: number;
+  fric_time_pressure: number;
+  fric_game_adjustments: number;
+  fric_other: number;
+  fric_other_text: string | null;
+}
+
 let sessionMock: () => { claims: { game_id: string }; me: MeMock } | null;
 let repoMock: () => {
   rounds: {
@@ -25,20 +36,7 @@ let repoMock: () => {
     } | null>;
   };
   roundSurveys: {
-    upsert: (input: {
-      round_id: string;
-      participant_id: string;
-      comm_balance: number;
-      attr_self: number;
-      attr_partner: number;
-      attr_system: number;
-    }) => Promise<{
-      comm_balance: number;
-      attr_self: number;
-      attr_partner: number;
-      attr_system: number;
-      submitted_at: string;
-    }>;
+    upsert: (input: UpsertInput) => Promise<UpsertInput & { submitted_at: string }>;
     findForParticipant: (
       round_id: string,
       participant_id: string,
@@ -46,7 +44,7 @@ let repoMock: () => {
   };
 };
 
-let upsertCalls: Array<unknown>;
+let upsertCalls: UpsertInput[];
 
 function makeRequest(body: unknown): NextRequest {
   return new Request(
@@ -83,10 +81,7 @@ beforeEach(() => {
       upsert: (input) => {
         upsertCalls.push(input);
         return Promise.resolve({
-          comm_balance: input.comm_balance,
-          attr_self: input.attr_self,
-          attr_partner: input.attr_partner,
-          attr_system: input.attr_system,
+          ...input,
           submitted_at: new Date().toISOString(),
         });
       },
@@ -99,16 +94,37 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("POST .../rounds/[round_id]/survey — attribution payload", () => {
-  it("rejects when attr_* don't sum to 100", async () => {
+describe("POST .../rounds/[round_id]/survey — category sliders", () => {
+  it("rejects each fric_* outside 0..100", async () => {
     vi.resetModules();
     const { POST } = await import("./route");
     const res = await POST(
       makeRequest({
-        comm_balance: 50,
-        attr_self: 40,
-        attr_partner: 40,
-        attr_system: 10, // sums to 90
+        fric_puzzle: 150,
+        fric_communication: -5,
+        fric_time_pressure: 0,
+        fric_game_adjustments: 0,
+        fric_other: 0,
+      }),
+      {
+        params: Promise.resolve({ code: "ABC-XYZ", round_id: "round-1" }),
+      },
+    );
+    expect(res.status).toBe(400);
+    expect(upsertCalls.length).toBe(0);
+  });
+
+  it("rejects fric_other_text longer than the cap", async () => {
+    vi.resetModules();
+    const { POST } = await import("./route");
+    const res = await POST(
+      makeRequest({
+        fric_puzzle: 10,
+        fric_communication: 10,
+        fric_time_pressure: 10,
+        fric_game_adjustments: 10,
+        fric_other: 40,
+        fric_other_text: "x".repeat(300),
       }),
       {
         params: Promise.resolve({ code: "ABC-XYZ", round_id: "round-1" }),
@@ -116,25 +132,7 @@ describe("POST .../rounds/[round_id]/survey — attribution payload", () => {
     );
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.error).toBe("attr_sum_must_equal_100");
-    expect(upsertCalls.length).toBe(0);
-  });
-
-  it("rejects each attr_* outside 0..100", async () => {
-    vi.resetModules();
-    const { POST } = await import("./route");
-    const res = await POST(
-      makeRequest({
-        comm_balance: 50,
-        attr_self: 150, // out of range
-        attr_partner: -50,
-        attr_system: 0,
-      }),
-      {
-        params: Promise.resolve({ code: "ABC-XYZ", round_id: "round-1" }),
-      },
-    );
-    expect(res.status).toBe(400);
+    expect(body.error).toBe("fric_other_text_too_long");
     expect(upsertCalls.length).toBe(0);
   });
 
@@ -152,10 +150,7 @@ describe("POST .../rounds/[round_id]/survey — attribution payload", () => {
         upsert: (input) => {
           upsertCalls.push(input);
           return Promise.resolve({
-            comm_balance: 50,
-            attr_self: 33,
-            attr_partner: 33,
-            attr_system: 34,
+            ...input,
             submitted_at: new Date().toISOString(),
           });
         },
@@ -166,10 +161,11 @@ describe("POST .../rounds/[round_id]/survey — attribution payload", () => {
     const { POST } = await import("./route");
     const res = await POST(
       makeRequest({
-        comm_balance: 50,
-        attr_self: 33,
-        attr_partner: 33,
-        attr_system: 34,
+        fric_puzzle: 20,
+        fric_communication: 20,
+        fric_time_pressure: 20,
+        fric_game_adjustments: 20,
+        fric_other: 0,
       }),
       {
         params: Promise.resolve({ code: "ABC-XYZ", round_id: "round-1" }),
@@ -181,15 +177,17 @@ describe("POST .../rounds/[round_id]/survey — attribution payload", () => {
     expect(upsertCalls.length).toBe(0);
   });
 
-  it("upserts the survey on the happy path", async () => {
+  it("upserts the survey on the happy path (other text saved when fric_other > 0)", async () => {
     vi.resetModules();
     const { POST } = await import("./route");
     const res = await POST(
       makeRequest({
-        comm_balance: 60,
-        attr_self: 33,
-        attr_partner: 33,
-        attr_system: 34,
+        fric_puzzle: 30,
+        fric_communication: 60,
+        fric_time_pressure: 0,
+        fric_game_adjustments: 15,
+        fric_other: 45,
+        fric_other_text: "  zoom audio kept dropping  ",
       }),
       {
         params: Promise.resolve({ code: "ABC-XYZ", round_id: "round-1" }),
@@ -200,12 +198,34 @@ describe("POST .../rounds/[round_id]/survey — attribution payload", () => {
       {
         round_id: "round-1",
         participant_id: "p-builder",
-        comm_balance: 60,
-        attr_self: 33,
-        attr_partner: 33,
-        attr_system: 34,
+        fric_puzzle: 30,
+        fric_communication: 60,
+        fric_time_pressure: 0,
+        fric_game_adjustments: 15,
+        fric_other: 45,
+        fric_other_text: "zoom audio kept dropping",
       },
     ]);
+  });
+
+  it("trims fric_other_text to null when only whitespace", async () => {
+    vi.resetModules();
+    const { POST } = await import("./route");
+    const res = await POST(
+      makeRequest({
+        fric_puzzle: 10,
+        fric_communication: 10,
+        fric_time_pressure: 10,
+        fric_game_adjustments: 10,
+        fric_other: 10,
+        fric_other_text: "   ",
+      }),
+      {
+        params: Promise.resolve({ code: "ABC-XYZ", round_id: "round-1" }),
+      },
+    );
+    expect(res.status).toBe(200);
+    expect(upsertCalls[0]?.fric_other_text).toBeNull();
   });
 
   it("forbids observers from submitting", async () => {
@@ -222,10 +242,11 @@ describe("POST .../rounds/[round_id]/survey — attribution payload", () => {
     const { POST } = await import("./route");
     const res = await POST(
       makeRequest({
-        comm_balance: 50,
-        attr_self: 33,
-        attr_partner: 33,
-        attr_system: 34,
+        fric_puzzle: 20,
+        fric_communication: 20,
+        fric_time_pressure: 20,
+        fric_game_adjustments: 20,
+        fric_other: 0,
       }),
       {
         params: Promise.resolve({ code: "ABC-XYZ", round_id: "round-1" }),
