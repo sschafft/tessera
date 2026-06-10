@@ -479,30 +479,36 @@ export type Database = {
       }
       round_surveys: {
         Row: {
-          attr_partner: number | null
-          attr_self: number | null
-          attr_system: number | null
-          comm_balance: number
+          fric_puzzle: number | null
+          fric_communication: number | null
+          fric_time_pressure: number | null
+          fric_game_adjustments: number | null
+          fric_other: number | null
+          fric_other_text: string | null
           id: string
           participant_id: string
           round_id: string
           submitted_at: string
         }
         Insert: {
-          attr_partner?: number | null
-          attr_self?: number | null
-          attr_system?: number | null
-          comm_balance: number
+          fric_puzzle?: number | null
+          fric_communication?: number | null
+          fric_time_pressure?: number | null
+          fric_game_adjustments?: number | null
+          fric_other?: number | null
+          fric_other_text?: string | null
           id?: string
           participant_id: string
           round_id: string
           submitted_at?: string
         }
         Update: {
-          attr_partner?: number | null
-          attr_self?: number | null
-          attr_system?: number | null
-          comm_balance?: number
+          fric_puzzle?: number | null
+          fric_communication?: number | null
+          fric_time_pressure?: number | null
+          fric_game_adjustments?: number | null
+          fric_other?: number | null
+          fric_other_text?: string | null
           id?: string
           participant_id?: string
           round_id?: string
