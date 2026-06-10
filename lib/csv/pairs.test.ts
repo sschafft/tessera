@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parsePairsCsv } from "./pairs";
+import { groupByTeam, parsePairsCsv } from "./pairs";
 
 describe("parsePairsCsv — required columns", () => {
   it("parses the canonical 4-column header without brief overrides", () => {
@@ -66,5 +66,56 @@ describe("parsePairsCsv — brief override columns", () => {
     const { rows, errors } = parsePairsCsv(csv);
     expect(errors).toEqual([]);
     expect(rows[0]!.brief_rules).toEqual(["one", "two", "three"]);
+  });
+});
+
+describe("parsePairsCsv — breakout_url column", () => {
+  it("reads a valid breakout_url per row", () => {
+    const csv = [
+      "name,team_name,role,breakout_url",
+      "Avery,Otters,builder,https://meet.jit.si/otters-2026",
+      "Bri,Otters,guider,",
+    ].join("\n");
+    const { rows, errors } = parsePairsCsv(csv);
+    expect(errors).toEqual([]);
+    expect(rows[0]!.breakout_url).toBe("https://meet.jit.si/otters-2026");
+    expect(rows[1]!.breakout_url).toBeNull();
+  });
+
+  it("rejects non-http(s) schemes", () => {
+    const csv = [
+      "name,team_name,role,breakout_url",
+      "Avery,Otters,builder,ftp://example.com/room",
+    ].join("\n");
+    const { errors } = parsePairsCsv(csv);
+    expect(errors[0]?.message).toMatch(/breakout_url must be http/);
+  });
+
+  it("rejects garbage strings", () => {
+    const csv = [
+      "name,team_name,role,breakout_url",
+      "Avery,Otters,builder,not-a-url",
+    ].join("\n");
+    const { errors } = parsePairsCsv(csv);
+    expect(errors[0]?.message).toMatch(/breakout_url is not a valid URL/);
+  });
+
+  it("collapses the team's URL across rows via groupByTeam", () => {
+    const csv = [
+      "name,team_name,role,breakout_url",
+      "Avery,Otters,builder,https://meet.jit.si/otters",
+      "Bri,Otters,guider,",
+      "Cam,Pelicans,builder,",
+      "Drew,Pelicans,guider,https://meet.google.com/abc-defg-hij",
+    ].join("\n");
+    const { rows, errors } = parsePairsCsv(csv);
+    expect(errors).toEqual([]);
+    const teams = groupByTeam(rows);
+    const otters = teams.find((t) => t.team_name === "Otters")!;
+    const pelicans = teams.find((t) => t.team_name === "Pelicans")!;
+    expect(otters.breakout_url).toBe("https://meet.jit.si/otters");
+    expect(pelicans.breakout_url).toBe(
+      "https://meet.google.com/abc-defg-hij",
+    );
   });
 });

@@ -152,6 +152,8 @@ export class SupabaseGameRepository implements GameRepository {
       this.setBriefOverrides(pair_id, overrides),
     clearBriefOverrides: (pair_id) => this.clearBriefOverrides(pair_id),
     setBreakout: (pair_id, breakout) => this.setPairBreakout(pair_id, breakout),
+    setPreSuppliedBreakout: (pair_id, call_url) =>
+      this.setPreSuppliedBreakout(pair_id, call_url),
     clearBreakout: (pair_id) => this.clearPairBreakout(pair_id),
     listWithBreakouts: (game_id) => this.listPairsWithBreakouts(game_id),
   };
@@ -813,6 +815,24 @@ export class SupabaseGameRepository implements GameRepository {
       })
       .eq("id", pair_id);
     if (error) throw new Error(`setPairBreakout: ${error.message}`);
+  }
+
+  async setPreSuppliedBreakout(
+    pair_id: string,
+    call_url: string,
+  ): Promise<void> {
+    const supabase = getServiceClient();
+    const { error } = await supabase
+      .from("pairs")
+      .update({
+        breakout_call_url: call_url,
+        // Null event_id is the sentinel that says "we don't own this
+        // call URL's lifecycle" — end-game cleanup keys on it to
+        // decide whether to issue a Calendar DELETE.
+        breakout_event_id: null,
+      })
+      .eq("id", pair_id);
+    if (error) throw new Error(`setPreSuppliedBreakout: ${error.message}`);
   }
 
   async setBriefOverrides(

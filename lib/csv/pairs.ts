@@ -28,6 +28,16 @@ export interface ParsedRow {
    */
   brief_title: string | null;
   brief_rules: string[];
+  /**
+   * Optional pre-supplied breakout call URL. Lives at the team
+   * level: every row of a given team should carry the same URL,
+   * and `groupByTeam` collapses them to the first non-empty value
+   * per team. When present, the upload route writes it directly
+   * onto `pairs.breakout_call_url` and `/breakouts/generate`
+   * skips the pair — pre-supplied URLs supplant generation.
+   * `null` when the row didn't carry a URL.
+   */
+  breakout_url: string | null;
 }
 
 export interface ParseError {
@@ -49,7 +59,11 @@ export const CSV_HEADERS = ["name", "email", "team_name", "role"] as const;
  *  brief, guider row's become the guider brief. Multi-rule cells are
  *  `|`-separated to avoid the multi-line CSV cell trap.
  */
-export const OPTIONAL_HEADERS = ["brief_title", "brief_rules"] as const;
+export const OPTIONAL_HEADERS = [
+  "brief_title",
+  "brief_rules",
+  "breakout_url",
+] as const;
 
 const ROLE_VALUES: ReadonlySet<string> = new Set([
   "builder",
@@ -181,6 +195,7 @@ export function parsePairsCsv(text: string): ParseResult {
     role: -1,
     brief_title: -1,
     brief_rules: -1,
+    breakout_url: -1,
   };
   for (let i = 0; i < headerCells.length; i++) {
     const h = headerCells[i]!;
@@ -190,7 +205,8 @@ export function parsePairsCsv(text: string): ParseResult {
       h === "role" ||
       h === "email" ||
       h === "brief_title" ||
-      h === "brief_rules"
+      h === "brief_rules" ||
+      h === "breakout_url"
     ) {
       indexOf[h] = i;
     }
@@ -283,6 +299,34 @@ export function parsePairsCsv(text: string): ParseResult {
       .map((r) => r.trim())
       .filter((r) => r.length > 0);
 
+    // Optional pre-supplied breakout URL. Validate it parses as an
+    // http(s) URL so a typo doesn't strand the pair with a broken
+    // link the GM can't easily edit post-upload. groupByTeam later
+    // collapses identical URLs across a team's rows into one
+    // canonical value.
+    const breakoutRaw =
+      indexOf.breakout_url >= 0 ? (cells[indexOf.breakout_url] ?? "") : "";
+    let breakout_url: string | null = null;
+    if (breakoutRaw.length > 0) {
+      try {
+        const parsed = new URL(breakoutRaw);
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+          errors.push({
+            line: lineNum,
+            message: `breakout_url must be http(s): "${breakoutRaw}"`,
+          });
+          continue;
+        }
+        breakout_url = breakoutRaw;
+      } catch {
+        errors.push({
+          line: lineNum,
+          message: `breakout_url is not a valid URL: "${breakoutRaw}"`,
+        });
+        continue;
+      }
+    }
+
     rows.push({
       line: lineNum,
       name,
@@ -291,6 +335,7 @@ export function parsePairsCsv(text: string): ParseResult {
       role: role as CsvRole,
       brief_title,
       brief_rules,
+      breakout_url,
     });
   }
 
@@ -310,6 +355,14 @@ export interface TeamGroup {
   observers: ParsedRow[];
   /** Rows that broke the "one builder + one guider" invariant. */
   conflicts: ParsedRow[];
+  /**
+   * Pre-supplied breakout URL for this pair, collapsed across all
+   * rows of the team. We take the first non-null `breakout_url`
+   * encountered; a GM who fills only the builder row (the common
+   * pattern, since the URL is a team attribute) gets the same
+   * result as one who fills every row.
+   */
+  breakout_url: string | null;
 }
 
 export function groupByTeam(rows: ParsedRow[]): TeamGroup[] {
@@ -324,8 +377,12 @@ export function groupByTeam(rows: ParsedRow[]): TeamGroup[] {
         guider: null,
         observers: [],
         conflicts: [],
+        breakout_url: null,
       };
       map.set(key, g);
+    }
+    if (g.breakout_url === null && r.breakout_url) {
+      g.breakout_url = r.breakout_url;
     }
     if (r.role === "builder") {
       if (g.builder) g.conflicts.push(r);
@@ -349,10 +406,11 @@ function quoteField(s: string): string {
 }
 
 /** The downloadable template — header + a couple of example rows.
- *  Includes the optional `brief_title` and `brief_rules` columns so
- *  the GM sees the format for pre-writing briefs at upload time
- *  (filled on one team to demonstrate, blank on the other).
- *  `brief_rules` is `|`-separated. */
+ *  Includes every optional column so the GM sees the format for
+ *  pre-writing briefs (`brief_title` + `brief_rules`) and supplying
+ *  their own breakout call URLs (`breakout_url`) at upload time.
+ *  `brief_rules` is `|`-separated; `breakout_url` is read from the
+ *  first non-empty row per team. */
 export function pairsTemplateCsv(): string {
   const header = [
     "name",
@@ -361,6 +419,7 @@ export function pairsTemplateCsv(): string {
     "role",
     "brief_title",
     "brief_rules",
+    "breakout_url",
   ].join(",");
   const examples = [
     [
@@ -370,6 +429,7 @@ export function pairsTemplateCsv(): string {
       "builder",
       "Distracted",
       "Talk about anything other than the game.|You can only respond to guidance if explicitly asked.",
+      "https://meet.google.com/abc-defg-hij",
     ],
     [
       "Jules Engineer",
@@ -378,12 +438,14 @@ export function pairsTemplateCsv(): string {
       "guider",
       "Nautical only",
       "Describe shapes only with nautical terms.|Avoid 'left' and 'right' — use port and starboard.",
+      "",
     ],
     [
       "Hugo Reviewer",
       "hugo@example.com",
       "The Pelicans",
       "observer",
+      "",
       "",
       "",
     ],
@@ -394,12 +456,14 @@ export function pairsTemplateCsv(): string {
       "builder",
       "",
       "",
+      "https://meet.jit.si/Otters-2026",
     ],
     [
       "Cameron Researcher",
       "cameron@example.com",
       "The Otters",
       "guider",
+      "",
       "",
       "",
     ],

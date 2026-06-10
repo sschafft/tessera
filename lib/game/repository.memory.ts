@@ -119,6 +119,8 @@ class MemoryGameRepository implements GameRepository {
       this.setBriefOverrides(pair_id, overrides),
     clearBriefOverrides: (pair_id) => this.clearBriefOverrides(pair_id),
     setBreakout: (pair_id, breakout) => this.setPairBreakout(pair_id, breakout),
+    setPreSuppliedBreakout: (pair_id, call_url) =>
+      this.setPreSuppliedBreakout(pair_id, call_url),
     clearBreakout: (pair_id) => this.clearPairBreakout(pair_id),
     listWithBreakouts: (game_id) => this.listPairsWithBreakouts(game_id),
   };
@@ -706,6 +708,16 @@ class MemoryGameRepository implements GameRepository {
     if (!p) return;
     p.breakout_call_url = breakout.call_url;
     p.breakout_event_id = breakout.event_id;
+  }
+
+  async setPreSuppliedBreakout(
+    pair_id: string,
+    call_url: string,
+  ): Promise<void> {
+    const p = this._pairTable.get(pair_id);
+    if (!p) return;
+    p.breakout_call_url = call_url;
+    p.breakout_event_id = null;
   }
 
   async clearPairBreakout(pair_id: string): Promise<void> {
