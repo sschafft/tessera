@@ -829,7 +829,11 @@ function BuilderInteractive({ state }: { state: PlayState }) {
           bar moved below the board so the % correct doesn't flicker
           in the player's peripheral vision while they're working at
           the canvas. */}
-      <section className="relative flex min-w-0 flex-col items-center gap-4 p-6">
+      {/* justify-center vertically anchors the board in the middle of
+          the available column space. Without it the canvas + bar sit
+          pinned to the top of the section, which read as "pushed up"
+          on tall viewports — common laptops, ultra-wide monitors. */}
+      <section className="relative flex min-w-0 flex-col items-center justify-center gap-4 p-6">
         <PrototypeOverlay
           prototype={state.prototype}
           complexity={complexity}

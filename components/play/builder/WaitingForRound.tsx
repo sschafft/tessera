@@ -28,6 +28,7 @@ export function WaitingForRound({ state }: { state: PlayState }) {
       <JoinCallCta
         videoCallUrl={state.video_call_url}
         whiteboardUrl={state.whiteboard_url}
+        breakoutCallUrl={state.pair?.breakout_call_url ?? null}
       />
     </section>
   );
