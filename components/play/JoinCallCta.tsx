@@ -58,73 +58,109 @@ export function JoinCallCta({
     return null;
   }
 
-  // Pair-breakout mode: primary CTA = breakout, with main-room +
-  // whiteboard demoted to small secondary links.
+  // Pair-breakout mode: surface BOTH the breakout AND the main room
+  // as button-shaped CTAs so the blank slate matches the top-bar
+  // pill's "you have two rooms to choose from" framing. Pre-fix the
+  // main room demoted to a tiny `↗ Main room` underline that read as
+  // an afterthought; playtest feedback flagged this as confusing
+  // because the top bar promoted both rooms to equal-weight chips.
   if (breakout) {
     return (
-      <div className="flex flex-col items-center gap-2.5">
-        <a
-          href={breakout}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-3 rounded-full font-semibold transition-transform"
-          style={{
-            background: "var(--color-t-blue)",
-            color: "#fff",
-            padding: big ? "16px 28px" : "12px 20px",
-            fontSize: big ? 18 : 14,
-            boxShadow:
-              "0 4px 0 rgb(0 0 0 / 0.10), 0 10px 22px rgb(60 40 10 / 0.10)",
-            textDecoration: "none",
-          }}
-        >
-          <span
-            aria-hidden="true"
-            className="grid place-items-center rounded-full"
+      <div className="flex flex-col items-center gap-3">
+        <div className="flex flex-wrap items-stretch justify-center gap-2.5">
+          <a
+            href={breakout}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-3 rounded-full font-semibold transition-transform"
             style={{
-              width: big ? 32 : 24,
-              height: big ? 32 : 24,
-              background: "rgba(255,255,255,0.22)",
-              fontSize: big ? 16 : 12,
+              background: "var(--color-t-blue)",
+              color: "#fff",
+              padding: big ? "16px 28px" : "12px 20px",
+              fontSize: big ? 18 : 14,
+              boxShadow:
+                "0 4px 0 rgb(0 0 0 / 0.10), 0 10px 22px rgb(60 40 10 / 0.10)",
+              textDecoration: "none",
             }}
           >
-            ▶
-          </span>
-          <span className="flex flex-col items-start leading-tight">
-            <span>Join your pair&apos;s call</span>
             <span
-              className="t-mono text-[10px] font-normal"
-              style={{ opacity: 0.85, letterSpacing: ".05em" }}
+              aria-hidden="true"
+              className="grid place-items-center rounded-full"
+              style={{
+                width: big ? 32 : 24,
+                height: big ? 32 : 24,
+                background: "rgba(255,255,255,0.22)",
+                fontSize: big ? 16 : 12,
+              }}
             >
-              breakout · just you + your partner
+              ▶
             </span>
-          </span>
-        </a>
-        <div
-          className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5"
-          style={{ color: "var(--color-ink-3)" }}
-        >
+            <span className="flex flex-col items-start leading-tight">
+              <span>Breakout room</span>
+              <span
+                className="t-mono text-[10px] font-normal"
+                style={{ opacity: 0.85, letterSpacing: ".05em" }}
+              >
+                just you + your partner
+              </span>
+            </span>
+          </a>
           {main && (
             <a
               href={main}
               target="_blank"
               rel="noopener noreferrer"
-              className="t-mono text-[12px] underline"
+              className="inline-flex items-center gap-3 rounded-full font-semibold transition-transform"
+              style={{
+                background: "#fff",
+                color: "var(--color-ink)",
+                padding: big ? "16px 28px" : "12px 20px",
+                fontSize: big ? 18 : 14,
+                boxShadow:
+                  "0 4px 0 rgb(0 0 0 / 0.10), 0 10px 22px rgb(60 40 10 / 0.06)",
+                border: "1.5px solid var(--color-line)",
+                textDecoration: "none",
+              }}
             >
-              ↗ Main room
-            </a>
-          )}
-          {whiteboard && (
-            <a
-              href={whiteboard}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="t-mono text-[12px] underline"
-            >
-              ↗ Whiteboard
+              <span
+                aria-hidden="true"
+                className="grid place-items-center rounded-full"
+                style={{
+                  width: big ? 32 : 24,
+                  height: big ? 32 : 24,
+                  background: "var(--color-paper-2)",
+                  color: "var(--color-ink-3)",
+                  fontSize: big ? 16 : 12,
+                }}
+              >
+                ▶
+              </span>
+              <span className="flex flex-col items-start leading-tight">
+                <span>Main room</span>
+                <span
+                  className="t-mono text-[10px] font-normal"
+                  style={{
+                    color: "var(--color-ink-3)",
+                    letterSpacing: ".05em",
+                  }}
+                >
+                  everyone in the workshop
+                </span>
+              </span>
             </a>
           )}
         </div>
+        {whiteboard && (
+          <a
+            href={whiteboard}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="t-mono text-[12px] underline"
+            style={{ color: "var(--color-ink-3)" }}
+          >
+            ↗ Whiteboard
+          </a>
+        )}
       </div>
     );
   }

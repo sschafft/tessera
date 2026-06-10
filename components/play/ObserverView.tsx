@@ -153,6 +153,7 @@ function WaitingForRound({ state }: { state: PlayState }) {
       <JoinCallCta
         videoCallUrl={state.video_call_url}
         whiteboardUrl={state.whiteboard_url}
+        breakoutCallUrl={state.pair?.breakout_call_url ?? null}
       />
       {state.available_pairs && state.available_pairs.length > 1 && (
         <PairSwitcher state={state} />

@@ -12,7 +12,6 @@ import {
   playTimePressure,
 } from "@/lib/sound";
 import { useGameEvents } from "@/lib/realtime/useGameEvents";
-import { usePartnerPresence } from "@/lib/realtime/usePartnerPresence";
 import { SuperPowerToast } from "./SuperPowerToast";
 import { WelcomeToast } from "./WelcomeToast";
 import { BriefsRevealedModal } from "./BriefsRevealedModal";
@@ -312,30 +311,29 @@ export function PlayContent({ code, initial }: PlayContentProps) {
     return () => clearInterval(id);
   }, [state.round, state.sound_on]);
 
-  const partnerForBar = state.partner
-    ? {
-        name: state.partner.display_name,
-        color: state.partner.color,
-        role: state.partner.role,
-      }
-    : null;
-  const partnerPresent = usePartnerPresence(
-    state.game_id,
-    state.me.id,
-    state.partner?.id ?? null,
-  );
+  // The top bar shows the LOCAL participant in the right-side pill —
+  // after a recover-URL handoff a partner pill there was confusing
+  // ("the top right looks like me but is actually my partner"). We
+  // drop the partner presence read entirely from this surface for the
+  // same reason; partner activity surfaces elsewhere (the pair name
+  // badge, in-canvas hover) without the top-right corner pretending
+  // to be a self-status pill.
+  const meForBar = {
+    name: state.me.display_name,
+    color: state.me.color,
+    role: state.me.role,
+  };
 
   return (
     <div className="flex min-h-screen flex-col bg-[var(--color-paper)]">
       <PlayTopBar
         code={state.code}
         role={roleLabel(state.role)}
-        partner={partnerForBar}
+        me={meForBar}
         round={state.round}
         videoCallUrl={state.video_call_url}
         whiteboardUrl={state.whiteboard_url}
         breakoutCallUrl={state.pair?.breakout_call_url ?? null}
-        partnerPresent={partnerPresent}
       />
       {/* overflow-x-hidden keeps stray decorative bleed in check, but
           overflow-y-auto is essential — at complexity 8 the 640px-tall

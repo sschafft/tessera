@@ -7,13 +7,19 @@ import { Avatar } from "@/components/primitives/Avatar";
 import type { TileColor } from "@/components/canvas/Tile";
 import { timerPhaseFor, timerPhaseStyle } from "@/lib/util/timerPhase";
 import { usableCallUrl } from "@/lib/util/url";
-import { PartnerActiveDot } from "./PartnerActiveDot";
 
 export interface PlayTopBarProps {
   code: string;
   /** Null while the player is in the lobby with no role assigned. */
   role: Role | null;
-  partner: {
+  /**
+   * The local participant's own avatar pill. Used to live as a
+   * partner pill — but after a recover-URL handoff the partner name
+   * in the top-right read as "you", which was confusing. Showing
+   * the local user's own identity matches what every other product
+   * does in the corner of the screen.
+   */
+  me: {
     name: string;
     color: TileColor;
     role: string;
@@ -31,22 +37,16 @@ export interface PlayTopBarProps {
    * `videoCallUrl` demotes to a small "main room ↗" secondary link.
    */
   breakoutCallUrl?: string | null;
-  /**
-   * True when the partner is subscribed to the game's presence channel.
-   * Drives the small online dot beside the partner avatar.
-   */
-  partnerPresent?: boolean;
 }
 
 export function PlayTopBar({
   code,
   role,
-  partner,
+  me,
   round,
   videoCallUrl,
   whiteboardUrl,
   breakoutCallUrl,
-  partnerPresent = false,
 }: PlayTopBarProps) {
   const remaining = useTimer(round);
   const phase = timerPhaseFor(remaining, round?.status === "running");
@@ -85,14 +85,16 @@ export function PlayTopBar({
           whiteboardUrl={whiteboardUrl}
           breakoutCallUrl={breakoutCallUrl ?? null}
         />
-        {partner && (
-          <div className="flex items-center gap-1.5 rounded-full bg-[var(--color-paper-2)] py-1 pl-1 pr-3">
-            <Avatar name={partner.name} color={partner.color} size={26} />
-            <span className="text-[12px] font-semibold">{partner.name}</span>
+        {me && (
+          <div
+            className="flex items-center gap-1.5 rounded-full bg-[var(--color-paper-2)] py-1 pl-1 pr-3"
+            aria-label={`You: ${me.name} (${me.role})`}
+          >
+            <Avatar name={me.name} color={me.color} size={26} />
+            <span className="text-[12px] font-semibold">{me.name}</span>
             <span className="text-[11px] text-[var(--color-ink-3)]">
-              · {partner.role}
+              · {me.role}
             </span>
-            <PartnerActiveDot present={partnerPresent} />
           </div>
         )}
       </div>
